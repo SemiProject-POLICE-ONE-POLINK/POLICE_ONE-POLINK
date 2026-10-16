@@ -1,0 +1,26 @@
+# 공통 Spring Boot 설정 파일입니다.
+# DB 계정과 비밀번호는 GitHub에 올리지 않는 application-local.yaml에 둡니다.
+
+spring:
+  application:
+    name: semiproject-polink
+
+  # 로컬 개발용 DB 설정 파일을 함께 읽는다.
+  # 이 파일이 없어도 설정 파일 자체를 읽을 때는 오류가 나지 않는다.
+  config:
+    import: optional:classpath:application-local.yaml
+
+  # 테이블은 sql/01_DB_SCRIPT.sql에서 직접 생성합니다.
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+        highlight_sql: true
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+    org.hibernate.orm.jdbc.bind: trace
