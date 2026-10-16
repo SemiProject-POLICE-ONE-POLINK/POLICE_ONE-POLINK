@@ -41,3 +41,4 @@ out/
 src/main/resources/application-local.yaml
 src/main/resources/application-local.example.yaml
 src/main/resources/application.yaml
+/src/main/resources/application.yaml
