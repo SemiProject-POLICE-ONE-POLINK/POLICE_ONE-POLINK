@@ -1,7 +1,0 @@
-# 이 파일을 복사해 application-local.yaml을 만든 뒤 본인의 MySQL 비밀번호를 입력한다.
-# application-local.yaml은 .gitignore에 등록되어 GitHub에 올라가지 않는다.
-
-spring:
-  datasource:
-    username: polink
-    password: polink
