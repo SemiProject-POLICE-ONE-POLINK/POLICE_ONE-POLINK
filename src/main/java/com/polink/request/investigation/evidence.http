@@ -1,9 +1,6 @@
-@baseUrl = http://localhost:8080
-@caseId = SMPA-2026-0405
-
 ### 증거물 등록
 ### 1. 정상 등록 → 201
-POST {{baseUrl}}/api/cases/{{caseId}}/evidences
+POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
 Content-Type: application/json
 
 {
@@ -13,8 +10,8 @@ Content-Type: application/json
   "acquiredLocation": "현장 출입구"
 }
 
-### 2. 증거물명 누락 → 400 + 이름 입력 문구
-POST {{baseUrl}}/api/cases/{{caseId}}/evidences
+### 2. 증거물명 누락 → 400
+POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
 Content-Type: application/json
 
 {
@@ -24,8 +21,8 @@ Content-Type: application/json
   "acquiredLocation": "현장 출입구"
 }
 
-### 3. 유형 미선택 → 400 + 유형 선택 문구
-POST {{baseUrl}}/api/cases/{{caseId}}/evidences
+### 3. 유형 미선택 → 400
+POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
 Content-Type: application/json
 
 {
@@ -34,3 +31,87 @@ Content-Type: application/json
   "description": "현장 출입구 사진",
   "acquiredLocation": "현장 출입구"
 }
+
+### 4. 설명 누락 → 400
+POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
+Content-Type: application/json
+
+{
+  "evidenceName": "현장 사진",
+  "evidenceType": "PHOTO",
+  "description": "",
+  "acquiredLocation": "현장 출입구"
+}
+
+### 5. 확보 장소 누락 → 400
+POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
+Content-Type: application/json
+
+{
+  "evidenceName": "현장 사진",
+  "evidenceType": "PHOTO",
+  "description": "현장 출입구 사진",
+  "acquiredLocation": ""
+}
+### 6. 첨부파일 포함 등록 → 201
+POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
+Content-Type: multipart/form-data; boundary=evidenceBoundary
+
+--evidenceBoundary
+Content-Disposition: form-data; name="request"
+Content-Type: application/json
+
+{
+  "evidenceName": "현장 사진",
+  "evidenceType": "PHOTO",
+  "description": "현장 출입구 사진",
+  "acquiredLocation": "현장 출입구"
+}
+--evidenceBoundary
+Content-Disposition: form-data; name="file"; filename="scene.jpg"
+Content-Type: image/jpeg
+
+-- 아래에 실제 경로를 넣어서 테스트
+< C:/Users/사용자명/Downloads/POLINK.png
+
+### 7. 미지원 확장자 → 400
+POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
+Content-Type: multipart/form-data; boundary=evidenceBoundary
+
+--evidenceBoundary
+Content-Disposition: form-data; name="request"
+Content-Type: application/json
+
+{
+  "evidenceName": "확장자 검증 테스트",
+  "evidenceType": "DOCUMENT",
+  "description": "지원하지 않는 확장자 등록 시도",
+  "acquiredLocation": "테스트 장소"
+}
+--evidenceBoundary
+Content-Disposition: form-data; name="file"; filename="test.exe"
+Content-Type: application/octet-stream
+
+test
+--evidenceBoundary--
+
+### 8. 빈 파일 → 400
+POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
+Content-Type: multipart/form-data; boundary=evidenceBoundary
+
+--evidenceBoundary
+Content-Disposition: form-data; name="request"
+Content-Type: application/json
+
+{
+  "evidenceName": "빈 파일 검증 테스트",
+  "evidenceType": "PHOTO",
+  "description": "내용 없는 파일 등록 시도",
+  "acquiredLocation": "테스트 장소"
+}
+--evidenceBoundary
+Content-Disposition: form-data; name="file"; filename="empty.jpg"
+Content-Type: image/jpeg
+
+< C:/Users/HYUN/Downloads/새 텍스트 문서.txt
+--evidenceBoundary--

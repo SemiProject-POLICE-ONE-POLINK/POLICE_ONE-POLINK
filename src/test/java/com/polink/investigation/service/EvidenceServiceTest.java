@@ -6,12 +6,15 @@ import com.polink.investigation.entity.Evidence;
 import com.polink.investigation.entity.EvidenceType;
 import com.polink.investigation.repository.CaseExistenceRepository;
 import com.polink.investigation.repository.EvidenceRepository;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -171,5 +174,19 @@ class EvidenceServiceTest {
                 LocalDateTime.of(2026, 10, 17, 10, 0),
                 "현장 출입구"
         );
+    }
+
+    @BeforeEach
+    void setUpSynchronization() {
+        // 트랜잭션 종료 처리 작업을 등록할 수 있도록 준비
+        TransactionSynchronizationManager.initSynchronization();
+    }
+
+    @AfterEach
+    void clearSynchronization() {
+        // 다음 테스트에 등록된 작업이 남지 않도록 정리
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 }
