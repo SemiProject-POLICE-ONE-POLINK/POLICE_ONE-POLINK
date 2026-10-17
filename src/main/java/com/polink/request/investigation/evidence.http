@@ -1,0 +1,36 @@
+@baseUrl = http://localhost:8080
+@caseId = SMPA-2026-0405
+
+### 증거물 등록
+### 1. 정상 등록 → 201
+POST {{baseUrl}}/api/cases/{{caseId}}/evidences
+Content-Type: application/json
+
+{
+  "evidenceName": "현장 사진",
+  "evidenceType": "PHOTO",
+  "description": "현장 출입구 사진",
+  "acquiredLocation": "현장 출입구"
+}
+
+### 2. 증거물명 누락 → 400 + 이름 입력 문구
+POST {{baseUrl}}/api/cases/{{caseId}}/evidences
+Content-Type: application/json
+
+{
+  "evidenceName": "",
+  "evidenceType": "PHOTO",
+  "description": "현장 출입구 사진",
+  "acquiredLocation": "현장 출입구"
+}
+
+### 3. 유형 미선택 → 400 + 유형 선택 문구
+POST {{baseUrl}}/api/cases/{{caseId}}/evidences
+Content-Type: application/json
+
+{
+  "evidenceName": "현장 사진",
+  "evidenceType": null,
+  "description": "현장 출입구 사진",
+  "acquiredLocation": "현장 출입구"
+}
