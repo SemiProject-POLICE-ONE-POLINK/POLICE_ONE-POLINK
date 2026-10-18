@@ -391,4 +391,87 @@ public class CaseServiceTest {
                 .findByAssignedOfficer_UserId(any(), any(Pageable.class));
         verifyNoInteractions(caseNumberGenerator);
     }
+
+    @Test
+    void getCaseDetail_caseNotFound() {
+        User citizen = new User(
+                "citizen01", "test-hash", "테스트시민", "010-0000-9931"
+        );
+        ReflectionTestUtils.setField(citizen, "userId", 1);
+
+        when(userRepository.findById(1))
+                .thenReturn(Optional.of(citizen));
+        when(caseRepository.findById("SMPA-2026-9999"))
+                .thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.getCaseDetail(1, "SMPA-2026-9999")
+        );
+
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        assertEquals("사건을 찾을 수 없습니다.",
+                exception.getReason());
+
+        verify(caseRepository).findById("SMPA-2026-9999");
+        verify(caseRepository, never()).save(any(CaseFile.class));
+        verifyNoInteractions(caseNumberGenerator);
+    }
+
+    @Test
+    void caseQueries_missingUserId_unauthorized() {
+        Pageable pageable = PageRequest.of(0, 10);
+
+        ResponseStatusException detailException = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.getCaseDetail(null, "SMPA-2026-0042")
+        );
+
+        ResponseStatusException listException = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.getCases(null, pageable)
+        );
+
+        ResponseStatusException myCasesException = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.getMyCases(null, pageable)
+        );
+
+        assertEquals(HttpStatus.UNAUTHORIZED,
+                detailException.getStatusCode());
+        assertEquals(HttpStatus.UNAUTHORIZED,
+                listException.getStatusCode());
+        assertEquals(HttpStatus.UNAUTHORIZED,
+                myCasesException.getStatusCode());
+
+        verifyNoInteractions(
+                userRepository, caseRepository, caseNumberGenerator
+        );
+    }
+
+    @Test
+    void getCases_citizenWithoutCases_emptyList() {
+        User citizen = new User(
+                "citizen01", "test-hash", "테스트시민", "010-0000-9941"
+        );
+        ReflectionTestUtils.setField(citizen, "userId", 1);
+
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(userRepository.findById(1))
+                .thenReturn(Optional.of(citizen));
+        when(caseRepository.findByReporter_UserId(1, pageable))
+                .thenReturn(Page.empty(pageable));
+
+        CaseListResponse response = caseService.getCases(1, pageable);
+
+        assertTrue(response.getItems().isEmpty());
+        assertEquals(0L, response.getTotalElements());
+
+        verify(caseRepository).findByReporter_UserId(1, pageable);
+        verify(caseRepository, never()).findAll(any(Pageable.class));
+        verify(caseRepository, never())
+                .findByAssignedOfficer_UserId(any(), any(Pageable.class));
+        verifyNoInteractions(caseNumberGenerator);
+    }
 }
