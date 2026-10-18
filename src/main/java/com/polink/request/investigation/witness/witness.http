@@ -1,0 +1,87 @@
+### 1. 목격자 및 최초 진술 정상 등록 → 201
+POST http://localhost:8080/api/cases/SMPA-2026-0405/witnesses
+Content-Type: application/json
+
+{
+  "name": "테스트 목격자",
+  "phone": "010-1234-5678",
+  "relationship": "인근 상점 직원",
+  "content": "오후 9시경 현장 앞을 지나가는 사람을 봤습니다."
+}
+
+### 2. 목격자 이름 누락 → 400
+POST http://localhost:8080/api/cases/SMPA-2026-0405/witnesses
+Content-Type: application/json
+
+{
+  "name": "",
+  "phone": "010-1234-5678",
+  "relationship": "인근 상점 직원",
+  "content": "오후 9시경 현장 앞을 지나가는 사람을 봤습니다."
+}
+
+### 3. 연락처 누락 → 400
+POST http://localhost:8080/api/cases/SMPA-2026-0405/witnesses
+Content-Type: application/json
+
+{
+  "name": "테스트 목격자",
+  "phone": "",
+  "relationship": "인근 상점 직원",
+  "content": "오후 9시경 현장 앞을 지나가는 사람을 봤습니다."
+}
+
+### 4. 연락처 하이픈 누락 → 400
+POST http://localhost:8080/api/cases/SMPA-2026-0405/witnesses
+Content-Type: application/json
+
+{
+  "name": "테스트 목격자",
+  "phone": "01012345678",
+  "relationship": "인근 상점 직원",
+  "content": "오후 9시경 현장 앞을 지나가는 사람을 봤습니다."
+}
+
+### 5. 연락처에 문자 포함 → 400
+POST http://localhost:8080/api/cases/SMPA-2026-0405/witnesses
+Content-Type: application/json
+
+{
+  "name": "테스트 목격자",
+  "phone": "010-abcd-5678",
+  "relationship": "인근 상점 직원",
+  "content": "오후 9시경 현장 앞을 지나가는 사람을 봤습니다."
+}
+
+### 6. 사건과의 관계 누락 → 400
+POST http://localhost:8080/api/cases/SMPA-2026-0405/witnesses
+Content-Type: application/json
+
+{
+  "name": "테스트 목격자",
+  "phone": "010-1234-5678",
+  "relationship": "",
+  "content": "오후 9시경 현장 앞을 지나가는 사람을 봤습니다."
+}
+
+### 7. 최초 진술 누락 → 400
+POST http://localhost:8080/api/cases/SMPA-2026-0405/witnesses
+Content-Type: application/json
+
+{
+  "name": "테스트 목격자",
+  "phone": "010-1234-5678",
+  "relationship": "인근 상점 직원",
+  "content": ""
+}
+
+### 8. 존재하지 않는 사건에 등록 → 404
+POST http://localhost:8080/api/cases/SMPA-2026-9999/witnesses
+Content-Type: application/json
+
+{
+  "name": "테스트 목격자",
+  "phone": "010-1234-5678",
+  "relationship": "인근 상점 직원",
+  "content": "오후 9시경 현장 앞을 지나가는 사람을 봤습니다."
+}
