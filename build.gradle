@@ -27,6 +27,9 @@ dependencies {
     //(JWT 인증·인가 전까지는 주석 처리)
 //    implementation 'org.springframework.boot:spring-boot-starter-security'
 
+    // 회원가입 시 비밀번호를 BCrypt로 해시 처리하고, 로그인 시 일치 여부를 검증한다.
+    implementation 'org.springframework.security:spring-security-crypto'
+
     // 요청값 검증에 사용한다. 예: 회원가입 시 아이디·비밀번호·연락처 검사
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
