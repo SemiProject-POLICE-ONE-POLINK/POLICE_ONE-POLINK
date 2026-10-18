@@ -27,6 +27,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.PageImpl;
 import java.util.List;
+import com.polink.casefile.dto.request.CaseOfficerRequest;
+import com.polink.casefile.dto.response.CaseOfficerResponse;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -389,6 +391,59 @@ public class CaseServiceTest {
         verify(caseRepository, never()).findAll(any(Pageable.class));
         verify(caseRepository, never())
                 .findByAssignedOfficer_UserId(any(), any(Pageable.class));
+        verifyNoInteractions(caseNumberGenerator);
+    }
+
+    @Test
+    void assignOfficer_firstAssignment_success() {
+        User admin = new User(
+                "admin01", "test-hash", "테스트관리자", "010-0000-9701"
+        );
+        ReflectionTestUtils.setField(admin, "userId", 10);
+        ReflectionTestUtils.setField(admin, "role", UserRole.ADMIN);
+
+        User officer = new User(
+                "police01", "test-hash", "테스트경찰", "010-0000-9702"
+        );
+        ReflectionTestUtils.setField(officer, "userId", 20);
+        ReflectionTestUtils.setField(officer, "role", UserRole.POLICE);
+
+        User reporter = new User(
+                "citizen01", "test-hash", "테스트시민", "010-0000-9703"
+        );
+        ReflectionTestUtils.setField(reporter, "userId", 30);
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                reporter,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                LocalDateTime.of(2026, 10, 18, 10, 0),
+                "테스트 장소"
+        );
+
+        CaseOfficerRequest request = new CaseOfficerRequest();
+        ReflectionTestUtils.setField(request, "officerId", 20);
+
+        when(userRepository.findById(10))
+                .thenReturn(Optional.of(admin));
+        when(userRepository.findById(20))
+                .thenReturn(Optional.of(officer));
+        when(caseRepository.findByCaseIdForUpdate("SMPA-2026-0042"))
+                .thenReturn(Optional.of(caseFile));
+
+        CaseOfficerResponse response = caseService.assignOfficer(
+                10, "SMPA-2026-0042", request
+        );
+
+        assertEquals("SMPA-2026-0042", response.getCaseId());
+        assertEquals(20, response.getAssignedOfficerId());
+        assertEquals(CaseStatus.INVESTIGATING, response.getStatus());
+        assertSame(officer, caseFile.getAssignedOfficer());
+
+        verify(caseRepository)
+                .findByCaseIdForUpdate("SMPA-2026-0042");
         verifyNoInteractions(caseNumberGenerator);
     }
 }
