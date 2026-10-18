@@ -11,6 +11,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import com.polink.casefile.dto.response.CaseDetailResponse;
+import java.util.Objects;
+import com.polink.casefile.dto.response.CaseListResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Service
 public class CaseService {
@@ -52,6 +57,121 @@ public class CaseService {
                 savedCase.getCaseId(),
                 savedCase.getStatus()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public CaseDetailResponse getCaseDetail(
+            Integer userId,
+            String caseId) {
+
+        if (userId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "로그인 사용자 정보가 필요합니다."
+            );
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "회원을 찾을 수 없습니다."
+                ));
+
+        CaseFile caseFile = caseRepository.findById(caseId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "사건을 찾을 수 없습니다."
+                ));
+
+        boolean canAccess =
+                user.getRole() == UserRole.POLICE
+                        || user.getRole() == UserRole.ADMIN
+                        || (user.getRole() == UserRole.CITIZEN
+                        && Objects.equals(
+                        caseFile.getReporter().getUserId(),
+                        user.getUserId()
+                ));
+
+        if (!canAccess) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "해당 사건을 조회할 권한이 없습니다."
+            );
+        }
+
+        return new CaseDetailResponse(caseFile);
+    }
+
+    @Transactional(readOnly = true)
+    public CaseListResponse getMyCases(
+            Integer userId,
+            Pageable pageable) {
+
+        if (userId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "로그인 사용자 정보가 필요합니다."
+            );
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "회원을 찾을 수 없습니다."
+                ));
+
+        Page<CaseFile> cases;
+
+        if (user.getRole() == UserRole.CITIZEN) {
+            cases = caseRepository.findByReporter_UserId(
+                    userId, pageable);
+        } else if (user.getRole() == UserRole.POLICE) {
+            cases = caseRepository.findByAssignedOfficer_UserId(
+                    userId, pageable);
+        } else {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "내 사건 조회는 시민과 경찰만 가능합니다."
+            );
+        }
+
+        return new CaseListResponse(cases);
+    }
+
+    @Transactional(readOnly = true)
+    public CaseListResponse getCases(
+            Integer userId,
+            Pageable pageable) {
+
+        if (userId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "로그인 사용자 정보가 필요합니다."
+            );
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "회원을 찾을 수 없습니다."
+                ));
+
+        Page<CaseFile> cases;
+
+        if (user.getRole() == UserRole.CITIZEN) {
+            cases = caseRepository.findByReporter_UserId(
+                    userId, pageable);
+        } else if (user.getRole() == UserRole.POLICE
+                || user.getRole() == UserRole.ADMIN) {
+            cases = caseRepository.findAll(pageable);
+        } else {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "사건 목록을 조회할 권한이 없습니다."
+            );
+        }
+
+        return new CaseListResponse(cases);
     }
 
     private User validateReporter(Integer reporterId) {
