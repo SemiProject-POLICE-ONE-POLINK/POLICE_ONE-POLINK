@@ -1,0 +1,83 @@
+### 1. 추가 진술 등록 → 201
+POST http://localhost:8080/api/cases/SMPA-2026-0405/witnesses/W-2026-0405-01/statements
+Content-Type: application/json
+
+{
+  "statementType": "ADDITIONAL",
+  "content": "당시 검은색 옷을 입고 있었습니다."
+}
+
+### 2. 정정 진술 등록 → 201
+POST http://localhost:8080/api/cases/SMPA-2026-0405/witnesses/W-2026-0405-01/statements
+Content-Type: application/json
+
+{
+  "statementType": "CORRECTION",
+  "content": "차량 색상을 검은색에서 회색으로 정정합니다."
+}
+
+### 3. 번복 진술 등록 → 201
+POST http://localhost:8080/api/cases/SMPA-2026-0405/witnesses/W-2026-0405-01/statements
+Content-Type: application/json
+
+{
+  "statementType": "REVERSAL",
+  "content": "사람을 직접 봤다는 기존 진술을 번복합니다."
+}
+
+### 4. 진술 유형 미선택 → 400
+POST http://localhost:8080/api/cases/SMPA-2026-0405/witnesses/W-2026-0405-01/statements
+Content-Type: application/json
+
+{
+  "statementType": null,
+  "content": "당시 검은색 옷을 입고 있었습니다."
+}
+
+### 5. 진술 내용 누락 → 400
+POST http://localhost:8080/api/cases/SMPA-2026-0405/witnesses/W-2026-0405-01/statements
+Content-Type: application/json
+
+{
+  "statementType": "ADDITIONAL",
+  "content": ""
+}
+
+### 6. 최초 진술 유형으로 추가 등록 → 400
+POST http://localhost:8080/api/cases/SMPA-2026-0405/witnesses/W-2026-0405-01/statements
+Content-Type: application/json
+
+{
+  "statementType": "INITIAL",
+  "content": "최초 진술 유형으로 추가 등록을 시도합니다."
+}
+
+### 7. 존재하지 않는 목격자 → 404
+POST http://localhost:8080/api/cases/SMPA-2026-0405/witnesses/W-2026-0405-99/statements
+Content-Type: application/json
+
+{
+  "statementType": "ADDITIONAL",
+  "content": "없는 목격자에게 진술 등록을 시도합니다."
+}
+
+### 8. 다른 사건에 속한 목격자 → 404
+POST http://localhost:8080/api/cases/SMPA-2026-0405/witnesses/W-2026-0409-01/statements
+Content-Type: application/json
+
+{
+  "statementType": "ADDITIONAL",
+  "content": "다른 사건의 목격자에게 진술 등록을 시도합니다."
+}
+
+### 9. 존재하지 않는 사건 → 404
+POST http://localhost:8080/api/cases/SMPA-2026-9999/witnesses/W-2026-0405-01/statements
+Content-Type: application/json
+
+{
+  "statementType": "ADDITIONAL",
+  "content": "없는 사건에 진술 등록을 시도합니다."
+}
+
+### 10. 등록 후 목격자·진술 이력 조회 → 200
+GET http://localhost:8080/api/cases/SMPA-2026-0405/witnesses

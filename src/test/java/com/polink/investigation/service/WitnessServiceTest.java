@@ -4,6 +4,7 @@ import com.polink.investigation.dto.request.WitnessCreateRequest;
 import com.polink.investigation.dto.response.WitnessCreateResponse;
 import com.polink.investigation.dto.response.WitnessListResponse;
 import com.polink.investigation.entity.Statement;
+import com.polink.investigation.entity.StatementType;
 import com.polink.investigation.entity.Witness;
 import com.polink.investigation.repository.CaseExistenceRepository;
 import com.polink.investigation.repository.StatementRepository;
@@ -99,7 +100,7 @@ class WitnessServiceTest {
         // 확인: 최초 진술이 같은 목격자 번호로 연결되는지 검사
         assertEquals(witness.getWitnessId(), statement.getWitnessId());
         assertEquals(request.content(), statement.getContent());
-        assertEquals("INITIAL", statement.getStatementType());
+        assertEquals(StatementType.INITIAL, statement.getStatementType());
 
         // 확인: 목격자와 최초 진술에 동일한 등록 일시 사용
         assertEquals(witness.getCreatedAt(), statement.getCreatedAt());
@@ -257,7 +258,7 @@ class WitnessServiceTest {
                 1,
                 earlierWitness.getWitnessId(),
                 "현장 앞에서 사람을 봤습니다.",
-                "INITIAL",
+                StatementType.INITIAL,
                 firstTime
         );
 
@@ -265,7 +266,7 @@ class WitnessServiceTest {
                 2,
                 laterWitness.getWitnessId(),
                 "차량 소리를 들었습니다.",
-                "INITIAL",
+                StatementType.INITIAL,
                 firstTime.plusHours(1)
         );
 
@@ -273,7 +274,7 @@ class WitnessServiceTest {
                 3,
                 earlierWitness.getWitnessId(),
                 "검은색 옷을 입고 있었습니다.",
-                "ADDITIONAL",
+                StatementType.ADDITIONAL,
                 firstTime.plusHours(2)
         );
 
@@ -339,7 +340,7 @@ class WitnessServiceTest {
                 firstResponse.statements().get(0).content()
         );
         assertEquals(
-                "INITIAL",
+                StatementType.INITIAL,
                 firstResponse.statements().get(0).statementType()
         );
         assertEquals(
@@ -351,7 +352,7 @@ class WitnessServiceTest {
                 firstResponse.statements().get(1).statementId()
         );
         assertEquals(
-                "ADDITIONAL",
+                StatementType.ADDITIONAL,
                 firstResponse.statements().get(1).statementType()
         );
 
@@ -452,7 +453,7 @@ class WitnessServiceTest {
             Integer statementId,
             String witnessId,
             String content,
-            String statementType,
+            StatementType statementType,
             LocalDateTime createdAt
     ) {
         Statement statement = new Statement(
