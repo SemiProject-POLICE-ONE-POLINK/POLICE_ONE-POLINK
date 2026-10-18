@@ -1,7 +1,9 @@
 package com.polink.investigation.service;
 
 import com.polink.investigation.dto.request.WitnessCreateRequest;
+import com.polink.investigation.dto.response.StatementResponse;
 import com.polink.investigation.dto.response.WitnessCreateResponse;
+import com.polink.investigation.dto.response.WitnessListResponse;
 import com.polink.investigation.entity.Statement;
 import com.polink.investigation.entity.Witness;
 import com.polink.investigation.repository.CaseExistenceRepository;
@@ -13,8 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 
 @Service
 public class WitnessService {
@@ -34,6 +35,7 @@ public class WitnessService {
         this.caseExistenceRepository = caseExistenceRepository;
     }
 
+    // 사건별 목격자 정보 및 최초 진술 추가
     @Transactional
     public WitnessCreateResponse createWitness(
             String caseId,
@@ -86,6 +88,91 @@ public class WitnessService {
                 savedWitness,
                 savedStatement
         );
+    }
+
+    // 사건별 목격자 정보와 진술 이력을 함께 조회
+    @Transactional(readOnly = true)
+    public List<WitnessListResponse> findWitnessList(String caseId) {
+
+        // 1. 조회할 사건이 있는지 확인
+        if (!caseExistenceRepository.existsByCaseId(caseId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "사건 정보를 확인할 수 없어 목격자 목록을 조회할 수 없습니다."
+            );
+        }
+
+        // 2. 해당 사건의 목격자 목록 조회
+        List<Witness> witnesses = new ArrayList<>(
+                witnessRepository.findByCaseId(caseId)
+        );
+
+        // 목격자가 없으면 빈 목록 반환
+        if (witnesses.isEmpty()) {
+            return List.of();
+        }
+
+        // 3. 목격자 등록 일시 오름차순 정렬
+        // 등록 일시가 같으면 목격자 번호 오름차순
+        witnesses.sort(
+                Comparator.comparing(Witness::getCreatedAt)
+                        .thenComparing(Witness::getWitnessId)
+        );
+
+        // 4. 진술 조회에 사용할 목격자 번호 목록 구성
+        List<String> witnessIds = new ArrayList<>();
+
+        for (Witness witness : witnesses) {
+            witnessIds.add(witness.getWitnessId());
+        }
+
+        // 5. 해당 목격자들의 진술을 등록 일시·진술 번호 오름차순으로 조회
+        List<Statement> statements =
+                statementRepository
+                        .findByWitnessIdInOrderByCreatedAtAscStatementIdAsc(
+                                witnessIds
+                        );
+
+        /* 6. 목격자 번호별로 진술 DTO 목록을 보관
+        *  순서 유지 없이 목격자 번호로 진술 목록을 빠르게 찾기 위해 HashMap 사용
+        * */
+        Map<String, List<StatementResponse>> statementsByWitness =
+                new HashMap<>();
+
+        for (Statement statement : statements) {
+            String witnessId = statement.getWitnessId();
+
+            // 해당 목격자의 목록이 없으면 생성
+            if (!statementsByWitness.containsKey(witnessId)) {
+                statementsByWitness.put(witnessId, new ArrayList<>());
+            }
+
+            // 진술을 DTO로 변환해 해당 목격자의 진술 목록에 추가
+            statementsByWitness.get(witnessId)
+                    .add(StatementResponse.from(statement));
+        }
+
+        // 7. 각 목격자 정보에 해당 목격자의 진술 목록을 연결
+        List<WitnessListResponse> responses = new ArrayList<>();
+
+        for (Witness witness : witnesses) {
+
+            // 연결된 진술이 없으면 빈 목록 사용
+            List<StatementResponse> witnessStatements =
+                    statementsByWitness.getOrDefault(
+                            witness.getWitnessId(),
+                            List.of()
+                    );
+
+            responses.add(
+                    WitnessListResponse.from(
+                            witness,
+                            witnessStatements
+                    )
+            );
+        }
+
+        return responses;
     }
 
     private String generateWitnessId(

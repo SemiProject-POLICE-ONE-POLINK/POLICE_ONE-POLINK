@@ -85,3 +85,6 @@ Content-Type: application/json
   "relationship": "인근 상점 직원",
   "content": "오후 9시경 현장 앞을 지나가는 사람을 봤습니다."
 }
+
+### 9. 사건별 목격자·진술 목록 조회 → 200
+GET http://localhost:8080/api/cases/SMPA-2026-0405/witnesses

@@ -2,6 +2,7 @@ package com.polink.investigation.service;
 
 import com.polink.investigation.dto.request.WitnessCreateRequest;
 import com.polink.investigation.dto.response.WitnessCreateResponse;
+import com.polink.investigation.dto.response.WitnessListResponse;
 import com.polink.investigation.entity.Statement;
 import com.polink.investigation.entity.Witness;
 import com.polink.investigation.repository.CaseExistenceRepository;
@@ -226,5 +227,248 @@ class WitnessServiceTest {
                 "인근 주민",
                 LocalDateTime.of(2026, 10, 17, 10, 0)
         );
+    }
+
+    // ==================== 목격자·진술 목록 조회 테스트 ====================
+
+    // 조회 1. 목격자 정렬, 목격자별 진술 연결 및 응답 정보 검사
+    @Test
+    @DisplayName("목격자를 등록순으로 반환하고 각자의 진술을 연결한다")
+    void findWitnessListWithStatements() {
+
+        LocalDateTime firstTime =
+                LocalDateTime.of(2026, 10, 17, 9, 0);
+
+        // 번호는 02지만 등록 일시가 더 빠른 목격자
+        Witness earlierWitness = new Witness(
+                "W-2026-0405-02",
+                CASE_ID,
+                "먼저 등록한 목격자",
+                "010-2222-3333",
+                "인근 주민",
+                firstTime
+        );
+
+        // 기존 도우미는 등록 일시가 같은 날 오전 10시인 객체를 생성
+        Witness laterWitness =
+                savedWitness("W-2026-0405-01");
+
+        Statement firstStatement = statementForList(
+                1,
+                earlierWitness.getWitnessId(),
+                "현장 앞에서 사람을 봤습니다.",
+                "INITIAL",
+                firstTime
+        );
+
+        Statement otherStatement = statementForList(
+                2,
+                laterWitness.getWitnessId(),
+                "차량 소리를 들었습니다.",
+                "INITIAL",
+                firstTime.plusHours(1)
+        );
+
+        Statement additionalStatement = statementForList(
+                3,
+                earlierWitness.getWitnessId(),
+                "검은색 옷을 입고 있었습니다.",
+                "ADDITIONAL",
+                firstTime.plusHours(2)
+        );
+
+        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+                .thenReturn(true);
+
+        // 정렬되지 않은 목격자 목록
+        when(witnessRepository.findByCaseId(CASE_ID))
+                .thenReturn(List.of(laterWitness, earlierWitness));
+
+        // Service가 정렬한 목격자 번호 목록으로 조회해야 함
+        List<String> witnessIds = List.of(
+                earlierWitness.getWitnessId(),
+                laterWitness.getWitnessId()
+        );
+
+        // Repository가 시간순으로 조회한 상황을 재현
+        // 서로 다른 목격자의 진술이 섞여 있어도 올바르게 묶어야 함
+        when(statementRepository
+                .findByWitnessIdInOrderByCreatedAtAscStatementIdAsc(witnessIds))
+                .thenReturn(List.of(
+                        firstStatement,
+                        otherStatement,
+                        additionalStatement
+                ));
+
+        // 실행
+        List<WitnessListResponse> responses =
+                witnessService.findWitnessList(CASE_ID);
+
+        // 확인: 목격자 번호보다 등록 일시를 우선해 정렬
+        assertEquals(2, responses.size());
+
+        WitnessListResponse firstResponse = responses.get(0);
+        WitnessListResponse secondResponse = responses.get(1);
+
+        assertEquals(
+                earlierWitness.getWitnessId(),
+                firstResponse.witnessId()
+        );
+        assertEquals(
+                laterWitness.getWitnessId(),
+                secondResponse.witnessId()
+        );
+
+        // 확인: 목격자 기본 정보 변환
+        assertEquals(earlierWitness.getName(), firstResponse.name());
+        assertEquals(earlierWitness.getPhone(), firstResponse.phone());
+        assertEquals(
+                earlierWitness.getRelationship(),
+                firstResponse.relationship()
+        );
+
+        // 확인: 첫 목격자의 최초·추가 진술만 순서대로 연결
+        assertEquals(2, firstResponse.statements().size());
+
+        assertEquals(
+                Integer.valueOf(1),
+                firstResponse.statements().get(0).statementId()
+        );
+        assertEquals(
+                "현장 앞에서 사람을 봤습니다.",
+                firstResponse.statements().get(0).content()
+        );
+        assertEquals(
+                "INITIAL",
+                firstResponse.statements().get(0).statementType()
+        );
+        assertEquals(
+                firstTime,
+                firstResponse.statements().get(0).createdAt()
+        );
+        assertEquals(
+                Integer.valueOf(3),
+                firstResponse.statements().get(1).statementId()
+        );
+        assertEquals(
+                "ADDITIONAL",
+                firstResponse.statements().get(1).statementType()
+        );
+
+        // 확인: 다른 목격자의 진술이 섞이지 않았는지 검사
+        assertEquals(1, secondResponse.statements().size());
+        assertEquals(
+                Integer.valueOf(2),
+                secondResponse.statements().get(0).statementId()
+        );
+
+        // 확인: 목격자마다 반복 조회하지 않고 한 번에 조회
+        verify(statementRepository)
+                .findByWitnessIdInOrderByCreatedAtAscStatementIdAsc(witnessIds);
+
+        // 조회 과정에서 저장하지 않음
+        verify(witnessRepository, never())
+                .saveAndFlush(any(Witness.class));
+        verify(statementRepository, never())
+                .save(any(Statement.class));
+    }
+
+    // 조회 2. 사건은 있지만 등록된 목격자가 없는 상황 검사
+    @Test
+    @DisplayName("목격자가 없으면 빈 목록을 반환하고 진술은 조회하지 않는다")
+    void findEmptyWitnessList() {
+
+        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+                .thenReturn(true);
+
+        when(witnessRepository.findByCaseId(CASE_ID))
+                .thenReturn(List.of());
+
+        // 실행
+        List<WitnessListResponse> responses =
+                witnessService.findWitnessList(CASE_ID);
+
+        // 확인
+        assertNotNull(responses);
+        assertTrue(responses.isEmpty());
+
+        verifyNoInteractions(statementRepository);
+    }
+
+    // 조회 3. 목격자는 있지만 연결된 진술이 없는 상황 검사
+    @Test
+    @DisplayName("목격자에게 연결된 진술이 없으면 빈 진술 목록을 반환한다")
+    void findWitnessWithoutStatements() {
+
+        Witness witness = savedWitness("W-2026-0405-01");
+
+        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+                .thenReturn(true);
+
+        when(witnessRepository.findByCaseId(CASE_ID))
+                .thenReturn(List.of(witness));
+
+        when(statementRepository
+                .findByWitnessIdInOrderByCreatedAtAscStatementIdAsc(
+                        List.of(witness.getWitnessId())
+                ))
+                .thenReturn(List.of());
+
+        // 실행
+        List<WitnessListResponse> responses =
+                witnessService.findWitnessList(CASE_ID);
+
+        // 확인: 목격자 정보는 유지하고 진술 목록만 비어 있음
+        assertEquals(1, responses.size());
+        assertEquals(witness.getWitnessId(), responses.get(0).witnessId());
+        assertNotNull(responses.get(0).statements());
+        assertTrue(responses.get(0).statements().isEmpty());
+    }
+
+    // 조회 4. 사건이 없으면 목격자·진술 조회를 중단하는지 검사
+    @Test
+    @DisplayName("사건이 없으면 404 예외가 발생하고 목록을 조회하지 않는다")
+    void rejectWitnessListForMissingCase() {
+
+        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+                .thenReturn(false);
+
+        // 실행 및 확인
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> witnessService.findWitnessList(CASE_ID)
+        );
+
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+
+        verifyNoInteractions(
+                witnessRepository,
+                statementRepository
+        );
+    }
+
+    // 조회 테스트에 사용할 기존 진술 객체 생성
+    private Statement statementForList(
+            Integer statementId,
+            String witnessId,
+            String content,
+            String statementType,
+            LocalDateTime createdAt
+    ) {
+        Statement statement = new Statement(
+                witnessId,
+                content,
+                statementType,
+                createdAt
+        );
+
+        // 실제 DB를 사용하지 않으므로 테스트에서 진술 번호 설정
+        ReflectionTestUtils.setField(
+                statement,
+                "statementId",
+                statementId
+        );
+
+        return statement;
     }
 }

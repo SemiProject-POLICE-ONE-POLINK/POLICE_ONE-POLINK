@@ -2,11 +2,14 @@ package com.polink.investigation.controller;
 
 import com.polink.investigation.dto.request.WitnessCreateRequest;
 import com.polink.investigation.dto.response.WitnessCreateResponse;
+import com.polink.investigation.dto.response.WitnessListResponse;
 import com.polink.investigation.service.WitnessService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/cases/{caseId}/witnesses")
@@ -33,5 +36,19 @@ public class WitnessController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(response);
+    }
+
+    // 사건별 목격자 정보와 진술 이력 조회
+    @GetMapping
+    public ResponseEntity<List<WitnessListResponse>> findWitnessList(
+            @PathVariable("caseId") String caseId
+    ) {
+
+        // 선택한 사건의 목격자·진술 목록 조회
+        List<WitnessListResponse> responses =
+                witnessService.findWitnessList(caseId);
+
+        // 조회 결과와 HTTP 200 반환
+        return ResponseEntity.ok(responses);
     }
 }
