@@ -11,7 +11,8 @@ public record ItemCreateResponse(
         ItemType itemType,
         String itemName,
         ItemStatus status,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        String imagePath
 ) {
     // Entity 전체를 그대로 반환하지 않고, 화면에 필요한 등록 결과만 골라서 반환한다.
     public static ItemCreateResponse from(Item item) {
@@ -20,7 +21,8 @@ public record ItemCreateResponse(
                 item.getItemType(),
                 item.getItemName(),
                 item.getStatus(),
-                item.getCreatedAt()
+                item.getCreatedAt(),
+                item.getImagePath()
         );
     }
 }

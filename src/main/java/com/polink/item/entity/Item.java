@@ -46,7 +46,7 @@ public class Item {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String description;
 
-    @Column(nullable = false, length = 255)
+    @Column(nullable = false)
     private String location;
 
     @Column(name = "occurred_at", nullable = false)
@@ -60,6 +60,7 @@ public class Item {
     // 사용자가 보내지 않아도 서버가 물품을 만든 시각을 자동 기록한다.
     private LocalDateTime createdAt;
 
+    @SuppressWarnings("unused")
     @Column(name = "returned_at")
     private LocalDateTime returnedAt;
 
@@ -79,7 +80,8 @@ public class Item {
             String description,
             String location,
             LocalDateTime occurredAt,
-            ItemStatus status
+            ItemStatus status,
+            String imagePath
     ) {
         // 아래 값들은 Controller → Service → Entity 순서로 전달되어 들어온다.
         this.itemId = itemId;
@@ -91,6 +93,7 @@ public class Item {
         this.location = location;
         this.occurredAt = occurredAt;
         this.status = status;
+        this.imagePath = imagePath;
         // 등록 시각은 클라이언트 시간을 신뢰하지 않고 서버 시간을 사용한다.
         this.createdAt = LocalDateTime.now();
     }
