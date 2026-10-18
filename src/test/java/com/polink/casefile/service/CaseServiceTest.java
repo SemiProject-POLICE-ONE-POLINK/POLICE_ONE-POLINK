@@ -446,4 +446,213 @@ public class CaseServiceTest {
                 .findByCaseIdForUpdate("SMPA-2026-0042");
         verifyNoInteractions(caseNumberGenerator);
     }
+
+    @Test
+    void assignOfficer_reassignment_success() {
+        User admin = new User(
+                "admin01", "test-hash", "테스트관리자", "010-0000-9801"
+        );
+        ReflectionTestUtils.setField(admin, "userId", 10);
+        ReflectionTestUtils.setField(admin, "role", UserRole.ADMIN);
+
+        User previousOfficer = new User(
+                "police01", "test-hash", "기존경찰", "010-0000-9802"
+        );
+        ReflectionTestUtils.setField(previousOfficer, "userId", 20);
+        ReflectionTestUtils.setField(previousOfficer, "role", UserRole.POLICE);
+
+        User newOfficer = new User(
+                "police02", "test-hash", "새담당경찰", "010-0000-9803"
+        );
+        ReflectionTestUtils.setField(newOfficer, "userId", 21);
+        ReflectionTestUtils.setField(newOfficer, "role", UserRole.POLICE);
+
+        User reporter = new User(
+                "citizen01", "test-hash", "테스트시민", "010-0000-9804"
+        );
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                reporter,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                LocalDateTime.of(2026, 10, 18, 10, 0),
+                "테스트 장소"
+        );
+
+        // 기존 경찰이 배정되어 수사 중인 사건을 준비합니다.
+        caseFile.assignOfficer(previousOfficer);
+
+        CaseOfficerRequest request = new CaseOfficerRequest();
+        ReflectionTestUtils.setField(request, "officerId", 21);
+
+        when(userRepository.findById(10))
+                .thenReturn(Optional.of(admin));
+        when(userRepository.findById(21))
+                .thenReturn(Optional.of(newOfficer));
+        when(caseRepository.findByCaseIdForUpdate("SMPA-2026-0042"))
+                .thenReturn(Optional.of(caseFile));
+
+        CaseOfficerResponse response = caseService.assignOfficer(
+                10, "SMPA-2026-0042", request
+        );
+
+        assertEquals("SMPA-2026-0042", response.getCaseId());
+        assertEquals(21, response.getAssignedOfficerId());
+        assertEquals(CaseStatus.INVESTIGATING, response.getStatus());
+
+        assertSame(newOfficer, caseFile.getAssignedOfficer());
+        assertEquals(CaseStatus.INVESTIGATING, caseFile.getStatus());
+
+        verify(caseRepository)
+                .findByCaseIdForUpdate("SMPA-2026-0042");
+        verifyNoInteractions(caseNumberGenerator);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = UserRole.class,
+            names = {"CITIZEN", "POLICE"}
+    )
+    void assignOfficer_nonAdmin_forbidden(UserRole role) {
+        User requester = new User(
+                "requester01", "test-hash", "요청자", "010-0000-9901"
+        );
+        ReflectionTestUtils.setField(requester, "userId", 10);
+        ReflectionTestUtils.setField(requester, "role", role);
+
+        CaseOfficerRequest request = new CaseOfficerRequest();
+        ReflectionTestUtils.setField(request, "officerId", 20);
+
+        when(userRepository.findById(10))
+                .thenReturn(Optional.of(requester));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.assignOfficer(
+                        10, "SMPA-2026-0042", request)
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        assertEquals("담당 경찰 배정은 관리자만 가능합니다.",
+                exception.getReason());
+
+        verify(userRepository, never()).findById(20);
+        verifyNoInteractions(caseRepository, caseNumberGenerator);
+    }
+
+    @Test
+    void assignOfficer_sameOfficer_conflict() {
+        User admin = new User(
+                "admin01", "test-hash", "테스트관리자", "010-0000-9911"
+        );
+        ReflectionTestUtils.setField(admin, "userId", 10);
+        ReflectionTestUtils.setField(admin, "role", UserRole.ADMIN);
+
+        User officer = new User(
+                "police01", "test-hash", "담당경찰", "010-0000-9912"
+        );
+        ReflectionTestUtils.setField(officer, "userId", 20);
+        ReflectionTestUtils.setField(officer, "role", UserRole.POLICE);
+
+        User reporter = new User(
+                "citizen01", "test-hash", "신고자", "010-0000-9913"
+        );
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                reporter,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                LocalDateTime.of(2026, 10, 18, 10, 0),
+                "테스트 장소"
+        );
+        caseFile.assignOfficer(officer);
+
+        CaseOfficerRequest request = new CaseOfficerRequest();
+        ReflectionTestUtils.setField(request, "officerId", 20);
+
+        when(userRepository.findById(10))
+                .thenReturn(Optional.of(admin));
+        when(userRepository.findById(20))
+                .thenReturn(Optional.of(officer));
+        when(caseRepository.findByCaseIdForUpdate("SMPA-2026-0042"))
+                .thenReturn(Optional.of(caseFile));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.assignOfficer(
+                        10, "SMPA-2026-0042", request)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("현재 담당 경찰과 동일한 경찰입니다.",
+                exception.getReason());
+
+        assertSame(officer, caseFile.getAssignedOfficer());
+        assertEquals(CaseStatus.INVESTIGATING, caseFile.getStatus());
+        verifyNoInteractions(caseNumberGenerator);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = CaseStatus.class,
+            names = {"CLOSED", "CANCELED"}
+    )
+    void assignOfficer_finishedCase_conflict(CaseStatus status) {
+        User admin = new User(
+                "admin01", "test-hash", "테스트관리자", "010-0000-9921"
+        );
+        ReflectionTestUtils.setField(admin, "userId", 10);
+        ReflectionTestUtils.setField(admin, "role", UserRole.ADMIN);
+
+        User officer = new User(
+                "police01", "test-hash", "배정대상경찰", "010-0000-9922"
+        );
+        ReflectionTestUtils.setField(officer, "userId", 20);
+        ReflectionTestUtils.setField(officer, "role", UserRole.POLICE);
+
+        User reporter = new User(
+                "citizen01", "test-hash", "신고자", "010-0000-9923"
+        );
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                reporter,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                LocalDateTime.of(2026, 10, 18, 10, 0),
+                "테스트 장소"
+        );
+        ReflectionTestUtils.setField(caseFile, "status", status);
+
+        CaseOfficerRequest request = new CaseOfficerRequest();
+        ReflectionTestUtils.setField(request, "officerId", 20);
+
+        when(userRepository.findById(10))
+                .thenReturn(Optional.of(admin));
+        when(userRepository.findById(20))
+                .thenReturn(Optional.of(officer));
+        when(caseRepository.findByCaseIdForUpdate("SMPA-2026-0042"))
+                .thenReturn(Optional.of(caseFile));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.assignOfficer(
+                        10, "SMPA-2026-0042", request)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(
+                "종결 또는 취소된 사건은 담당 경찰을 변경할 수 없습니다.",
+                exception.getReason()
+        );
+
+        assertEquals(status, caseFile.getStatus());
+        assertNull(caseFile.getAssignedOfficer());
+        verifyNoInteractions(caseNumberGenerator);
+    }
 }
