@@ -5,6 +5,7 @@ import com.polink.investigation.dto.response.StatementResponse;
 import com.polink.investigation.dto.response.WitnessCreateResponse;
 import com.polink.investigation.dto.response.WitnessListResponse;
 import com.polink.investigation.entity.Statement;
+import com.polink.investigation.entity.StatementType;
 import com.polink.investigation.entity.Witness;
 import com.polink.investigation.repository.CaseExistenceRepository;
 import com.polink.investigation.repository.StatementRepository;
@@ -76,7 +77,7 @@ public class WitnessService {
         Statement statement = new Statement(
                 savedWitness.getWitnessId(),
                 request.content(),
-                "INITIAL",
+                StatementType.INITIAL,
                 createdAt
         );
 

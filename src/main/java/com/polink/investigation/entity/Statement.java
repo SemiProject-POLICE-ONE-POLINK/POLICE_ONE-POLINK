@@ -25,8 +25,9 @@ public class Statement {
     private String content;
 
     // 진술 유형 — 최초·추가·정정·번복 구분
+    @Enumerated(EnumType.STRING)
     @Column(name = "statement_type", length = 30, nullable = false)
-    private String statementType;
+    private StatementType statementType;
 
     // 진술 등록 일시
     @Column(name = "created_at", nullable = false)
@@ -35,7 +36,8 @@ public class Statement {
     public Statement() {
     }
 
-    public Statement(String witnessId, String content, String statementType, LocalDateTime createdAt) {
+    public Statement(String witnessId, String content, StatementType statementType, LocalDateTime createdAt
+    ) {
         this.witnessId = witnessId;
         this.content = content;
         this.statementType = statementType;
@@ -54,7 +56,7 @@ public class Statement {
         return content;
     }
 
-    public String getStatementType() {
+    public StatementType getStatementType() {
         return statementType;
     }
 
