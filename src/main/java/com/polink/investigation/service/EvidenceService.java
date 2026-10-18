@@ -2,18 +2,23 @@ package com.polink.investigation.service;
 
 import com.polink.investigation.dto.request.EvidenceCreateRequest;
 import com.polink.investigation.dto.response.EvidenceCreateResponse;
+import com.polink.investigation.dto.response.EvidenceListResponse;
 import com.polink.investigation.entity.Evidence;
 import com.polink.investigation.repository.CaseExistenceRepository;
 import com.polink.investigation.repository.EvidenceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
@@ -91,6 +96,39 @@ public class EvidenceService {
 
         // 6. 변환 메서드를 호출하여 응답 DTO로 변환
         return EvidenceCreateResponse.from(savedEvidence);
+    }
+
+    // 사건별 증거물 목록 조회
+    @Transactional(readOnly = true)
+    public List<EvidenceListResponse> findEvidenceList(String caseId) {
+
+        // 사건이 없으면 HTTP 404로 처리
+        if (!caseExistenceRepository.existsByCaseId(caseId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "사건 정보를 확인할 수 없어 증거물 목록을 조회할 수 없습니다."
+            );
+        }
+
+        // 해당 사건의 증거물을 정렬 가능한 목록으로 가져오기
+        List<Evidence> evidences = new ArrayList<>(
+                evidenceRepository.findByCaseId(caseId)
+        );
+
+        // 증거번호 오름차순 정렬: 01 → 02 → 03
+        evidences.sort(
+                Comparator.comparing(Evidence::getEvidenceId)
+        );
+
+        // 조회 결과를 응답 DTO 목록으로 변환
+        List<EvidenceListResponse> responses = new ArrayList<>();
+
+        for (Evidence evidence : evidences) {
+            responses.add(EvidenceListResponse.from(evidence));
+        }
+
+        // 증거물이 없으면 빈 목록 반환
+        return responses;
     }
 
     // DB 등록이 취소되면 저장된 첨부파일 정리
