@@ -1,0 +1,28 @@
+### 수사보드 조회
+### 1. 정상 조회 — 경찰관, 예상 결과 200
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigation-board
+X-User-Id: 7
+
+
+### 2. 로그인 정보 없이 조회 — 예상 결과 401
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigation-board
+
+
+### 3. 시민 사용자로 조회 — 예상 결과 403
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigation-board
+X-User-Id: 1
+
+
+### 4. 관리자 사용자로 조회 — 예상 결과 403
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigation-board
+X-User-Id: 11
+
+
+### 5. 존재하지 않는 사용자 — 예상 결과 401
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigation-board
+X-User-Id: 99999
+
+
+### 6. 존재하지 않는 사건 — 예상 결과 404
+GET http://localhost:8080/api/v1/cases/SMPA-2099-9999/investigation-board
+X-User-Id: 7
