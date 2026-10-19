@@ -82,6 +82,15 @@ public class InvestigationBoardService {
                                 "사건 정보를 확인할 수 없습니다."
                         ));
 
+        // 현재 배정된 담당 경찰관만 수사보드 접근 가능
+        if (caseInfo.assignedOfficerId() == null
+                || !caseInfo.assignedOfficerId().equals(user.getUserId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "수사보드에 접근할 권한이 없습니다."
+            );
+        }
+
         // 해당 사건의 전체 증거물을 조회하고 정렬 가능한 목록으로 복사
         List<Evidence> evidences =
                 new ArrayList<>(evidenceRepository.findByCaseId(caseId));

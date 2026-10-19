@@ -26,3 +26,15 @@ X-User-Id: 99999
 ### 6. 존재하지 않는 사건 — 예상 결과 404
 GET http://localhost:8080/api/v1/cases/SMPA-2099-9999/investigation-board
 X-User-Id: 7
+
+### 7. 다른 경찰관 조회 — 예상 결과 403
+# SMPA-2026-0405 담당자는 7번이고, 요청자는 8번
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigation-board
+X-User-Id: 8
+
+
+### 8. 미배정 사건 조회 — 예상 결과 403
+# SMPA-2026-0415는 담당 경찰관이 없는 사건
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0415/investigation-board
+X-User-Id: 7
+
