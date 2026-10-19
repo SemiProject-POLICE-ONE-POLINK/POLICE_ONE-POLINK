@@ -41,6 +41,7 @@ public class ReturnRequest {
     private String foundItemId;
 
     // 승인·반려를 처리한 경찰관 번호다. 최초 신청 시에는 없다.
+    @SuppressWarnings("unused")
     @Column(name = "processed_by")
     private Integer processedBy;
 
@@ -55,6 +56,7 @@ public class ReturnRequest {
     @Column(name = "reject_reason", nullable = false, length = 500)
     private String rejectReason;
 
+    @SuppressWarnings("unused")
     @Column(name = "processed_at")
     private LocalDateTime processedAt;
 
