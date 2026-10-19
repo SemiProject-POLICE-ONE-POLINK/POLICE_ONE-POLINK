@@ -20,7 +20,7 @@ TEST_검은 카드지갑
 --itemBoundary
 Content-Disposition: form-data; name="category"
 
-WALLET_CARD
+지갑
 --itemBoundary
 Content-Disposition: form-data; name="description"
 
@@ -54,7 +54,7 @@ TEST_파란 우산
 --itemBoundary
 Content-Disposition: form-data; name="category"
 
-CLOTHING_GOODS
+의류잡화
 --itemBoundary
 Content-Disposition: form-data; name="description"
 
@@ -114,7 +114,7 @@ Content-Disposition: form-data; name="registrantId"
 --itemBoundary
 Content-Disposition: form-data; name="category"
 
-ETC
+기타
 --itemBoundary
 Content-Disposition: form-data; name="description"
 
@@ -148,7 +148,7 @@ Content-Disposition: form-data; name="itemName"
 --itemBoundary
 Content-Disposition: form-data; name="category"
 
-ETC
+기타
 --itemBoundary
 Content-Disposition: form-data; name="description"
 
@@ -182,7 +182,7 @@ TEST_노란 이어폰 케이스
 --itemBoundary
 Content-Disposition: form-data; name="category"
 
-ELECTRONICS
+전자기기
 --itemBoundary
 Content-Disposition: form-data; name="description"
 
@@ -221,7 +221,7 @@ Content-Disposition: form-data; name="itemName"
 --itemBoundary
 Content-Disposition: form-data; name="category"
 
-ETC
+기타
 --itemBoundary
 Content-Disposition: form-data; name="description"
 
