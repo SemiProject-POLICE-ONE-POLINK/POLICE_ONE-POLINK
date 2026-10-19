@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS tbl_case (
 -- case_id가 PK이면서 tbl_case를 참조하는 FK 역할도 한다.
 CREATE TABLE IF NOT EXISTS tbl_case_close (
     case_id VARCHAR(25) NOT NULL COMMENT '사건 번호',
-    closed_by INT NOT NULL COMMENT '사건 종결 처리 경찰의 회원 번호',
+    closed_by INT NOT NULL COMMENT '사건 종결 처리 관리자의 회원 번호',
     close_reason TEXT NOT NULL COMMENT '사건 종결 사유',
     closed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '사건 종결 일시',
 
