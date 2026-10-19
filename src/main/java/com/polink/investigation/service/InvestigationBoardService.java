@@ -1,5 +1,7 @@
 package com.polink.investigation.service;
 
+import com.polink.casefile.entity.CaseFile;
+import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.response.BoardCaseResponse;
 import com.polink.investigation.dto.response.BoardEvidenceSummaryResponse;
 import com.polink.investigation.dto.response.BoardWitnessSummaryResponse;
@@ -9,7 +11,6 @@ import com.polink.investigation.entity.Evidence;
 import com.polink.investigation.entity.InvestigationLog;
 import com.polink.investigation.entity.Statement;
 import com.polink.investigation.entity.Witness;
-import com.polink.investigation.repository.CaseExistenceRepository;
 import com.polink.investigation.repository.EvidenceRepository;
 import com.polink.investigation.repository.InvestigationLogRepository;
 import com.polink.investigation.repository.StatementRepository;
@@ -34,7 +35,7 @@ public class InvestigationBoardService {
     // 수사보드의 각 영역에는 최대 4개의 요약 정보만 표시
     private static final int SUMMARY_LIMIT = 4;
 
-    private final CaseExistenceRepository caseExistenceRepository;
+    private final CaseRepository caseRepository;
     private final EvidenceRepository evidenceRepository;
     private final WitnessRepository witnessRepository;
     private final StatementRepository statementRepository;
@@ -42,14 +43,14 @@ public class InvestigationBoardService {
     private final UserRepository userRepository;
 
     public InvestigationBoardService(
-            CaseExistenceRepository caseExistenceRepository,
+            CaseRepository caseRepository,
             EvidenceRepository evidenceRepository,
             WitnessRepository witnessRepository,
             StatementRepository statementRepository,
             InvestigationLogRepository investigationLogRepository,
             UserRepository userRepository
     ) {
-        this.caseExistenceRepository = caseExistenceRepository;
+        this.caseRepository = caseRepository;
         this.evidenceRepository = evidenceRepository;
         this.witnessRepository = witnessRepository;
         this.statementRepository = statementRepository;
@@ -75,21 +76,25 @@ public class InvestigationBoardService {
         }
 
         // 수사보드에 표시할 사건 기본 정보를 조회하고, 사건이 없으면 404 처리
-        BoardCaseResponse caseInfo =
-                caseExistenceRepository.findBoardCase(caseId)
+        CaseFile caseFile =
+                caseRepository.findById(caseId)
                         .orElseThrow(() -> new ResponseStatusException(
                                 HttpStatus.NOT_FOUND,
                                 "사건 정보를 확인할 수 없습니다."
                         ));
 
-        // 현재 배정된 담당 경찰관만 수사보드 접근 가능
-        if (caseInfo.assignedOfficerId() == null
-                || !caseInfo.assignedOfficerId().equals(user.getUserId())) {
+        User assignedOfficer = caseFile.getAssignedOfficer();
+
+        if (assignedOfficer == null
+                || !assignedOfficer.getUserId().equals(user.getUserId())) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "수사보드에 접근할 권한이 없습니다."
             );
         }
+
+        // CaseFile Entity를 수사보드 사건 정보 DTO로 변환
+        BoardCaseResponse caseInfo = BoardCaseResponse.from(caseFile);
 
         // 해당 사건의 전체 증거물을 조회하고 정렬 가능한 목록으로 복사
         List<Evidence> evidences =

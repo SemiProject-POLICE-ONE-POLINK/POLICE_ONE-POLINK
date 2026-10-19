@@ -1,12 +1,12 @@
 package com.polink.investigation.service;
 
+import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.request.WitnessCreateRequest;
 import com.polink.investigation.dto.response.WitnessCreateResponse;
 import com.polink.investigation.dto.response.WitnessListResponse;
 import com.polink.investigation.entity.Statement;
 import com.polink.investigation.entity.StatementType;
 import com.polink.investigation.entity.Witness;
-import com.polink.investigation.repository.CaseExistenceRepository;
 import com.polink.investigation.repository.StatementRepository;
 import com.polink.investigation.repository.WitnessRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +38,7 @@ class WitnessServiceTest {
     private StatementRepository statementRepository;
 
     @Mock
-    private CaseExistenceRepository caseExistenceRepository;
+    private CaseRepository caseRepository;
 
     // 가짜 Repository들을 연결해 테스트할 Service 생성
     @InjectMocks
@@ -61,7 +61,7 @@ class WitnessServiceTest {
     void createFirstWitness() {
 
         // 준비: 사건은 존재하고 등록된 목격자는 없는 상황
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(true);
 
         when(witnessRepository.findByCaseId(CASE_ID))
@@ -124,7 +124,7 @@ class WitnessServiceTest {
     @DisplayName("조회 순서와 관계없이 최대 순번 다음 번호로 등록된다")
     void createNextWitness() {
 
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(true);
 
         // 마지막 항목은 01이지만 최대 순번은 03인 상황
@@ -149,7 +149,7 @@ class WitnessServiceTest {
     @DisplayName("사건이 없으면 404 예외가 발생하고 저장하지 않는다")
     void rejectMissingCase() {
 
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(false);
 
         // 실행 및 확인
@@ -175,7 +175,7 @@ class WitnessServiceTest {
     @DisplayName("최대 순번이 99이면 목격자와 진술을 저장하지 않는다")
     void rejectSequenceOverflow() {
 
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(true);
 
         when(witnessRepository.findByCaseId(CASE_ID))
@@ -278,7 +278,7 @@ class WitnessServiceTest {
                 firstTime.plusHours(2)
         );
 
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(true);
 
         // 정렬되지 않은 목격자 목록
@@ -379,7 +379,7 @@ class WitnessServiceTest {
     @DisplayName("목격자가 없으면 빈 목록을 반환하고 진술은 조회하지 않는다")
     void findEmptyWitnessList() {
 
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(true);
 
         when(witnessRepository.findByCaseId(CASE_ID))
@@ -403,7 +403,7 @@ class WitnessServiceTest {
 
         Witness witness = savedWitness("W-2026-0405-01");
 
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(true);
 
         when(witnessRepository.findByCaseId(CASE_ID))
@@ -431,7 +431,7 @@ class WitnessServiceTest {
     @DisplayName("사건이 없으면 404 예외가 발생하고 목록을 조회하지 않는다")
     void rejectWitnessListForMissingCase() {
 
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(false);
 
         // 실행 및 확인
