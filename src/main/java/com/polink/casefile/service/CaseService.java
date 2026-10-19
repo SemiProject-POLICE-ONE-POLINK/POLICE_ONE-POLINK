@@ -18,6 +18,9 @@ import java.util.Objects;
 import com.polink.casefile.dto.response.CaseListResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import com.polink.casefile.dto.request.CaseOfficerRequest;
+import com.polink.casefile.dto.response.CaseOfficerResponse;
+import com.polink.casefile.entity.CaseStatus;
 
 @Service
 public class CaseService {
@@ -174,6 +177,81 @@ public class CaseService {
         }
 
         return new CaseListResponse(cases);
+    }
+
+    @Transactional
+    public CaseOfficerResponse assignOfficer(
+            Integer adminId,
+            String caseId,
+            CaseOfficerRequest request) {
+
+        if (adminId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "로그인 사용자 정보가 필요합니다."
+            );
+        }
+
+        User admin = userRepository.findById(adminId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "회원을 찾을 수 없습니다."
+                ));
+
+        if (admin.getRole() != UserRole.ADMIN) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "담당 경찰 배정은 관리자만 가능합니다."
+            );
+        }
+
+        User officer = userRepository.findById(request.getOfficerId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "배정할 회원을 찾을 수 없습니다."
+                ));
+
+        if (officer.getRole() != UserRole.POLICE) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "경찰 회원만 담당자로 배정할 수 있습니다."
+            );
+        }
+
+        CaseFile caseFile = caseRepository.findByCaseIdForUpdate(caseId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "사건을 찾을 수 없습니다."
+                ));
+
+        if (caseFile.getStatus() == CaseStatus.CLOSED
+                || caseFile.getStatus() == CaseStatus.CANCELED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "종결 또는 취소된 사건은 담당 경찰을 변경할 수 없습니다."
+            );
+        }
+
+        User currentOfficer = caseFile.getAssignedOfficer();
+
+        if (currentOfficer == null) {
+            if (caseFile.getStatus() != CaseStatus.WAITING) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "최초 배정은 대기 중인 사건만 가능합니다."
+                );
+            }
+        } else if (Objects.equals(
+                currentOfficer.getUserId(), officer.getUserId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "현재 담당 경찰과 동일한 경찰입니다."
+            );
+        }
+
+        caseFile.assignOfficer(officer);
+
+        return new CaseOfficerResponse(caseFile);
     }
 
     private User validateReporter(Integer reporterId) {

@@ -71,4 +71,12 @@ public class CaseFile {
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
     }
+
+    public void assignOfficer(User officer) {
+        if (this.assignedOfficer == null) {
+            this.status = CaseStatus.INVESTIGATING;
+        }
+
+        this.assignedOfficer = officer;
+    }
 }
