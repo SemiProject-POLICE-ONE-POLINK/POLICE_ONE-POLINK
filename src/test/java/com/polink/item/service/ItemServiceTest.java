@@ -2,14 +2,12 @@ package com.polink.item.service;
 
 import com.polink.item.dto.ItemCreateRequest;
 import com.polink.item.dto.ItemCreateResponse;
-import com.polink.item.dto.ItemDetailResponse;
 import com.polink.item.dto.ItemPageResponse;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import com.polink.item.entity.Item;
 import com.polink.item.entity.ItemStatus;
 import com.polink.item.entity.ItemType;
-import com.polink.item.exception.ItemNotFoundException;
 import com.polink.item.repository.ItemRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
