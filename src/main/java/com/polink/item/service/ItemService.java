@@ -87,6 +87,59 @@ public class ItemService {
         );
     }
 
+    /*
+     * 로그인한 사용자가 등록한 물품 목록을 페이지 단위로 조회한다.
+     * 현재는 Controller가 아직 로그인 userId를 전달하지 않는다.
+     * 로그인 기능이 연결되면 인증정보의 userId를 registrantId 자리에 전달한다.
+     */
+    public ItemPageResponse getMyItems(
+            Integer registrantId,
+            int page,
+            int size
+    ) {
+        // 로그인 사용자 ID가 없으면 정상적인 내 물품 조회를 할 수 없다.
+        if (registrantId == null || registrantId < 1) {
+            throw new IllegalArgumentException("로그인 사용자 정보가 필요합니다.");
+        }
+
+        // 페이지 번호는 0부터 시작한다.
+        if (page < 0) {
+            throw new IllegalArgumentException("페이지 번호는 0 이상이어야 합니다.");
+        }
+
+        // 한 번에 과도하게 많은 데이터를 가져오지 않도록 제한한다.
+        if (size < 1 || size > 100) {
+            throw new IllegalArgumentException("페이지 크기는 1 이상 100 이하여야 합니다.");
+        }
+
+        // 등록자 ID와 페이지 정보를 Repository에 전달한다.
+        Pageable pageable = PageRequest.of(page, size);
+
+        // 해당 사용자가 등록한 물품만 최신 등록순으로 조회한다.
+        Page<Item> itemPage = itemRepository
+                .findByRegistrantIdOrderByCreatedAtDescItemIdDesc(
+                        registrantId,
+                        pageable
+                );
+
+        // Entity 목록을 API 응답용 DTO 목록으로 바꾼다.
+        List<ItemListResponse> items = itemPage.getContent()
+                .stream()
+                .map(ItemListResponse::from)
+                .toList();
+
+        // 목록과 페이지 정보를 함께 반환한다.
+        return new ItemPageResponse(
+                items,
+                itemPage.getNumber(),
+                itemPage.getSize(),
+                itemPage.getTotalElements(),
+                itemPage.getTotalPages(),
+                itemPage.isFirst(),
+                itemPage.isLast()
+        );
+    }
+
     /** 물품 번호로 한 건의 상세 정보를 조회한다. */
     public ItemDetailResponse getItemDetail(String itemId) {
         Item item = itemRepository.findById(itemId)

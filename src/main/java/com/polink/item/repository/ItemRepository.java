@@ -58,4 +58,13 @@ public interface ItemRepository extends JpaRepository<Item, String> {
             @Param("status") ItemStatus status,
             Pageable pageable
     );
+
+    /*
+     * 특정 등록자(registrantId)가 등록한 물품만 최신 등록순으로 페이지 조회한다.
+     * 로그인 연동 후에는 Controller가 로그인한 사용자의 userId를 전달한다.
+     */
+    Page<Item> findByRegistrantIdOrderByCreatedAtDescItemIdDesc(
+            Integer registrantId,
+            Pageable pageable
+    );
 }
