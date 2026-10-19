@@ -7,6 +7,7 @@ import com.polink.user.repository.UserRepository;
 import com.polink.casefile.dto.request.CaseCreateRequest;
 import com.polink.casefile.dto.response.CaseCreateResponse;
 import com.polink.casefile.entity.CaseFile;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -32,7 +33,7 @@ public class CaseService {
         this.caseNumberGenerator = caseNumberGenerator;
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public CaseCreateResponse createCase(
             Integer reporterId,
             CaseCreateRequest request) {
