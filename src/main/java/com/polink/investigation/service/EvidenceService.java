@@ -1,10 +1,10 @@
 package com.polink.investigation.service;
 
+import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.request.EvidenceCreateRequest;
 import com.polink.investigation.dto.response.EvidenceCreateResponse;
 import com.polink.investigation.dto.response.EvidenceListResponse;
 import com.polink.investigation.entity.Evidence;
-import com.polink.investigation.repository.CaseExistenceRepository;
 import com.polink.investigation.repository.EvidenceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,14 +27,14 @@ public class EvidenceService {
 
     private final EvidenceRepository evidenceRepository;
     private final EvidenceFileService evidenceFileService;
-    // 임시 사건 번호 조회용 Repository로 이후에 삭제 예정
-    private final CaseExistenceRepository caseExistenceRepository;
+    private final CaseRepository caseRepository;
 
-    public EvidenceService(EvidenceRepository evidenceRepository, EvidenceFileService evidenceFileService, CaseExistenceRepository caseExistenceRepository) {
+    public EvidenceService(EvidenceRepository evidenceRepository, EvidenceFileService evidenceFileService, CaseRepository caseRepository) {
         this.evidenceRepository = evidenceRepository;
         this.evidenceFileService = evidenceFileService;
-        this.caseExistenceRepository = caseExistenceRepository;
+        this.caseRepository = caseRepository;
     }
+
 
     // 첨부 파일이 없는 증거물 등록 (파일 위치에 null 값 전달)
     @Transactional
@@ -103,7 +103,7 @@ public class EvidenceService {
     public List<EvidenceListResponse> findEvidenceList(String caseId) {
 
         // 사건이 없으면 HTTP 404로 처리
-        if (!caseExistenceRepository.existsByCaseId(caseId)) {
+        if (!caseRepository.existsById(caseId)) {
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "사건 정보를 확인할 수 없어 증거물 목록을 조회할 수 없습니다."
@@ -168,7 +168,7 @@ public class EvidenceService {
     // 1-1. 접수된 사건이 없으면 증거물 등록 불가
     private void checkCaseExists(String caseId) {
 
-        if (!caseExistenceRepository.existsByCaseId(caseId)) {
+        if (!caseRepository.existsById(caseId)) {
             throw new IllegalArgumentException(
                     "해당하는 사건을 찾을 수 없어 증거물을 등록할 수 없습니다."
             );

@@ -1,9 +1,9 @@
 package com.polink.investigation.service;
 
+import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.request.InvestigationLogCreateRequest;
 import com.polink.investigation.dto.response.InvestigationLogResponse;
 import com.polink.investigation.entity.InvestigationLog;
-import com.polink.investigation.repository.CaseExistenceRepository;
 import com.polink.investigation.repository.InvestigationLogRepository;
 import com.polink.user.entity.User;
 import com.polink.user.entity.UserRole;
@@ -20,13 +20,13 @@ import java.util.List;
 public class InvestigationLogService {
 
     private final InvestigationLogRepository investigationLogRepository;
-    private final CaseExistenceRepository caseExistenceRepository;
+    private final CaseRepository caseRepository;
     private final UserRepository userRepository;
 
 
-    public InvestigationLogService(InvestigationLogRepository investigationLogRepository, CaseExistenceRepository caseExistenceRepository, UserRepository userRepository) {
+    public InvestigationLogService(InvestigationLogRepository investigationLogRepository, CaseRepository caseRepository, UserRepository userRepository) {
         this.investigationLogRepository = investigationLogRepository;
-        this.caseExistenceRepository = caseExistenceRepository;
+        this.caseRepository = caseRepository;
         this.userRepository = userRepository;
     }
 
@@ -50,7 +50,7 @@ public class InvestigationLogService {
         }
 
         // 기록을 등록할 사건 확인
-        if (!caseExistenceRepository.existsByCaseId(caseId)) {
+        if (!caseRepository.existsById(caseId)) {
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "사건 정보를 확인할 수 없어 수사기록을 등록할 수 없습니다."
@@ -88,7 +88,7 @@ public class InvestigationLogService {
             );
         }
 
-        if (!caseExistenceRepository.existsByCaseId(caseId)) {
+        if (!caseRepository.existsById(caseId)) {
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "사건 정보를 확인할 수 없어 수사기록을 조회할 수 없습니다."

@@ -1,5 +1,6 @@
 package com.polink.investigation.service;
 
+import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.request.WitnessCreateRequest;
 import com.polink.investigation.dto.response.StatementResponse;
 import com.polink.investigation.dto.response.WitnessCreateResponse;
@@ -7,7 +8,6 @@ import com.polink.investigation.dto.response.WitnessListResponse;
 import com.polink.investigation.entity.Statement;
 import com.polink.investigation.entity.StatementType;
 import com.polink.investigation.entity.Witness;
-import com.polink.investigation.repository.CaseExistenceRepository;
 import com.polink.investigation.repository.StatementRepository;
 import com.polink.investigation.repository.WitnessRepository;
 import org.springframework.http.HttpStatus;
@@ -28,12 +28,12 @@ public class WitnessService {
     private final StatementRepository statementRepository;
 
     // 목격자를 등록할 사건의 존재 여부 확인
-    private final CaseExistenceRepository caseExistenceRepository;
+    private final CaseRepository caseRepository;
 
-    public WitnessService(WitnessRepository witnessRepository, StatementRepository statementRepository, CaseExistenceRepository caseExistenceRepository) {
+    public WitnessService(WitnessRepository witnessRepository, StatementRepository statementRepository, CaseRepository caseRepository) {
         this.witnessRepository = witnessRepository;
         this.statementRepository = statementRepository;
-        this.caseExistenceRepository = caseExistenceRepository;
+        this.caseRepository = caseRepository;
     }
 
     // 사건별 목격자 정보 및 최초 진술 추가
@@ -43,7 +43,7 @@ public class WitnessService {
             WitnessCreateRequest request
     ) {
         // 1. 목격자를 등록할 사건이 있는지 확인
-        if (!caseExistenceRepository.existsByCaseId(caseId)) {
+        if (!caseRepository.existsById(caseId)) {
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "사건 정보를 확인할 수 없어 목격자를 등록할 수 없습니다."
@@ -96,7 +96,7 @@ public class WitnessService {
     public List<WitnessListResponse> findWitnessList(String caseId) {
 
         // 1. 조회할 사건이 있는지 확인
-        if (!caseExistenceRepository.existsByCaseId(caseId)) {
+        if (!caseRepository.existsById(caseId)) {
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "사건 정보를 확인할 수 없어 목격자 목록을 조회할 수 없습니다."

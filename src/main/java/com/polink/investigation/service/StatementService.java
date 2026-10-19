@@ -1,11 +1,11 @@
 package com.polink.investigation.service;
 
+import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.request.StatementCreateRequest;
 import com.polink.investigation.dto.response.StatementResponse;
 import com.polink.investigation.entity.Statement;
 import com.polink.investigation.entity.StatementType;
 import com.polink.investigation.entity.Witness;
-import com.polink.investigation.repository.CaseExistenceRepository;
 import com.polink.investigation.repository.StatementRepository;
 import com.polink.investigation.repository.WitnessRepository;
 import org.springframework.http.HttpStatus;
@@ -20,12 +20,12 @@ public class StatementService {
 
     private final StatementRepository statementRepository;
     private final WitnessRepository witnessRepository;
-    private final CaseExistenceRepository caseExistenceRepository;
+    private final CaseRepository caseRepository;
 
-    public StatementService(StatementRepository statementRepository, WitnessRepository witnessRepository, CaseExistenceRepository caseExistenceRepository) {
+    public StatementService(StatementRepository statementRepository, WitnessRepository witnessRepository, CaseRepository caseRepository) {
         this.statementRepository = statementRepository;
         this.witnessRepository = witnessRepository;
-        this.caseExistenceRepository = caseExistenceRepository;
+        this.caseRepository = caseRepository;
     }
 
     // 기존 목격자에게 새 진술 등록 — 이전 진술은 유지
@@ -37,7 +37,7 @@ public class StatementService {
     ) {
 
         // 1. 진술을 등록할 사건이 있는지 확인
-        if (!caseExistenceRepository.existsByCaseId(caseId)) {
+        if (!caseRepository.existsById(caseId)) {
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "사건 정보를 확인할 수 없어 진술을 등록할 수 없습니다."

@@ -1,6 +1,8 @@
 package com.polink.investigation.service;
 
-import com.polink.investigation.dto.response.BoardCaseResponse;
+import com.polink.casefile.entity.CaseFile;
+import com.polink.casefile.entity.CaseType;
+import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.response.InvestigationBoardResponse;
 import com.polink.investigation.entity.Evidence;
 import com.polink.investigation.entity.EvidenceType;
@@ -8,7 +10,6 @@ import com.polink.investigation.entity.InvestigationLog;
 import com.polink.investigation.entity.Statement;
 import com.polink.investigation.entity.StatementType;
 import com.polink.investigation.entity.Witness;
-import com.polink.investigation.repository.CaseExistenceRepository;
 import com.polink.investigation.repository.EvidenceRepository;
 import com.polink.investigation.repository.InvestigationLogRepository;
 import com.polink.investigation.repository.StatementRepository;
@@ -40,7 +41,7 @@ import static org.mockito.Mockito.*;
 class InvestigationBoardServiceTest {
 
     @Mock
-    private CaseExistenceRepository caseExistenceRepository;
+    private CaseRepository caseRepository;
 
     @Mock
     private EvidenceRepository evidenceRepository;
@@ -72,22 +73,12 @@ class InvestigationBoardServiceTest {
 
         User officer = savedUser(OFFICER_ID, UserRole.POLICE);
 
-        BoardCaseResponse caseInfo = new BoardCaseResponse(
-                CASE_ID,
-                "편의점 절도 사건",
-                "THEFT",
-                "INVESTIGATING",
-                BASE_TIME.minusDays(1),
-                "서울시 강남구",
-                "편의점에서 물품이 도난당한 사건",
-                OFFICER_ID
-        );
-
         when(userRepository.findById(OFFICER_ID))
                 .thenReturn(Optional.of(officer));
 
-        when(caseExistenceRepository.findBoardCase(CASE_ID))
-                .thenReturn(Optional.of(caseInfo));
+        // 요청한 경찰관이 담당자로 배정된 사건
+        when(caseRepository.findById(CASE_ID))
+                .thenReturn(Optional.of(savedCase(officer)));
 
         // 정렬되지 않은 증거물 5개
         when(evidenceRepository.findByCaseId(CASE_ID))
@@ -198,9 +189,12 @@ class InvestigationBoardServiceTest {
                         OFFICER_ID
                 );
 
-        // 사건 기본 정보
+        // 사건 기본 정보 — CaseFile이 수사보드 DTO로 변환되었는지 확인
         assertEquals(CASE_ID, response.caseInfo().caseId());
         assertEquals("편의점 절도 사건", response.caseInfo().title());
+        assertEquals("THEFT", response.caseInfo().caseType());
+        assertEquals("INVESTIGATING", response.caseInfo().status());
+        assertEquals(OFFICER_ID, response.caseInfo().assignedOfficerId());
 
         // 증거물은 전체 5개지만 번호 오름차순으로 최대 4개만 반환
         assertEquals(5, response.totalEvidenceCount());
@@ -276,8 +270,9 @@ class InvestigationBoardServiceTest {
         when(userRepository.findById(OFFICER_ID))
                 .thenReturn(Optional.of(officer));
 
-        when(caseExistenceRepository.findBoardCase(CASE_ID))
-                .thenReturn(Optional.of(boardCase()));
+        // 요청한 경찰관이 담당자로 배정된 사건
+        when(caseRepository.findById(CASE_ID))
+                .thenReturn(Optional.of(savedCase(officer)));
 
         when(evidenceRepository.findByCaseId(CASE_ID))
                 .thenReturn(List.of());
@@ -330,7 +325,7 @@ class InvestigationBoardServiceTest {
 
         verifyNoInteractions(
                 userRepository,
-                caseExistenceRepository,
+                caseRepository,
                 evidenceRepository,
                 witnessRepository,
                 statementRepository,
@@ -359,7 +354,7 @@ class InvestigationBoardServiceTest {
         );
 
         verifyNoInteractions(
-                caseExistenceRepository,
+                caseRepository,
                 evidenceRepository,
                 witnessRepository,
                 statementRepository,
@@ -394,7 +389,7 @@ class InvestigationBoardServiceTest {
         );
 
         verifyNoInteractions(
-                caseExistenceRepository,
+                caseRepository,
                 evidenceRepository,
                 witnessRepository,
                 statementRepository,
@@ -411,7 +406,7 @@ class InvestigationBoardServiceTest {
                         savedUser(OFFICER_ID, UserRole.POLICE)
                 ));
 
-        when(caseExistenceRepository.findBoardCase(CASE_ID))
+        when(caseRepository.findById(CASE_ID))
                 .thenReturn(Optional.empty());
 
         ResponseStatusException exception = assertThrows(
@@ -435,17 +430,100 @@ class InvestigationBoardServiceTest {
         );
     }
 
-    private BoardCaseResponse boardCase() {
-        return new BoardCaseResponse(
-                CASE_ID,
-                "편의점 절도 사건",
-                "THEFT",
-                "INVESTIGATING",
-                BASE_TIME.minusDays(1),
-                "서울시 강남구",
-                "편의점에서 물품이 도난당한 사건",
-                OFFICER_ID
+    @Test
+    @DisplayName("다른 경찰관이 담당한 사건이면 403 예외가 발생하고 수사 자료를 조회하지 않는다")
+    void rejectOfficerNotAssigned() {
+
+        // 준비: 요청자는 8번 경찰관, 사건 담당자는 7번 경찰관
+        Integer otherOfficerId = 8;
+
+        when(userRepository.findById(otherOfficerId))
+                .thenReturn(Optional.of(
+                        savedUser(otherOfficerId, UserRole.POLICE)
+                ));
+
+        when(caseRepository.findById(CASE_ID))
+                .thenReturn(Optional.of(
+                        savedCase(savedUser(OFFICER_ID, UserRole.POLICE))
+                ));
+
+        // 실행
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> investigationBoardService.findInvestigationBoard(
+                        CASE_ID,
+                        otherOfficerId
+                )
         );
+
+        // 검증: 403이고 수사 자료는 조회하지 않음
+        assertEquals(
+                HttpStatus.FORBIDDEN,
+                exception.getStatusCode()
+        );
+
+        verifyNoInteractions(
+                evidenceRepository,
+                witnessRepository,
+                statementRepository,
+                investigationLogRepository
+        );
+    }
+
+    @Test
+    @DisplayName("담당 경찰관이 배정되지 않은 사건이면 403 예외가 발생한다")
+    void rejectUnassignedCase() {
+
+        // 준비: 경찰관이 요청했지만 사건에 담당자가 없음
+        when(userRepository.findById(OFFICER_ID))
+                .thenReturn(Optional.of(
+                        savedUser(OFFICER_ID, UserRole.POLICE)
+                ));
+
+        when(caseRepository.findById(CASE_ID))
+                .thenReturn(Optional.of(savedCase(null)));
+
+        // 실행
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> investigationBoardService.findInvestigationBoard(
+                        CASE_ID,
+                        OFFICER_ID
+                )
+        );
+
+        // 검증: 403이고 수사 자료는 조회하지 않음
+        assertEquals(
+                HttpStatus.FORBIDDEN,
+                exception.getStatusCode()
+        );
+
+        verifyNoInteractions(
+                evidenceRepository,
+                witnessRepository,
+                statementRepository,
+                investigationLogRepository
+        );
+    }
+
+    // DB에서 조회한 사건 역할의 테스트 객체 생성 — 담당 경찰관이 null이면 미배정 사건
+    private CaseFile savedCase(User assignedOfficer) {
+        CaseFile caseFile = new CaseFile(
+                CASE_ID,
+                savedUser(1, UserRole.CITIZEN),   // 신고자
+                "편의점 절도 사건",
+                CaseType.THEFT,
+                "편의점에서 물품이 도난당한 사건",
+                BASE_TIME.minusDays(1),
+                "서울시 강남구"
+        );
+
+        // 담당자를 배정하면 사건 상태가 INVESTIGATING으로 바뀜
+        if (assignedOfficer != null) {
+            caseFile.assignOfficer(assignedOfficer);
+        }
+
+        return caseFile;
     }
 
     private User savedUser(

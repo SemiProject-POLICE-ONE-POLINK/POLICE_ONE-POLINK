@@ -1,11 +1,11 @@
 package com.polink.investigation.service;
 
+import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.request.EvidenceCreateRequest;
 import com.polink.investigation.dto.response.EvidenceCreateResponse;
 import com.polink.investigation.dto.response.EvidenceListResponse;
 import com.polink.investigation.entity.Evidence;
 import com.polink.investigation.entity.EvidenceType;
-import com.polink.investigation.repository.CaseExistenceRepository;
 import com.polink.investigation.repository.EvidenceRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,7 +35,7 @@ class EvidenceServiceTest {
     private EvidenceRepository evidenceRepository;
 
     @Mock
-    private CaseExistenceRepository caseExistenceRepository;
+    private CaseRepository caseRepository;
 
     // 가짜 Repository들을 주입하여 테스트할 Service 생성
     @InjectMocks
@@ -59,7 +59,7 @@ class EvidenceServiceTest {
     void createFirstEvidence() {
 
         // 준비: 해당 사건이 존재하도록 설정
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(true);
 
         // 준비: 해당 사건에 저장된 증거물이 없는 상황
@@ -99,7 +99,7 @@ class EvidenceServiceTest {
     void createNextEvidence() {
 
         // 준비: 해당 사건이 존재하도록 설정
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(true);
 
         // 준비: 순번이 03, 01인 증거물을 순서대로 반환
@@ -127,7 +127,7 @@ class EvidenceServiceTest {
     void rejectMissingCase() {
 
         // 준비: 해당 사건이 존재하지 않는 상황
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(false);
 
         // 실행 및 확인: 등록 요청 시 지정한 예외가 발생하는지 검사
@@ -146,7 +146,7 @@ class EvidenceServiceTest {
     void rejectSequenceOverflow() {
 
         // 준비: 해당 사건이 존재하도록 설정
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(true);
 
         // 준비: 해당 사건의 마지막 증거물 순번이 99인 상황
@@ -193,7 +193,7 @@ class EvidenceServiceTest {
         Evidence thirdEvidence =
                 savedEvidence("EV-2026-0405-03");
 
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(true);
 
         // 정렬되지 않은 순서로 반환하여 Service의 정렬 동작 검사
@@ -237,7 +237,7 @@ class EvidenceServiceTest {
     void findEmptyEvidenceList() {
 
         // 준비: 사건은 존재하지만 증거물 조회 결과는 없는 상황
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(true);
 
         when(evidenceRepository.findByCaseId(CASE_ID))
@@ -260,7 +260,7 @@ class EvidenceServiceTest {
     void rejectEvidenceListForMissingCase() {
 
         // 준비: 해당 사건이 존재하지 않는 상황
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(false);
 
         // 실행 및 확인: Service에서 지정한 예외가 발생하는지 검사

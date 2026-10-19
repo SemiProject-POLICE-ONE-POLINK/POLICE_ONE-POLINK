@@ -1,9 +1,9 @@
 package com.polink.investigation.service;
 
+import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.request.InvestigationLogCreateRequest;
 import com.polink.investigation.dto.response.InvestigationLogResponse;
 import com.polink.investigation.entity.InvestigationLog;
-import com.polink.investigation.repository.CaseExistenceRepository;
 import com.polink.investigation.repository.InvestigationLogRepository;
 import com.polink.user.entity.User;
 import com.polink.user.entity.UserRole;
@@ -39,7 +39,7 @@ class InvestigationLogServiceTest {
     private InvestigationLogRepository investigationLogRepository;
 
     @Mock
-    private CaseExistenceRepository caseExistenceRepository;
+    private CaseRepository caseRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -70,7 +70,7 @@ class InvestigationLogServiceTest {
 
             when(userRepository.findById(OFFICER_ID))
                     .thenReturn(Optional.of(officer));
-            when(caseExistenceRepository.existsByCaseId(CASE_ID))
+            when(caseRepository.existsById(CASE_ID))
                     .thenReturn(true);
 
             // DB가 새 기록 번호를 생성하는 상황을 재현
@@ -122,7 +122,7 @@ class InvestigationLogServiceTest {
             assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
             verifyNoInteractions(
                     userRepository,
-                    caseExistenceRepository,
+                    caseRepository,
                     investigationLogRepository
             );
         }
@@ -142,7 +142,7 @@ class InvestigationLogServiceTest {
             );
 
             assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
-            verifyNoInteractions(caseExistenceRepository, investigationLogRepository);
+            verifyNoInteractions(caseRepository, investigationLogRepository);
         }
 
         // 등록은 경찰관만 가능 — 시민·관리자는 거부
@@ -162,7 +162,7 @@ class InvestigationLogServiceTest {
             );
 
             assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
-            verifyNoInteractions(caseExistenceRepository, investigationLogRepository);
+            verifyNoInteractions(caseRepository, investigationLogRepository);
         }
 
         @Test
@@ -171,7 +171,7 @@ class InvestigationLogServiceTest {
 
             when(userRepository.findById(OFFICER_ID))
                     .thenReturn(Optional.of(savedUser(OFFICER_ID, UserRole.POLICE)));
-            when(caseExistenceRepository.existsByCaseId(CASE_ID))
+            when(caseRepository.existsById(CASE_ID))
                     .thenReturn(false);
 
             ResponseStatusException exception = assertThrows(
@@ -209,7 +209,7 @@ class InvestigationLogServiceTest {
             );
 
             when(userRepository.findById(5)).thenReturn(Optional.of(viewer));
-            when(caseExistenceRepository.existsByCaseId(CASE_ID)).thenReturn(true);
+            when(caseRepository.existsById(CASE_ID)).thenReturn(true);
             when(investigationLogRepository
                     .findByCaseIdOrderByInvestigatedAtAscLogIdAsc(CASE_ID))
                     .thenReturn(logs);
@@ -237,7 +237,7 @@ class InvestigationLogServiceTest {
 
             when(userRepository.findById(OFFICER_ID))
                     .thenReturn(Optional.of(savedUser(OFFICER_ID, UserRole.POLICE)));
-            when(caseExistenceRepository.existsByCaseId(CASE_ID)).thenReturn(true);
+            when(caseRepository.existsById(CASE_ID)).thenReturn(true);
             when(investigationLogRepository
                     .findByCaseIdOrderByInvestigatedAtAscLogIdAsc(CASE_ID))
                     .thenReturn(List.of());
@@ -260,7 +260,7 @@ class InvestigationLogServiceTest {
             assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
             verifyNoInteractions(
                     userRepository,
-                    caseExistenceRepository,
+                    caseRepository,
                     investigationLogRepository
             );
         }
@@ -277,7 +277,7 @@ class InvestigationLogServiceTest {
             );
 
             assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
-            verifyNoInteractions(caseExistenceRepository, investigationLogRepository);
+            verifyNoInteractions(caseRepository, investigationLogRepository);
         }
 
         @Test
@@ -293,7 +293,7 @@ class InvestigationLogServiceTest {
             );
 
             assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
-            verifyNoInteractions(caseExistenceRepository, investigationLogRepository);
+            verifyNoInteractions(caseRepository, investigationLogRepository);
         }
 
         @Test
@@ -302,7 +302,7 @@ class InvestigationLogServiceTest {
 
             when(userRepository.findById(OFFICER_ID))
                     .thenReturn(Optional.of(savedUser(OFFICER_ID, UserRole.POLICE)));
-            when(caseExistenceRepository.existsByCaseId(anyString())).thenReturn(false);
+            when(caseRepository.existsById(anyString())).thenReturn(false);
 
             ResponseStatusException exception = assertThrows(
                     ResponseStatusException.class,

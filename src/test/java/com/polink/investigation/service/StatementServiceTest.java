@@ -1,11 +1,11 @@
 package com.polink.investigation.service;
 
+import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.request.StatementCreateRequest;
 import com.polink.investigation.dto.response.StatementResponse;
 import com.polink.investigation.entity.Statement;
 import com.polink.investigation.entity.StatementType;
 import com.polink.investigation.entity.Witness;
-import com.polink.investigation.repository.CaseExistenceRepository;
 import com.polink.investigation.repository.StatementRepository;
 import com.polink.investigation.repository.WitnessRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -39,7 +39,7 @@ class StatementServiceTest {
     private WitnessRepository witnessRepository;
 
     @Mock
-    private CaseExistenceRepository caseExistenceRepository;
+    private CaseRepository caseRepository;
 
     @InjectMocks
     private StatementService statementService;
@@ -69,7 +69,7 @@ class StatementServiceTest {
                 );
 
         // 준비: 사건과 해당 사건의 목격자가 존재
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(true);
 
         when(witnessRepository.findById(WITNESS_ID))
@@ -130,7 +130,7 @@ class StatementServiceTest {
     @DisplayName("사건이 없으면 404 예외가 발생하고 저장하지 않는다")
     void rejectMissingCase() {
 
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(false);
 
         ResponseStatusException exception = assertThrows(
@@ -155,7 +155,7 @@ class StatementServiceTest {
     @DisplayName("목격자가 없으면 404 예외가 발생하고 저장하지 않는다")
     void rejectMissingWitness() {
 
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(true);
 
         when(witnessRepository.findById(WITNESS_ID))
@@ -180,7 +180,7 @@ class StatementServiceTest {
     @DisplayName("다른 사건의 목격자이면 404 예외가 발생한다")
     void rejectWitnessFromAnotherCase() {
 
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(true);
 
         // 목격자는 존재하지만 DB에 저장된 소속 사건번호가 다른 상황
@@ -208,7 +208,7 @@ class StatementServiceTest {
     @DisplayName("INITIAL 유형이면 400 예외가 발생하고 저장하지 않는다")
     void rejectInitialStatement() {
 
-        when(caseExistenceRepository.existsByCaseId(CASE_ID))
+        when(caseRepository.existsById(CASE_ID))
                 .thenReturn(true);
 
         when(witnessRepository.findById(WITNESS_ID))
