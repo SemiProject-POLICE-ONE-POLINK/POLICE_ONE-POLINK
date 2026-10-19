@@ -1,5 +1,5 @@
 ### 증거물 등록
-### 1. 정상 등록 → 201
+### 1. 파일 없는 정상 등록 → 201
 POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
 Content-Type: application/json
 
@@ -53,11 +53,12 @@ Content-Type: application/json
   "description": "현장 출입구 사진",
   "acquiredLocation": ""
 }
-### 6. 첨부파일 포함 등록 → 201
-POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
-Content-Type: multipart/form-data; boundary=evidenceBoundary
 
---evidenceBoundary
+### 6. 첨부파일 포함 정상 등록 → 201
+POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
+Content-Type: multipart/form-data; boundary=upload
+
+--upload
 Content-Disposition: form-data; name="request"
 Content-Type: application/json
 
@@ -67,18 +68,18 @@ Content-Type: application/json
   "description": "현장 출입구 사진",
   "acquiredLocation": "현장 출입구"
 }
---evidenceBoundary
-Content-Disposition: form-data; name="file"; filename="scene.jpg"
-Content-Type: image/jpeg
+--upload
+Content-Disposition: form-data; name="file"; filename="POLINK.png"
+Content-Type: image/png
 
--- 아래에 실제 경로를 넣어서 테스트
-< C:/Users/사용자명/Downloads/POLINK.png
+< C:/Users/HYUN/Downloads/POLINK.png
+--upload--
 
 ### 7. 미지원 확장자 → 400
 POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
-Content-Type: multipart/form-data; boundary=evidenceBoundary
+Content-Type: multipart/form-data; boundary=upload
 
---evidenceBoundary
+--upload
 Content-Disposition: form-data; name="request"
 Content-Type: application/json
 
@@ -88,18 +89,18 @@ Content-Type: application/json
   "description": "지원하지 않는 확장자 등록 시도",
   "acquiredLocation": "테스트 장소"
 }
---evidenceBoundary
+--upload
 Content-Disposition: form-data; name="file"; filename="test.exe"
 Content-Type: application/octet-stream
 
 test
---evidenceBoundary--
+--upload--
 
 ### 8. 빈 파일 → 400
 POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
-Content-Type: multipart/form-data; boundary=evidenceBoundary
+Content-Type: multipart/form-data; boundary=upload
 
---evidenceBoundary
+--upload
 Content-Disposition: form-data; name="request"
 Content-Type: application/json
 
@@ -109,9 +110,13 @@ Content-Type: application/json
   "description": "내용 없는 파일 등록 시도",
   "acquiredLocation": "테스트 장소"
 }
---evidenceBoundary
+--upload
 Content-Disposition: form-data; name="file"; filename="empty.jpg"
 Content-Type: image/jpeg
 
-< C:/Users/HYUN/Downloads/새 텍스트 문서.txt
---evidenceBoundary--
+< C:/Users/HYUN/Downloads/empty.jpg
+--upload--
+
+### 증거물 조회
+### 9. 사건별 증거물 목록 조회 → 200
+GET http://localhost:8080/api/cases/SMPA-2026-0405/evidences

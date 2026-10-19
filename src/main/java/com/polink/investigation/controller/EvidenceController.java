@@ -2,6 +2,7 @@ package com.polink.investigation.controller;
 
 import com.polink.investigation.dto.request.EvidenceCreateRequest;
 import com.polink.investigation.dto.response.EvidenceCreateResponse;
+import com.polink.investigation.dto.response.EvidenceListResponse;
 import com.polink.investigation.service.EvidenceService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -9,6 +10,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/cases/{caseId}/evidences")
@@ -48,5 +51,18 @@ public class EvidenceController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(response);
+    }
+
+    // 선택한 사건의 증거물 목록 조회
+    @GetMapping
+    public ResponseEntity<List<EvidenceListResponse>> findEvidenceList(
+            @PathVariable("caseId") String caseId
+    ) {
+        // Service에서 조회한 응답 DTO 목록 받기
+        List<EvidenceListResponse> responses =
+                evidenceService.findEvidenceList(caseId);
+
+        // HTTP 200과 증거물 목록 반환
+        return ResponseEntity.ok(responses);
     }
 }
