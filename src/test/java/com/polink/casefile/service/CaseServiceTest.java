@@ -22,6 +22,7 @@ import com.polink.casefile.dto.response.CaseDetailResponse;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import com.polink.casefile.dto.response.CaseListResponse;
+import com.polink.casefile.dto.response.MyCaseListResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
@@ -295,7 +296,7 @@ public class CaseServiceTest {
         when(caseRepository.findByAssignedOfficer_UserId(2, pageable))
                 .thenReturn(Page.empty(pageable));
 
-        CaseListResponse response =
+        MyCaseListResponse response =
                 caseService.getMyCases(2, pageable);
 
         assertTrue(response.getItems().isEmpty());
@@ -307,6 +308,88 @@ public class CaseServiceTest {
         verify(caseRepository, never())
                 .findByReporter_UserId(any(), any(Pageable.class));
         verifyNoInteractions(caseNumberGenerator);
+    }
+
+    @Test
+    void getMyCases_citizenOnlyOwnCases() {
+        User citizen = new User(
+                "citizen01",
+                "test-hash",
+                "테스트시민",
+                "010-0000-9701"
+        );
+        ReflectionTestUtils.setField(citizen, "userId", 1);
+
+        LocalDateTime occurredAt =
+                LocalDateTime.of(2026, 10, 18, 10, 0);
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                citizen,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                occurredAt,
+                "테스트 장소"
+        );
+
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<CaseFile> page =
+                new PageImpl<>(List.of(caseFile), pageable, 1);
+
+        when(userRepository.findById(1))
+                .thenReturn(Optional.of(citizen));
+        when(caseRepository.findByReporter_UserId(1, pageable))
+                .thenReturn(page);
+
+        MyCaseListResponse response =
+                caseService.getMyCases(1, pageable);
+
+        assertEquals(1L, response.getTotalElements());
+        assertEquals(1, response.getItems().size());
+
+        var item = response.getItems().get(0);
+        assertEquals("SMPA-2026-0042", item.getCaseId());
+        assertEquals("지갑 절도 신고", item.getTitle());
+        assertEquals(CaseStatus.WAITING, item.getStatus());
+
+        verify(caseRepository)
+                .findByReporter_UserId(1, pageable);
+        verify(caseRepository, never())
+                .findByAssignedOfficer_UserId(any(), any(Pageable.class));
+        verify(caseRepository, never())
+                .findAll(any(Pageable.class));
+        verifyNoInteractions(caseNumberGenerator);
+    }
+
+    @Test
+    void getMyCases_adminForbidden() {
+        User admin = new User(
+                "admin01",
+                "test-hash",
+                "테스트관리자",
+                "010-0000-9702"
+        );
+        ReflectionTestUtils.setField(admin, "userId", 3);
+        ReflectionTestUtils.setField(admin, "role", UserRole.ADMIN);
+
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(userRepository.findById(3))
+                .thenReturn(Optional.of(admin));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.getMyCases(3, pageable)
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        assertEquals(
+                "내 사건 조회는 시민과 경찰만 가능합니다.",
+                exception.getReason()
+        );
+
+        verifyNoInteractions(caseRepository, caseNumberGenerator);
     }
 
     @ParameterizedTest

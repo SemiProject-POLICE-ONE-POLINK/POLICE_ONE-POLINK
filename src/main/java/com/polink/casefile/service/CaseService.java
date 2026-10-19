@@ -1,5 +1,6 @@
 package com.polink.casefile.service;
 
+import com.polink.casefile.dto.response.MyCaseListResponse;
 import com.polink.casefile.repository.CaseRepository;
 import com.polink.user.entity.User;
 import com.polink.user.entity.UserRole;
@@ -104,7 +105,7 @@ public class CaseService {
     }
 
     @Transactional(readOnly = true)
-    public CaseListResponse getMyCases(
+    public MyCaseListResponse getMyCases(
             Integer userId,
             Pageable pageable) {
 
@@ -136,7 +137,7 @@ public class CaseService {
             );
         }
 
-        return new CaseListResponse(cases);
+        return new MyCaseListResponse(cases);
     }
 
     @Transactional(readOnly = true)
