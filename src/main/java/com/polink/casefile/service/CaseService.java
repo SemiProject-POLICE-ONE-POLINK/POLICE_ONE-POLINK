@@ -1,5 +1,6 @@
 package com.polink.casefile.service;
 
+import com.polink.casefile.dto.response.MyCaseListResponse;
 import com.polink.casefile.repository.CaseRepository;
 import com.polink.user.entity.User;
 import com.polink.user.entity.UserRole;
@@ -7,6 +8,7 @@ import com.polink.user.repository.UserRepository;
 import com.polink.casefile.dto.request.CaseCreateRequest;
 import com.polink.casefile.dto.response.CaseCreateResponse;
 import com.polink.casefile.entity.CaseFile;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -35,7 +37,7 @@ public class CaseService {
         this.caseNumberGenerator = caseNumberGenerator;
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public CaseCreateResponse createCase(
             Integer reporterId,
             CaseCreateRequest request) {
@@ -106,7 +108,7 @@ public class CaseService {
     }
 
     @Transactional(readOnly = true)
-    public CaseListResponse getMyCases(
+    public MyCaseListResponse getMyCases(
             Integer userId,
             Pageable pageable) {
 
@@ -138,7 +140,7 @@ public class CaseService {
             );
         }
 
-        return new CaseListResponse(cases);
+        return new MyCaseListResponse(cases);
     }
 
     @Transactional(readOnly = true)

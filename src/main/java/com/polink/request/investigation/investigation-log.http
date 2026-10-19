@@ -1,0 +1,110 @@
+### 수사기록 정상 등록
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigations
+Content-Type: application/json
+X-User-Id: 7
+
+{
+  "content": "교차로 CCTV 추가 영상을 확보하고 차량 이동 경로를 확인했습니다.",
+  "investigatedAt": "2026-10-19T09:30:00"
+}
+
+### 로그인 정보 없이 등록
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigations
+Content-Type: application/json
+
+{
+  "content": "로그인 정보 없이 등록을 시도합니다.",
+  "investigatedAt": "2026-10-19T09:30:00"
+}
+
+### 시민 회원으로 등록
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigations
+Content-Type: application/json
+X-User-Id: 1
+
+{
+  "content": "시민 회원으로 등록을 시도합니다.",
+  "investigatedAt": "2026-10-19T09:30:00"
+}
+
+### 존재하지 않는 회원으로 등록
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigations
+Content-Type: application/json
+X-User-Id: 9999
+
+{
+  "content": "존재하지 않는 회원으로 등록을 시도합니다.",
+  "investigatedAt": "2026-10-19T09:30:00"
+}
+
+### 존재하지 않는 사건에 등록
+POST http://localhost:8080/api/v1/cases/SMPA-2026-9999/investigations
+Content-Type: application/json
+X-User-Id: 7
+
+{
+  "content": "존재하지 않는 사건에 등록을 시도합니다.",
+  "investigatedAt": "2026-10-19T09:30:00"
+}
+
+### 수사 내용이 빈 값
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigations
+Content-Type: application/json
+X-User-Id: 7
+
+{
+  "content": "",
+  "investigatedAt": "2026-10-19T09:30:00"
+}
+
+### 수사 내용 누락
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigations
+Content-Type: application/json
+X-User-Id: 7
+
+{
+  "investigatedAt": "2026-10-19T09:30:00"
+}
+
+### 수사 일시 누락
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigations
+Content-Type: application/json
+X-User-Id: 7
+
+{
+  "content": "수사 일시 없이 등록을 시도합니다."
+}
+
+### 미래 수사 일시로 등록
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigations
+Content-Type: application/json
+X-User-Id: 7
+
+{
+  "content": "미래 수사 일시로 등록을 시도합니다.",
+  "investigatedAt": "2099-12-31T23:59:59"
+}
+
+### 수사기록 조회
+### 1. 사건별 수사기록 목록 조회 → 200
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigations
+X-User-Id: 7
+
+### 2. 로그인 정보 없이 조회 → 401
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigations
+
+### 3. 시민 회원으로 조회 → 403
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigations
+X-User-Id: 1
+
+### 4. 존재하지 않는 회원으로 조회 → 401
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/investigations
+X-User-Id: 9999
+
+### 5. 존재하지 않는 사건 조회 → 404
+GET http://localhost:8080/api/v1/cases/SMPA-2026-9999/investigations
+X-User-Id: 7
+
+### 6. 수사기록 없는 사건 조회 → 200 빈 배열
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0429/investigations
+X-User-Id: 7
