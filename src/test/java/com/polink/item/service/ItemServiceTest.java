@@ -2,14 +2,12 @@ package com.polink.item.service;
 
 import com.polink.item.dto.ItemCreateRequest;
 import com.polink.item.dto.ItemCreateResponse;
-import com.polink.item.dto.ItemDetailResponse;
 import com.polink.item.dto.ItemPageResponse;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import com.polink.item.entity.Item;
 import com.polink.item.entity.ItemStatus;
 import com.polink.item.entity.ItemType;
-import com.polink.item.exception.ItemNotFoundException;
 import com.polink.item.repository.ItemRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -135,38 +133,120 @@ class ItemServiceTest {
                 eq(PageRequest.of(0, 10))
         );
     }
-    // 4. 존재하는 번호는 상세 응답으로 변환되는지 검사
+
+    // 4. 로그인한 사용자가 등록한 물품 목록만 조회하는지 검사
     @Test
-    @DisplayName("물품 번호로 상세 정보를 조회한다")
-    void getItemDetail() {
-        when(itemRepository.findById("L-0001"))
-                .thenReturn(Optional.of(savedItem("L-0001", ItemType.LOST, ItemStatus.LOST)));
+    @DisplayName("내가 등록한 물품 목록을 페이지 단위로 조회한다")
+    void getMyItems() {
+        // savedItem()은 등록자 ID를 1로 만들어 주므로,
+        // 로그인한 사용자 ID를 1이라고 가정한 테스트 데이터로 사용한다.
+        Item item = savedItem("L-0001", ItemType.LOST, ItemStatus.LOST);
 
-        ItemDetailResponse response = itemService.getItemDetail("L-0001");
+        // Repository가 등록자 ID=1의 물품 한 건을 반환하도록 설정한다.
+        when(itemRepository.findByRegistrantIdOrderByCreatedAtDescItemIdDesc(
+                eq(1),
+                any()
+        )).thenReturn(new PageImpl<>(
+                List.of(item),
+                PageRequest.of(0, 10),
+                1
+        ));
 
-        assertEquals("L-0001", response.itemId());
-        assertEquals("기존 물품", response.itemName());
+        // 로그인한 사용자 ID=1, 첫 페이지, 한 페이지 10개 조회를 요청한다.
+        ItemPageResponse response = itemService.getMyItems(1, 0, 10);
+
+        // 응답에 등록자 1의 물품 한 건이 포함되는지 확인한다.
+        assertEquals(1, response.items().size());
+        assertEquals("L-0001", response.items().get(0).itemId());
+        assertEquals(0, response.page());
+        assertEquals(10, response.size());
+        assertEquals(1, response.totalElements());
+
+        // Service가 Repository에 사용자 ID=1과 올바른 페이지 정보를 전달했는지 확인한다.
+        verify(itemRepository).findByRegistrantIdOrderByCreatedAtDescItemIdDesc(
+                eq(1),
+                eq(PageRequest.of(0, 10))
+        );
     }
 
-    // 5. 없는 번호는 404 처리용 ItemNotFoundException이 발생하는지 검사
+    // 5. 내 등록 물품이 없어도 오류 대신 빈 목록을 반환하는지 검사
     @Test
-    @DisplayName("존재하지 않는 물품 번호를 조회하면 예외가 발생한다")
-    void rejectMissingItem() {
-        when(itemRepository.findById("L-9999")).thenReturn(Optional.empty());
+    @DisplayName("내가 등록한 물품이 없으면 빈 목록을 반환한다")
+    void getMyItemsReturnsEmptyList() {
+        // Repository가 조회 결과 없음(빈 목록)을 반환하도록 설정한다.
+        when(itemRepository.findByRegistrantIdOrderByCreatedAtDescItemIdDesc(
+                eq(1),
+                any()
+        )).thenReturn(new PageImpl<>(
+                List.of(),
+                PageRequest.of(0, 10),
+                0
+        ));
 
-        assertThrows(ItemNotFoundException.class, () -> itemService.getItemDetail("L-9999"));
+        // 사용자 ID=1의 내 물품 목록을 조회한다.
+        ItemPageResponse response = itemService.getMyItems(1, 0, 10);
+
+        // 빈 목록이어도 정상 응답 객체가 반환되어야 한다.
+        assertTrue(response.items().isEmpty());
+        assertEquals(0, response.totalElements());
+        assertEquals(0, response.totalPages());
+        assertTrue(response.first());
+        assertTrue(response.last());
     }
 
-    // 기존에 저장된 물품 역할을 할 객체 생성. 실제 DB에는 저장하지 않는다.
-    private Item savedItem(String itemId, ItemType itemType, ItemStatus itemStatus) {
+    // 6. 로그인 사용자 ID와 페이지 입력값을 검증하는지 검사
+    @Test
+    @DisplayName("내 등록 물품 조회의 사용자 ID와 페이지 조건을 검증한다")
+    void rejectInvalidMyItemsConditions() {
+        // 로그인한 사용자 정보가 없으면 조회할 수 없다.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> itemService.getMyItems(null, 0, 10)
+        );
+
+        // 사용자 ID는 1 이상이어야 한다.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> itemService.getMyItems(0, 0, 10)
+        );
+
+        // 페이지 번호는 0 이상이어야 한다.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> itemService.getMyItems(1, -1, 10)
+        );
+
+        // 한 페이지 크기는 1 이상이어야 한다.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> itemService.getMyItems(1, 0, 0)
+        );
+
+        // 한 페이지 크기는 최대 100개까지만 허용한다.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> itemService.getMyItems(1, 0, 101)
+        );
+
+        // 잘못된 입력값은 Repository 조회까지 진행되면 안 된다.
+        verifyNoInteractions(itemRepository);
+    }
+
+    // 여러 테스트에서 공통으로 사용할 가짜 Item 객체를 만든다.
+    // 실제 DB에 저장하지 않고, Service와 Repository 테스트 데이터로만 사용한다.
+    private Item savedItem(
+            String itemId,
+            ItemType itemType,
+            ItemStatus itemStatus
+    ) {
         return new Item(
                 itemId,
                 1,
                 itemType,
-                "기존 물품",
+                "existing item",
                 "ETC",
-                "기존 물품 설명",
-                "테스트 장소",
+                "existing item description",
+                "test location",
                 LocalDateTime.of(2026, 10, 17, 10, 0),
                 itemStatus,
                 null
