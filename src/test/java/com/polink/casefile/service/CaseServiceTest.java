@@ -18,6 +18,16 @@ import com.polink.user.entity.User;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
+import com.polink.casefile.dto.response.CaseDetailResponse;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import com.polink.casefile.dto.response.CaseListResponse;
+import com.polink.casefile.dto.response.MyCaseListResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.PageImpl;
+import java.util.List;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -156,5 +166,395 @@ public class CaseServiceTest {
         assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
 
         verifyNoInteractions(caseNumberGenerator, caseRepository);
+    }
+
+    @Test
+    void getCaseDetail_ownCase() {
+        User reporter = new User(
+                "citizen01", "test-hash", "테스트시민", "010-0000-9101"
+        );
+        ReflectionTestUtils.setField(reporter, "userId", 1);
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                reporter,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                LocalDateTime.of(2026, 10, 18, 10, 0),
+                "테스트 장소"
+        );
+
+        when(userRepository.findById(1))
+                .thenReturn(Optional.of(reporter));
+        when(caseRepository.findById("SMPA-2026-0042"))
+                .thenReturn(Optional.of(caseFile));
+
+        CaseDetailResponse response =
+                caseService.getCaseDetail(1, "SMPA-2026-0042");
+
+        assertEquals("SMPA-2026-0042", response.getCaseId());
+        assertEquals("지갑 절도 신고", response.getTitle());
+        assertEquals(CaseStatus.WAITING, response.getStatus());
+        assertNull(response.getAssignedOfficerId());
+
+        verifyNoInteractions(caseNumberGenerator);
+        verify(caseRepository, never()).save(any(CaseFile.class));
+    }
+
+    @Test
+    void getCaseDetail_otherCitizenCase() {
+        User reporter = new User(
+                "reporter01", "test-hash", "신고자", "010-0000-9201"
+        );
+        ReflectionTestUtils.setField(reporter, "userId", 1);
+
+        User otherCitizen = new User(
+                "citizen02", "test-hash", "다른시민", "010-0000-9202"
+        );
+        ReflectionTestUtils.setField(otherCitizen, "userId", 2);
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                reporter,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                LocalDateTime.of(2026, 10, 18, 10, 0),
+                "테스트 장소"
+        );
+
+        when(userRepository.findById(2))
+                .thenReturn(Optional.of(otherCitizen));
+        when(caseRepository.findById("SMPA-2026-0042"))
+                .thenReturn(Optional.of(caseFile));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.getCaseDetail(2, "SMPA-2026-0042")
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+
+        verifyNoInteractions(caseNumberGenerator);
+        verify(caseRepository, never()).save(any(CaseFile.class));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = UserRole.class,
+            names = {"POLICE", "ADMIN"}
+    )
+    void getCaseDetail_staffCanAccess(UserRole role) {
+        User reporter = new User(
+                "reporter01", "test-hash", "신고자", "010-0000-9301"
+        );
+        ReflectionTestUtils.setField(reporter, "userId", 1);
+
+        User staff = new User(
+                "staff01", "test-hash", "담당직원", "010-0000-9302"
+        );
+        ReflectionTestUtils.setField(staff, "userId", 2);
+        ReflectionTestUtils.setField(staff, "role", role);
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                reporter,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                LocalDateTime.of(2026, 10, 18, 10, 0),
+                "테스트 장소"
+        );
+
+        when(userRepository.findById(2))
+                .thenReturn(Optional.of(staff));
+        when(caseRepository.findById("SMPA-2026-0042"))
+                .thenReturn(Optional.of(caseFile));
+
+        CaseDetailResponse response =
+                caseService.getCaseDetail(2, "SMPA-2026-0042");
+
+        assertEquals("SMPA-2026-0042", response.getCaseId());
+
+        verifyNoInteractions(caseNumberGenerator);
+        verify(caseRepository, never()).save(any(CaseFile.class));
+    }
+
+    @Test
+    void getMyCases_policeOnlyAssignedCases() {
+        User officer = new User(
+                "police01", "test-hash", "테스트경찰", "010-0000-9401"
+        );
+        ReflectionTestUtils.setField(officer, "userId", 2);
+        ReflectionTestUtils.setField(officer, "role", UserRole.POLICE);
+
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(userRepository.findById(2))
+                .thenReturn(Optional.of(officer));
+        when(caseRepository.findByAssignedOfficer_UserId(2, pageable))
+                .thenReturn(Page.empty(pageable));
+
+        MyCaseListResponse response =
+                caseService.getMyCases(2, pageable);
+
+        assertTrue(response.getItems().isEmpty());
+        assertEquals(0L, response.getTotalElements());
+
+        verify(caseRepository)
+                .findByAssignedOfficer_UserId(2, pageable);
+        verify(caseRepository, never()).findAll(any(Pageable.class));
+        verify(caseRepository, never())
+                .findByReporter_UserId(any(), any(Pageable.class));
+        verifyNoInteractions(caseNumberGenerator);
+    }
+
+    @Test
+    void getMyCases_citizenOnlyOwnCases() {
+        User citizen = new User(
+                "citizen01",
+                "test-hash",
+                "테스트시민",
+                "010-0000-9701"
+        );
+        ReflectionTestUtils.setField(citizen, "userId", 1);
+
+        LocalDateTime occurredAt =
+                LocalDateTime.of(2026, 10, 18, 10, 0);
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                citizen,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                occurredAt,
+                "테스트 장소"
+        );
+
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<CaseFile> page =
+                new PageImpl<>(List.of(caseFile), pageable, 1);
+
+        when(userRepository.findById(1))
+                .thenReturn(Optional.of(citizen));
+        when(caseRepository.findByReporter_UserId(1, pageable))
+                .thenReturn(page);
+
+        MyCaseListResponse response =
+                caseService.getMyCases(1, pageable);
+
+        assertEquals(1L, response.getTotalElements());
+        assertEquals(1, response.getItems().size());
+
+        var item = response.getItems().get(0);
+        assertEquals("SMPA-2026-0042", item.getCaseId());
+        assertEquals("지갑 절도 신고", item.getTitle());
+        assertEquals(CaseStatus.WAITING, item.getStatus());
+
+        verify(caseRepository)
+                .findByReporter_UserId(1, pageable);
+        verify(caseRepository, never())
+                .findByAssignedOfficer_UserId(any(), any(Pageable.class));
+        verify(caseRepository, never())
+                .findAll(any(Pageable.class));
+        verifyNoInteractions(caseNumberGenerator);
+    }
+
+    @Test
+    void getMyCases_adminForbidden() {
+        User admin = new User(
+                "admin01",
+                "test-hash",
+                "테스트관리자",
+                "010-0000-9702"
+        );
+        ReflectionTestUtils.setField(admin, "userId", 3);
+        ReflectionTestUtils.setField(admin, "role", UserRole.ADMIN);
+
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(userRepository.findById(3))
+                .thenReturn(Optional.of(admin));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.getMyCases(3, pageable)
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        assertEquals(
+                "내 사건 조회는 시민과 경찰만 가능합니다.",
+                exception.getReason()
+        );
+
+        verifyNoInteractions(caseRepository, caseNumberGenerator);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = UserRole.class,
+            names = {"POLICE", "ADMIN"}
+    )
+    void getCases_staffCanReadAll(UserRole role) {
+        User staff = new User(
+                "staff01", "test-hash", "테스트직원", "010-0000-9501"
+        );
+        ReflectionTestUtils.setField(staff, "userId", 2);
+        ReflectionTestUtils.setField(staff, "role", role);
+
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(userRepository.findById(2))
+                .thenReturn(Optional.of(staff));
+        when(caseRepository.findAll(pageable))
+                .thenReturn(Page.empty(pageable));
+
+        CaseListResponse response =
+                caseService.getCases(2, pageable);
+
+        assertTrue(response.getItems().isEmpty());
+        assertEquals(0L, response.getTotalElements());
+
+        verify(caseRepository).findAll(pageable);
+        verify(caseRepository, never())
+                .findByReporter_UserId(any(), any(Pageable.class));
+        verify(caseRepository, never())
+                .findByAssignedOfficer_UserId(any(), any(Pageable.class));
+        verifyNoInteractions(caseNumberGenerator);
+    }
+
+    @Test
+    void getCases_citizenOnlyOwnCases() {
+        User citizen = new User(
+                "citizen01", "test-hash", "테스트시민", "010-0000-9601"
+        );
+        ReflectionTestUtils.setField(citizen, "userId", 1);
+
+        LocalDateTime occurredAt =
+                LocalDateTime.of(2026, 10, 18, 10, 0);
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                citizen,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                occurredAt,
+                "테스트 장소"
+        );
+
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<CaseFile> page =
+                new PageImpl<>(List.of(caseFile), pageable, 1);
+
+        when(userRepository.findById(1))
+                .thenReturn(Optional.of(citizen));
+        when(caseRepository.findByReporter_UserId(1, pageable))
+                .thenReturn(page);
+
+        CaseListResponse response =
+                caseService.getCases(1, pageable);
+
+        assertEquals(1L, response.getTotalElements());
+        assertEquals(1, response.getItems().size());
+
+        var item = response.getItems().get(0);
+        assertEquals("SMPA-2026-0042", item.getCaseId());
+        assertEquals("지갑 절도 신고", item.getTitle());
+        assertEquals(CaseType.THEFT, item.getCaseType());
+        assertEquals(occurredAt, item.getOccurredAt());
+        assertEquals("테스트 장소", item.getLocation());
+        assertEquals(CaseStatus.WAITING, item.getStatus());
+
+        verify(caseRepository).findByReporter_UserId(1, pageable);
+        verify(caseRepository, never()).findAll(any(Pageable.class));
+        verify(caseRepository, never())
+                .findByAssignedOfficer_UserId(any(), any(Pageable.class));
+        verifyNoInteractions(caseNumberGenerator);
+    }
+
+    @Test
+    void getCaseDetail_caseNotFound() {
+        User citizen = new User(
+                "citizen01", "test-hash", "테스트시민", "010-0000-9931"
+        );
+        ReflectionTestUtils.setField(citizen, "userId", 1);
+
+        when(userRepository.findById(1))
+                .thenReturn(Optional.of(citizen));
+        when(caseRepository.findById("SMPA-2026-9999"))
+                .thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.getCaseDetail(1, "SMPA-2026-9999")
+        );
+
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        assertEquals("사건을 찾을 수 없습니다.",
+                exception.getReason());
+
+        verify(caseRepository).findById("SMPA-2026-9999");
+        verify(caseRepository, never()).save(any(CaseFile.class));
+        verifyNoInteractions(caseNumberGenerator);
+    }
+
+    @Test
+    void caseQueries_missingUserId_unauthorized() {
+        Pageable pageable = PageRequest.of(0, 10);
+
+        ResponseStatusException detailException = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.getCaseDetail(null, "SMPA-2026-0042")
+        );
+
+        ResponseStatusException listException = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.getCases(null, pageable)
+        );
+
+        ResponseStatusException myCasesException = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.getMyCases(null, pageable)
+        );
+
+        assertEquals(HttpStatus.UNAUTHORIZED,
+                detailException.getStatusCode());
+        assertEquals(HttpStatus.UNAUTHORIZED,
+                listException.getStatusCode());
+        assertEquals(HttpStatus.UNAUTHORIZED,
+                myCasesException.getStatusCode());
+
+        verifyNoInteractions(
+                userRepository, caseRepository, caseNumberGenerator
+        );
+    }
+
+    @Test
+    void getCases_citizenWithoutCases_emptyList() {
+        User citizen = new User(
+                "citizen01", "test-hash", "테스트시민", "010-0000-9941"
+        );
+        ReflectionTestUtils.setField(citizen, "userId", 1);
+
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(userRepository.findById(1))
+                .thenReturn(Optional.of(citizen));
+        when(caseRepository.findByReporter_UserId(1, pageable))
+                .thenReturn(Page.empty(pageable));
+
+        CaseListResponse response = caseService.getCases(1, pageable);
+
+        assertTrue(response.getItems().isEmpty());
+        assertEquals(0L, response.getTotalElements());
+
+        verify(caseRepository).findByReporter_UserId(1, pageable);
+        verify(caseRepository, never()).findAll(any(Pageable.class));
+        verify(caseRepository, never())
+                .findByAssignedOfficer_UserId(any(), any(Pageable.class));
+        verifyNoInteractions(caseNumberGenerator);
     }
 }
