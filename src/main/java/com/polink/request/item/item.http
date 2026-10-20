@@ -9,10 +9,7 @@ Content-Type: multipart/form-data; boundary=itemBoundary
 Content-Disposition: form-data; name="itemType"
 
 LOST
---itemBoundary
-Content-Disposition: form-data; name="registrantId"
 
-1
 --itemBoundary
 Content-Disposition: form-data; name="itemName"
 
@@ -43,10 +40,7 @@ Content-Type: multipart/form-data; boundary=itemBoundary
 Content-Disposition: form-data; name="itemType"
 
 FOUND
---itemBoundary
-Content-Disposition: form-data; name="registrantId"
 
-1
 --itemBoundary
 Content-Disposition: form-data; name="itemName"
 
@@ -73,10 +67,7 @@ Content-Disposition: form-data; name="occurredAt"
 POST http://localhost:8080/api/v1/items
 Content-Type: multipart/form-data; boundary=itemBoundary
 
---itemBoundary
-Content-Disposition: form-data; name="registrantId"
 
-1
 --itemBoundary
 Content-Disposition: form-data; name="itemName"
 
@@ -107,10 +98,7 @@ Content-Type: multipart/form-data; boundary=itemBoundary
 Content-Disposition: form-data; name="itemType"
 
 LOST
---itemBoundary
-Content-Disposition: form-data; name="registrantId"
 
-1
 --itemBoundary
 Content-Disposition: form-data; name="category"
 
@@ -137,10 +125,7 @@ Content-Type: multipart/form-data; boundary=itemBoundary
 Content-Disposition: form-data; name="itemType"
 
 FOUND
---itemBoundary
-Content-Disposition: form-data; name="registrantId"
 
-1
 --itemBoundary
 Content-Disposition: form-data; name="itemName"
 
@@ -171,10 +156,7 @@ Content-Type: multipart/form-data; boundary=itemBoundary
 Content-Disposition: form-data; name="itemType"
 
 FOUND
---itemBoundary
-Content-Disposition: form-data; name="registrantId"
 
-1
 --itemBoundary
 Content-Disposition: form-data; name="itemName"
 
@@ -210,10 +192,7 @@ Content-Type: multipart/form-data; boundary=itemBoundary
 Content-Disposition: form-data; name="itemType"
 
 LOST
---itemBoundary
-Content-Disposition: form-data; name="registrantId"
 
-1
 --itemBoundary
 Content-Disposition: form-data; name="itemName"
 
@@ -264,3 +243,7 @@ GET http://localhost:8080/api/v1/items/L-0101
 
 ### 14. 존재하지 않는 물품 상세 조회 → 404
 GET http://localhost:8080/api/v1/items/L-9999
+
+### 15. 내 등록 물품 조회 → 200
+GET http://localhost:8080/api/v1/items/me?page=0&size=10
+### 실행 전 확인: 서버를 먼저 실행하고, application.yaml의 app.dev-user-id는 시민 계정 1로 설정한다.

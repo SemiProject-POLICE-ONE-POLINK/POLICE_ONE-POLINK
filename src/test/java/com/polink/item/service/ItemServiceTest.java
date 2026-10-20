@@ -44,7 +44,6 @@ class ItemServiceTest {
 
     private final ItemCreateRequest lostRequest = new ItemCreateRequest(
             ItemType.LOST,
-            1,
             "검은색 카드지갑",
             "WALLET_CARD",
             "교통카드와 학생증이 들어 있습니다.",
@@ -61,7 +60,7 @@ class ItemServiceTest {
         when(itemRepository.save(any(Item.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        ItemCreateResponse response = itemService.registerItem(lostRequest);
+        ItemCreateResponse response = itemService.registerItem(lostRequest, 1, null);
 
         assertEquals("L-0001", response.itemId());
         assertEquals(ItemType.LOST, response.itemType());
@@ -75,15 +74,22 @@ class ItemServiceTest {
     @DisplayName("습득물은 마지막 F 번호 다음 번호로 등록된다")
     void createNextFoundItem() {
         ItemCreateRequest foundRequest = new ItemCreateRequest(
-                ItemType.FOUND, 1, "파란 우산", "CLOTHING_GOODS",
-                "나무 손잡이가 달린 우산입니다.", "청솔역", LocalDate.of(2026, 10, 18)
+                ItemType.FOUND,
+                "파란 우산",
+                "CLOTHING_GOODS",
+                "나무 손잡이가 달린 우산입니다.",
+                "청솔역",
+                LocalDate.of(2026, 10, 18)
         );
+
         when(itemRepository.findTopByItemTypeOrderByItemIdDesc(ItemType.FOUND))
-                .thenReturn(Optional.of(savedItem("F-0215", ItemType.FOUND, ItemStatus.STORED)));
+                .thenReturn(Optional.of(
+                        savedItem("F-0215", ItemType.FOUND, ItemStatus.STORED)
+                ));
         when(itemRepository.save(any(Item.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        ItemCreateResponse response = itemService.registerItem(foundRequest);
+        ItemCreateResponse response = itemService.registerItem(foundRequest, 1, null);
 
         assertEquals("F-0216", response.itemId());
         assertEquals(ItemType.FOUND, response.itemType());

@@ -15,6 +15,10 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.polink.item.dto.ItemPageResponse;
 import java.util.List;
+import com.polink.item.dev.LocalCurrentUserProvider;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 분실물·습득물 등록 요청을 받는 Controller다.
@@ -26,6 +30,11 @@ import java.util.List;
 public class ItemController {
 
     private final ItemService itemService;
+    /*
+     * local 프로필에서만 LocalCurrentUserProvider Bean이 만들어진다.
+     * ObjectProvider를 쓰면 local이 아닌 환경에서도 애플리케이션이 시작된다.
+     */
+    private final ObjectProvider<LocalCurrentUserProvider> localCurrentUserProvider;
 
     /**
      * GET /api/v1/items?page=0&size=10
@@ -69,7 +78,26 @@ public class ItemController {
         // 이미지가 없으면 null, 있으면 첫 번째 파일 한 개만 Service에 전달한다.
         MultipartFile image = images == null || images.isEmpty() ? null : images.get(0);
 
-        ItemCreateResponse response = itemService.registerItem(request, image);
+        // 현재는 실제 로그인 대신 application.yaml의 app.dev-user-id를 사용한다.
+        LocalCurrentUserProvider currentUserProvider =
+                localCurrentUserProvider.getIfAvailable();
+
+        // local 프로필이 아니면 임시 사용자 제공자가 없으므로 등록을 막는다.
+        if (currentUserProvider == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "로그인 기능이 아직 연결되지 않았습니다."
+            );
+        }
+
+        // 시민 계정만 분실물·습득물 등록을 할 수 있다.
+        currentUserProvider.requireCitizen();
+
+        ItemCreateResponse response = itemService.registerItem(
+                request,
+                currentUserProvider.getCurrentUserId(),
+                image
+        );
 
         // 등록 성공 시 201과 새 물품의 상세 주소를 반환한다.
         return ResponseEntity
