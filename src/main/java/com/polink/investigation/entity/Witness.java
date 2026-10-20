@@ -1,9 +1,7 @@
 package com.polink.investigation.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import com.polink.casefile.entity.CaseFile;
+import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 
@@ -19,8 +17,9 @@ public class Witness {
     private String witnessId;
 
     // 목격자가 속한 사건 번호
-    @Column(name = "case_id", length = 25, nullable = false)
-    private String caseId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "case_id", nullable = false)
+    private CaseFile caseFile;
 
     // 목격자 이름
     @Column(name = "name", length = 50, nullable = false)
@@ -41,9 +40,9 @@ public class Witness {
     public Witness() {
     }
 
-    public Witness(String witnessId, String caseId, String name, String phone, String relationship, LocalDateTime createdAt) {
+    public Witness(String witnessId, CaseFile casefile, String name, String phone, String relationship, LocalDateTime createdAt) {
         this.witnessId = witnessId;
-        this.caseId = caseId;
+        this.caseFile = casefile;
         this.name = name;
         this.phone = phone;
         this.relationship = relationship;
@@ -54,8 +53,8 @@ public class Witness {
         return witnessId;
     }
 
-    public String getCaseId() {
-        return caseId;
+    public CaseFile getCaseFile() {
+        return caseFile;
     }
 
     public String getName() {

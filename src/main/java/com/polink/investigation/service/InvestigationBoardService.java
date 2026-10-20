@@ -98,7 +98,7 @@ public class InvestigationBoardService {
 
         // 해당 사건의 전체 증거물을 조회하고 정렬 가능한 목록으로 복사
         List<Evidence> evidences =
-                new ArrayList<>(evidenceRepository.findByCaseId(caseId));
+                new ArrayList<>(evidenceRepository.findByCaseFile_CaseId(caseId));
 
         // 증거번호가 빠른 순서대로 수사보드에 표시
         evidences.sort(
@@ -114,7 +114,7 @@ public class InvestigationBoardService {
 
         // 해당 사건의 전체 목격자를 조회하고 정렬 가능한 목록으로 복사
         List<Witness> witnesses =
-                new ArrayList<>(witnessRepository.findByCaseId(caseId));
+                new ArrayList<>(witnessRepository.findByCaseFile_CaseId(caseId));
 
         // 목격자를 등록 일시 오름차순으로 정렬하고,
         // 등록 일시가 같으면 목격자 번호로 순서를 결정
@@ -135,7 +135,7 @@ public class InvestigationBoardService {
         List<InvestigationLog> investigationLogs =
                 new ArrayList<>(
                         investigationLogRepository
-                                .findByCaseIdOrderByInvestigatedAtAscLogIdAsc(
+                                .findByCaseFile_CaseIdOrderByInvestigatedAtAscLogIdAsc(
                                         caseId
                                 )
                 );

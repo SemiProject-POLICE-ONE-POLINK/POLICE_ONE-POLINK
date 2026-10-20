@@ -54,7 +54,7 @@ public class StatementService {
         // 3. 선택한 사건에 속한 목격자인지 확인
         // (URL에 사건번호와 목격자 번호가 잘못 조합되어 전달되었을 때를 대비)
         // ex) 2026-0405 사건에 2026-0406 사건의 목격자로 진술을 등록 시도 시 중단
-        if (!caseId.equals(witness.getCaseId())) {
+        if (!caseId.equals(witness.getCaseFile().getCaseId())) {
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "해당 사건에 등록된 목격자를 찾을 수 없습니다."

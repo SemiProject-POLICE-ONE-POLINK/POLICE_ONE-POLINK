@@ -24,7 +24,7 @@ public record WitnessCreateResponse(
     ) {
         return new WitnessCreateResponse(
                 witness.getWitnessId(),
-                witness.getCaseId(),
+                witness.getCaseFile().getCaseId(),
                 witness.getName(),
                 witness.getPhone(),
                 witness.getRelationship(),
