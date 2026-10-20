@@ -1,7 +1,6 @@
 package com.polink.investigation.service;
 
 import com.polink.casefile.entity.CaseFile;
-import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.request.WitnessCreateRequest;
 import com.polink.investigation.dto.response.StatementResponse;
 import com.polink.investigation.dto.response.WitnessCreateResponse;
@@ -11,10 +10,8 @@ import com.polink.investigation.entity.StatementType;
 import com.polink.investigation.entity.Witness;
 import com.polink.investigation.repository.StatementRepository;
 import com.polink.investigation.repository.WitnessRepository;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -29,27 +26,27 @@ public class WitnessService {
     private final StatementRepository statementRepository;
 
     // 목격자를 등록할 사건의 존재 여부 확인
-    private final CaseRepository caseRepository;
+    private final InvestigationAccessService investigationAccessService;
 
-    public WitnessService(WitnessRepository witnessRepository, StatementRepository statementRepository, CaseRepository caseRepository) {
+    public WitnessService(WitnessRepository witnessRepository, StatementRepository statementRepository, InvestigationAccessService investigationAccessService) {
         this.witnessRepository = witnessRepository;
         this.statementRepository = statementRepository;
-        this.caseRepository = caseRepository;
+        this.investigationAccessService = investigationAccessService;
     }
 
     // 사건별 목격자 정보 및 최초 진술 추가
     @Transactional
     public WitnessCreateResponse createWitness(
             String caseId,
+            Integer loggedInUserId,
             WitnessCreateRequest request
     ) {
-        // 1. 목격자를 등록할 사건이 있는지 확인
-        CaseFile caseFile = caseRepository.findById(caseId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "사건 정보를 확인할 수 없어 목격자를 등록할 수 없습니다."
-                ));
-
+        // 로그인한 사용자가 수사중인 사건의 담당 경찰인지 확인
+        CaseFile caseFile =
+                investigationAccessService.findInvestigatingCase(
+                        caseId,
+                        loggedInUserId
+                );
 
         // 2. 같은 사건에 등록된 목격자를 조회해 다음 목격자 번호 생성
         List<Witness> savedWitnesses =
@@ -95,15 +92,15 @@ public class WitnessService {
 
     // 사건별 목격자 정보와 진술 이력을 함께 조회
     @Transactional(readOnly = true)
-    public List<WitnessListResponse> findWitnessList(String caseId) {
-
-        // 1. 조회할 사건이 있는지 확인
-        if (!caseRepository.existsById(caseId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "사건 정보를 확인할 수 없어 목격자 목록을 조회할 수 없습니다."
-            );
-        }
+    public List<WitnessListResponse> findWitnessList(
+            String caseId,
+            Integer loggedInUserId
+    ) {
+        // 사건 상태와 관계없이 해당 사건의 담당 경찰인지 확인
+        investigationAccessService.findAssignedCase(
+                caseId,
+                loggedInUserId
+        );
 
         // 2. 해당 사건의 목격자 목록 조회
         List<Witness> witnesses = new ArrayList<>(

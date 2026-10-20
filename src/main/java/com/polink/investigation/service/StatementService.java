@@ -20,12 +20,12 @@ public class StatementService {
 
     private final StatementRepository statementRepository;
     private final WitnessRepository witnessRepository;
-    private final CaseRepository caseRepository;
+    private final InvestigationAccessService investigationAccessService;
 
-    public StatementService(StatementRepository statementRepository, WitnessRepository witnessRepository, CaseRepository caseRepository) {
+    public StatementService(StatementRepository statementRepository, WitnessRepository witnessRepository, InvestigationAccessService investigationAccessService) {
         this.statementRepository = statementRepository;
         this.witnessRepository = witnessRepository;
-        this.caseRepository = caseRepository;
+        this.investigationAccessService = investigationAccessService;
     }
 
     // 기존 목격자에게 새 진술 등록 — 이전 진술은 유지
@@ -33,16 +33,15 @@ public class StatementService {
     public StatementResponse createStatement(
             String caseId,
             String witnessId,
+            Integer loggedInUserId,
             StatementCreateRequest request
     ) {
 
-        // 1. 진술을 등록할 사건이 있는지 확인
-        if (!caseRepository.existsById(caseId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "사건 정보를 확인할 수 없어 진술을 등록할 수 없습니다."
-            );
-        }
+        // 1. 로그인한 사용자가 수사중인 사건의 담당 경찰인지 확인
+        investigationAccessService.findInvestigatingCase(
+                caseId,
+                loggedInUserId
+        );
 
         // 2. 진술을 남길 목격자가 등록되어 있는지 확인
         Witness witness = witnessRepository.findById(witnessId)

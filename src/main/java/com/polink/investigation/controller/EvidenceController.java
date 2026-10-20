@@ -8,6 +8,8 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -27,11 +29,18 @@ public class EvidenceController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<EvidenceCreateResponse> createEvidenceWithFile(
             @PathVariable("caseId") String caseId,
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestPart("request") EvidenceCreateRequest request,
             @RequestPart(value = "file", required = false) MultipartFile file
     ){
       // Service를 호출해 증거물 등록
-      EvidenceCreateResponse response = evidenceService.createEvidence(caseId, request, file);
+      EvidenceCreateResponse response =
+              evidenceService.createEvidence(
+              caseId,
+              toLoggedInUserId(jwt),
+              request,
+              file
+      );
 
       // 등록된 증거물 정보와 HTTP 201 반환
       return ResponseEntity
@@ -43,10 +52,15 @@ public class EvidenceController {
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<EvidenceCreateResponse> createEvidence(
             @PathVariable("caseId") String caseId,
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody EvidenceCreateRequest request
     ) {
         EvidenceCreateResponse response =
-                evidenceService.createEvidence(caseId, request);
+                evidenceService.createEvidence(
+                        caseId,
+                        toLoggedInUserId(jwt),
+                        request
+                );
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -56,13 +70,24 @@ public class EvidenceController {
     // 선택한 사건의 증거물 목록 조회
     @GetMapping
     public ResponseEntity<List<EvidenceListResponse>> findEvidenceList(
-            @PathVariable("caseId") String caseId
+            @PathVariable("caseId") String caseId,
+            @AuthenticationPrincipal Jwt jwt
     ) {
         // Service에서 조회한 응답 DTO 목록 받기
         List<EvidenceListResponse> responses =
-                evidenceService.findEvidenceList(caseId);
+                evidenceService.findEvidenceList(
+                        caseId,
+                        toLoggedInUserId(jwt)
+                );
 
         // HTTP 200과 증거물 목록 반환
         return ResponseEntity.ok(responses);
+    }
+
+    // 검증된 JWT에서 회원 번호 추출 — 토큰이 없으면 Service에서 401 처리
+    private Integer toLoggedInUserId(Jwt jwt) {
+        return jwt == null
+                ? null
+                : Integer.valueOf(jwt.getSubject());
     }
 }
