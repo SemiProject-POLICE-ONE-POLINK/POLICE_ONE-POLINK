@@ -1,27 +1,37 @@
+# 로컬 테스트에서는 application.yaml의 app.dev-user-id를 현재 로그인 사용자처럼 사용한다.
+# 시민 기능 테스트: dev-user-id를 1로 변경 후 서버 재시작
+# 경찰 기능 테스트: dev-user-id를 6으로 변경 후 서버 재시작
 @baseUrl = http://localhost:8080
-
-# 로그인 기능이 완성된 뒤 실제 토큰 값으로 바꾼다.
-@accessToken = 여기에_로그인_후_받은_토큰
 
 ### RET-001 습득물 반환 신청
 POST {{baseUrl}}/api/v1/return-requests
 Content-Type: application/json
-Authorization: Bearer {{accessToken}}
 
 {
-  "lostItemId": "L-0001",
-  "foundItemId": "F-0001",
-  "requestReason": "내가 분실한 카드지갑입니다."
+  "lostItemId": "L-0108",
+  "foundItemId": "F-0213",
+  "requestReason": "네잎클로버 모양 머리핀을 분실했습니다. 습득물의 특징과 일치합니다."
 }
 
 ### RET-002 내 반환 신청 조회
-GET {{baseUrl}}/api/v1/return-requests/my?page=0&size=10
-Authorization: Bearer {{accessToken}}
+GET {{baseUrl}}/api/v1/return-requests/me?page=0&size=10
 
 ### RET-003 경찰 반환 신청 목록 조회
-GET {{baseUrl}}/api/v1/return-requests?status=PENDING&keyword=카드지갑&page=0&size=10
-Authorization: Bearer {{accessToken}}
+GET {{baseUrl}}/api/v1/return-requests?status=PENDING&page=0&size=10
 
 ### RET-004 경찰 반환 신청 상세 조회
-GET {{baseUrl}}/api/v1/return-requests/1
-Authorization: Bearer {{accessToken}}
+GET {{baseUrl}}/api/v1/return-requests/5
+
+### RET-005 반환 신청 승인
+PATCH {{baseUrl}}/api/v1/return-requests/9/approve
+
+### RET-006 반환 신청 반려
+PATCH {{baseUrl}}/api/v1/return-requests/5/reject
+Content-Type: application/json
+
+{
+  "rejectReason": "신청자 정보가 일치하지 않습니다."
+}
+
+### RET-007 물품 인계 완료
+PATCH {{baseUrl}}/api/v1/return-requests/9/complete

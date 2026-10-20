@@ -107,7 +107,131 @@ public class ReturnRequestService {
         return ReturnRequestCreateResponse.from(savedReturnRequest);
     }
 
-    /**
+    /*
+     * 경찰관이 대기 중인 반환 신청을 승인한다.
+     * 실제 경찰 권한 확인은 로그인 기능 연동 후 Controller에서 처리한다.
+     */
+    @Transactional
+    public void approveReturnRequest(Integer policeId, Integer requestId) {
+        if (policeId == null || policeId < 1) {
+            throw new IllegalArgumentException("처리 경찰관 정보가 필요합니다.");
+        }
+
+        if (requestId == null || requestId < 1) {
+            throw new IllegalArgumentException("반환 신청 번호는 1 이상이어야 합니다.");
+        }
+
+        ReturnRequest returnRequest = returnRequestRepository.findById(requestId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("반환 신청을 찾을 수 없습니다."));
+
+        if (returnRequest.getStatus() != ReturnRequestStatus.PENDING) {
+            throw new IllegalArgumentException("대기 상태의 반환 신청만 승인할 수 있습니다.");
+        }
+
+        Item lostItem = itemRepository.findById(returnRequest.getLostItemId())
+                .orElseThrow(() ->
+                        new IllegalArgumentException("연결된 분실물을 찾을 수 없습니다."));
+
+        Item foundItem = itemRepository.findById(returnRequest.getFoundItemId())
+                .orElseThrow(() ->
+                        new IllegalArgumentException("연결된 습득물을 찾을 수 없습니다."));
+
+        if (lostItem.getItemType() != ItemType.LOST
+                || lostItem.getStatus() != ItemStatus.LOST) {
+            throw new IllegalArgumentException("승인 가능한 상태의 분실물이 아닙니다.");
+        }
+
+        if (foundItem.getItemType() != ItemType.FOUND
+                || foundItem.getStatus() != ItemStatus.STORED) {
+            throw new IllegalArgumentException("승인 가능한 상태의 습득물이 아닙니다.");
+        }
+
+        returnRequest.approve(policeId);
+        lostItem.changeStatus(ItemStatus.HANDOVER_PENDING);
+        foundItem.changeStatus(ItemStatus.HANDOVER_PENDING);
+    }
+
+    /*
+     * 경찰관이 대기 중인 반환 신청을 반려한다.
+     * 반려하면 물품 상태는 바꾸지 않고, 반려 사유와 처리 정보만 저장한다.
+     */
+    @Transactional
+    public void rejectReturnRequest(
+            Integer policeId,
+            Integer requestId,
+            String rejectReason
+    ) {
+        if (policeId == null || policeId < 1) {
+            throw new IllegalArgumentException("처리 경찰관 정보가 필요합니다.");
+        }
+
+        if (requestId == null || requestId < 1) {
+            throw new IllegalArgumentException("반환 신청 번호는 1 이상이어야 합니다.");
+        }
+
+        if (rejectReason == null || rejectReason.isBlank()) {
+            throw new IllegalArgumentException("반려 사유는 필수입니다.");
+        }
+
+        ReturnRequest returnRequest = returnRequestRepository.findById(requestId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("반환 신청을 찾을 수 없습니다."));
+
+        // 대기 상태인 신청만 반려할 수 있다.
+        if (returnRequest.getStatus() != ReturnRequestStatus.PENDING) {
+            throw new IllegalArgumentException("대기 상태의 반환 신청만 반려할 수 있습니다.");
+        }
+
+        // 앞뒤 공백은 제거한 반려 사유를 저장한다.
+        returnRequest.reject(policeId, rejectReason.trim());
+    }
+
+    /*
+     * 승인된 반환 신청의 실제 물품 인계를 완료한다.
+     * 완료되면 신청과 연결된 두 물품을 모두 반환 완료 상태로 변경한다.
+     */
+    @Transactional
+    public void completeReturnRequest(Integer requestId) {
+        if (requestId == null || requestId < 1) {
+            throw new IllegalArgumentException("반환 신청 번호는 1 이상이어야 합니다.");
+        }
+
+        ReturnRequest returnRequest = returnRequestRepository.findById(requestId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("반환 신청을 찾을 수 없습니다."));
+
+        // 승인된 신청만 실제 인계 완료 처리할 수 있다.
+        if (returnRequest.getStatus() != ReturnRequestStatus.APPROVED) {
+            throw new IllegalArgumentException("승인된 반환 신청만 인계 완료 처리할 수 있습니다.");
+        }
+
+        Item lostItem = itemRepository.findById(returnRequest.getLostItemId())
+                .orElseThrow(() ->
+                        new IllegalArgumentException("연결된 분실물을 찾을 수 없습니다."));
+
+        Item foundItem = itemRepository.findById(returnRequest.getFoundItemId())
+                .orElseThrow(() ->
+                        new IllegalArgumentException("연결된 습득물을 찾을 수 없습니다."));
+
+        // 승인 후 두 물품 모두 인계 대기 상태여야 한다.
+        if (lostItem.getItemType() != ItemType.LOST
+                || lostItem.getStatus() != ItemStatus.HANDOVER_PENDING) {
+            throw new IllegalArgumentException("인계 완료 가능한 상태의 분실물이 아닙니다.");
+        }
+
+        if (foundItem.getItemType() != ItemType.FOUND
+                || foundItem.getStatus() != ItemStatus.HANDOVER_PENDING) {
+            throw new IllegalArgumentException("인계 완료 가능한 상태의 습득물이 아닙니다.");
+        }
+
+        // 반환 신청은 완료, 두 물품은 반환 완료 및 반환 시각 기록 처리한다.
+        returnRequest.complete();
+        lostItem.completeReturn();
+        foundItem.completeReturn();
+    }
+
+    /*
      * 로그인한 시민이 신청한 반환 신청 목록을 최신순으로 조회한다.
      * page는 0부터 시작하며, size는 한 페이지의 목록 개수다.
      */
@@ -186,7 +310,7 @@ public class ReturnRequestService {
         return new PoliceReturnRequestListResponse(items);
     }
 
-    /**
+    /*
      * 경찰관이 반환 신청 번호로 한 건을 상세 조회한다.
      * 실제 경찰 권한 검증은 로그인 기능이 연결된 Controller에서 처리한다.
      */

@@ -1,10 +1,10 @@
 package com.polink.item.returnrequest.service;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
 import com.polink.item.entity.Item;
 import com.polink.item.entity.ItemStatus;
 import com.polink.item.entity.ItemType;
@@ -23,7 +23,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.never;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
@@ -573,4 +572,212 @@ class ReturnRequestServiceTest {
         verifyNoInteractions(returnRequestRepository);
     }
 
+    /*
+     * 대기 중인 반환 신청을 승인하면,
+     * 신청은 APPROVED, 두 물품은 HANDOVER_PENDING이 되어야 한다.
+     */
+    @Test
+    @DisplayName("대기 중인 반환 신청을 승인하고 두 물품을 인계 대기로 변경한다")
+    void approveReturnRequest() {
+        ReturnRequest returnRequest = new ReturnRequest(
+                1,
+                "L-0001",
+                "F-0001",
+                "내가 분실한 카드지갑입니다."
+        );
+
+        Item lostItem = item(
+                "L-0001",
+                1,
+                ItemType.LOST,
+                ItemStatus.LOST
+        );
+
+        Item foundItem = item(
+                "F-0001",
+                2,
+                ItemType.FOUND,
+                ItemStatus.STORED
+        );
+
+        when(returnRequestRepository.findById(1))
+                .thenReturn(Optional.of(returnRequest));
+        when(itemRepository.findById("L-0001"))
+                .thenReturn(Optional.of(lostItem));
+        when(itemRepository.findById("F-0001"))
+                .thenReturn(Optional.of(foundItem));
+
+        // 10번 경찰관이 1번 반환 신청을 승인한다.
+        returnRequestService.approveReturnRequest(10, 1);
+
+        assertEquals(
+                ReturnRequestStatus.APPROVED,
+                returnRequest.getStatus()
+        );
+        assertEquals(10, returnRequest.getProcessedBy());
+        assertNotNull(returnRequest.getProcessedAt());
+
+        assertEquals(
+                ItemStatus.HANDOVER_PENDING,
+                lostItem.getStatus()
+        );
+        assertEquals(
+                ItemStatus.HANDOVER_PENDING,
+                foundItem.getStatus()
+        );
+    }
+
+    /*
+     * 이미 승인·반려·완료된 신청은 다시 승인할 수 없어야 한다.
+     */
+    @Test
+    @DisplayName("대기 상태가 아닌 반환 신청은 승인할 수 없다")
+    void rejectApproveWhenReturnRequestIsNotPending() {
+        ReturnRequest returnRequest = new ReturnRequest(
+                1,
+                "L-0001",
+                "F-0001",
+                "이미 처리된 반환 신청입니다."
+        );
+
+        // 이미 다른 경찰관이 승인한 상태로 만든다.
+        returnRequest.approve(10);
+
+        when(returnRequestRepository.findById(1))
+                .thenReturn(Optional.of(returnRequest));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> returnRequestService.approveReturnRequest(11, 1)
+        );
+
+        assertEquals(
+                "대기 상태의 반환 신청만 승인할 수 있습니다.",
+                exception.getMessage()
+        );
+
+        // 신청 상태 검증에서 실패했으므로 물품을 조회하면 안 된다.
+        verifyNoInteractions(itemRepository);
+    }
+
+    /*
+     * 대기 중인 반환 신청을 반려하면,
+     * 신청만 REJECTED가 되고 물품 상태는 기존 상태를 유지해야 한다.
+     */
+    @Test
+    @DisplayName("대기 중인 반환 신청을 반려하고 물품 상태는 유지한다")
+    void rejectReturnRequest() {
+        ReturnRequest returnRequest = new ReturnRequest(
+                1,
+                "L-0001",
+                "F-0001",
+                "내가 분실한 카드지갑입니다."
+        );
+
+        when(returnRequestRepository.findById(1))
+                .thenReturn(Optional.of(returnRequest));
+
+        returnRequestService.rejectReturnRequest(
+                10,
+                1,
+                "  신청자 정보가 일치하지 않습니다.  "
+        );
+
+        assertEquals(
+                ReturnRequestStatus.REJECTED,
+                returnRequest.getStatus()
+        );
+        assertEquals(10, returnRequest.getProcessedBy());
+        assertNotNull(returnRequest.getProcessedAt());
+        assertEquals(
+                "신청자 정보가 일치하지 않습니다.",
+                returnRequest.getRejectReason()
+        );
+
+        // 반려는 물품 상태를 변경하지 않으므로 물품 Repository를 조회하지 않는다.
+        verifyNoInteractions(itemRepository);
+    }
+
+    /**
+     * 승인된 반환 신청의 인계를 완료하면,
+     * 신청과 두 물품 모두 반환 완료 상태가 되어야 한다.
+     */
+    @Test
+    @DisplayName("승인된 반환 신청의 인계를 완료하고 두 물품을 반환 완료로 변경한다")
+    void completeReturnRequest() {
+        ReturnRequest returnRequest = new ReturnRequest(
+                1,
+                "L-0001",
+                "F-0001",
+                "내가 분실한 카드지갑입니다."
+        );
+
+        // 승인된 신청만 인계 완료할 수 있다.
+        returnRequest.approve(10);
+
+        Item lostItem = item(
+                "L-0001",
+                1,
+                ItemType.LOST,
+                ItemStatus.HANDOVER_PENDING
+        );
+
+        Item foundItem = item(
+                "F-0001",
+                2,
+                ItemType.FOUND,
+                ItemStatus.HANDOVER_PENDING
+        );
+
+        when(returnRequestRepository.findById(1))
+                .thenReturn(Optional.of(returnRequest));
+        when(itemRepository.findById("L-0001"))
+                .thenReturn(Optional.of(lostItem));
+        when(itemRepository.findById("F-0001"))
+                .thenReturn(Optional.of(foundItem));
+
+        returnRequestService.completeReturnRequest(1);
+
+        assertEquals(
+                ReturnRequestStatus.COMPLETED,
+                returnRequest.getStatus()
+        );
+
+        assertEquals(ItemStatus.RETURNED, lostItem.getStatus());
+        assertNotNull(lostItem.getReturnedAt());
+
+        assertEquals(ItemStatus.RETURNED, foundItem.getStatus());
+        assertNotNull(foundItem.getReturnedAt());
+    }
+
+    /*
+     * 승인되지 않은 반환 신청은 실제 인계 완료 처리할 수 없어야 한다.
+     */
+    @Test
+    @DisplayName("승인되지 않은 반환 신청은 인계 완료할 수 없다")
+    void rejectCompleteWhenReturnRequestIsNotApproved() {
+        ReturnRequest returnRequest = new ReturnRequest(
+                1,
+                "L-0001",
+                "F-0001",
+                "아직 승인되지 않은 반환 신청입니다."
+        );
+
+        // 새 신청은 PENDING 상태다.
+        when(returnRequestRepository.findById(1))
+                .thenReturn(Optional.of(returnRequest));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> returnRequestService.completeReturnRequest(1)
+        );
+
+        assertEquals(
+                "승인된 반환 신청만 인계 완료 처리할 수 있습니다.",
+                exception.getMessage()
+        );
+
+        // 신청 상태 검증에서 실패했으므로 물품을 조회하면 안 된다.
+        verifyNoInteractions(itemRepository);
+    }
 }
