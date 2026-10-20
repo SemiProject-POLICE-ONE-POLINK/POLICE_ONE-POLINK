@@ -129,12 +129,19 @@ CREATE TABLE IF NOT EXISTS tbl_statement (
 CREATE TABLE IF NOT EXISTS tbl_hypothesis (
     hypothesis_id INT AUTO_INCREMENT NOT NULL COMMENT '수사 가설 번호',
     case_id VARCHAR(25) NOT NULL COMMENT '사건 번호',
+    adopted_by INT NOT NULL COMMENT '채택한 경찰의 회원 번호',
     content TEXT NOT NULL COMMENT '수사 가설 내용',
     reason TEXT NOT NULL COMMENT 'AI 추론 근거',
     additional_recommendation TEXT NULL COMMENT '추가 수사 권고 사항',
+    confidence INT NULL COMMENT 'AI 신뢰도(0~100)',
+    source VARCHAR(10) NOT NULL DEFAULT 'AI' COMMENT '가설 출처',
+    basis_json TEXT NULL COMMENT '근거가 된 증거물·진술 목록',
+    adopted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '채택 일시',
 
     CONSTRAINT pk_hypothesis PRIMARY KEY (hypothesis_id),
-    CONSTRAINT fk_hypothesis_case FOREIGN KEY (case_id) REFERENCES tbl_case (case_id)
+    CONSTRAINT fk_hypothesis_case FOREIGN KEY (case_id) REFERENCES tbl_case (case_id),
+    CONSTRAINT fk_hypothesis_user FOREIGN KEY (adopted_by) REFERENCES tbl_user (user_id),
+    CONSTRAINT chk_hypothesis_confidence CHECK (confidence IS NULL OR confidence BETWEEN 0 AND 100)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='수사 가설';
 
 CREATE TABLE IF NOT EXISTS tbl_investigation_log (
