@@ -1,5 +1,8 @@
 package com.polink.investigation.dto.ai;
 
+import com.polink.investigation.entity.StatementType;
+
+import java.time.LocalDateTime;
 import java.util.List;
 
 // 한 사건의 자료 중 AI 가설 생성에 필요한 전체 정보
@@ -22,7 +25,10 @@ public record HypothesisAiInput(
     // AI가 진술을 읽고 근거 번호를 지목할 수 있도록 전달
     public record StatementInput(
             Integer statementId,              // 진술 번호
-            String content                    // 목격자가 진술한 내용
+            String witnessId,            // 같은 목격자의 진술을 구분할 번호
+            StatementType statementType, // 최초·추가·정정·번복 구분
+            LocalDateTime createdAt,     // 진술 등록 일시
+            String content               // 진술 내용
     ) {
 
     }

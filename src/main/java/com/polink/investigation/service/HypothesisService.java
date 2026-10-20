@@ -26,6 +26,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
+// 가설 채택·저장 담당 Service
 @Service
 public class HypothesisService {
 
