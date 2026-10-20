@@ -1,16 +1,19 @@
 package com.polink.casefile.service;
 
+import com.polink.casefile.dto.request.CaseCloseRequest;
+import com.polink.casefile.dto.response.*;
+import com.polink.casefile.entity.CaseClose;
 import com.polink.user.entity.UserRole;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import com.polink.casefile.repository.CaseRepository;
+import com.polink.casefile.repository.CaseCloseRepository;
 import com.polink.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.polink.casefile.dto.request.CaseCreateRequest;
-import com.polink.casefile.dto.response.CaseCreateResponse;
 import com.polink.casefile.entity.CaseFile;
 import com.polink.casefile.entity.CaseStatus;
 import com.polink.casefile.entity.CaseType;
@@ -18,18 +21,14 @@ import com.polink.user.entity.User;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
-import com.polink.casefile.dto.response.CaseDetailResponse;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import com.polink.casefile.dto.response.CaseListResponse;
-import com.polink.casefile.dto.response.MyCaseListResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.PageImpl;
 import java.util.List;
 import com.polink.casefile.dto.request.CaseOfficerRequest;
-import com.polink.casefile.dto.response.CaseOfficerResponse;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -45,6 +44,9 @@ public class CaseServiceTest {
     private CaseRepository caseRepository;
 
     @Mock
+    private CaseCloseRepository caseCloseRepository;
+
+    @Mock
     private UserRepository userRepository;
 
     @Mock
@@ -57,7 +59,8 @@ public class CaseServiceTest {
         caseService = new CaseService(
                 caseRepository,
                 userRepository,
-                caseNumberGenerator
+                caseNumberGenerator,
+                caseCloseRepository
         );
     }
 
@@ -820,6 +823,312 @@ public class CaseServiceTest {
         verify(caseRepository, never())
                 .findByAssignedOfficer_UserId(any(), any(Pageable.class));
 
+        verifyNoInteractions(caseNumberGenerator);
+    }
+
+    @Test
+    void closeCase_success() {
+        User admin = new User(
+                "admin01", "test-hash", "테스트관리자", "010-0000-9951"
+        );
+        ReflectionTestUtils.setField(admin, "userId", 10);
+        ReflectionTestUtils.setField(admin, "role", UserRole.ADMIN);
+
+        User officer = new User(
+                "police01", "test-hash", "테스트경찰", "010-0000-9952"
+        );
+        ReflectionTestUtils.setField(officer, "userId", 20);
+        ReflectionTestUtils.setField(officer, "role", UserRole.POLICE);
+
+        User reporter = new User(
+                "citizen01", "test-hash", "테스트시민", "010-0000-9953"
+        );
+        ReflectionTestUtils.setField(reporter, "userId", 30);
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                reporter,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                LocalDateTime.of(2026, 10, 18, 10, 0),
+                "테스트 장소"
+        );
+
+        // 담당 경찰이 배정된 수사 중 사건을 준비한다.
+        caseFile.assignOfficer(officer);
+
+        CaseCloseRequest request = new CaseCloseRequest();
+        ReflectionTestUtils.setField(
+                request,
+                "closeReason",
+                "피의자 검거 및 사건 처리 완료"
+        );
+
+        LocalDateTime closedAt =
+                LocalDateTime.of(2026, 10, 20, 15, 0);
+
+        when(userRepository.findById(10))
+                .thenReturn(Optional.of(admin));
+        when(caseRepository.findByCaseIdForUpdate("SMPA-2026-0042"))
+                .thenReturn(Optional.of(caseFile));
+        when(caseCloseRepository.existsById("SMPA-2026-0042"))
+                .thenReturn(false);
+
+        // 실제 JPA 저장 시 @PrePersist가 설정하는 종결 일시를 모의한다.
+        when(caseCloseRepository.save(any(CaseClose.class)))
+                .thenAnswer(invocation -> {
+                    CaseClose savedCaseClose = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(
+                            savedCaseClose, "closedAt", closedAt
+                    );
+                    return savedCaseClose;
+                });
+
+        CaseCloseResponse response = caseService.closeCase(
+                10,
+                "SMPA-2026-0042",
+                request
+        );
+
+        assertEquals("SMPA-2026-0042", response.getCaseId());
+        assertEquals(CaseStatus.CLOSED, response.getStatus());
+        assertEquals(closedAt, response.getClosedAt());
+        assertEquals(CaseStatus.CLOSED, caseFile.getStatus());
+
+        ArgumentCaptor<CaseClose> caseCloseCaptor =
+                ArgumentCaptor.forClass(CaseClose.class);
+
+        verify(caseCloseRepository).save(caseCloseCaptor.capture());
+
+        CaseClose savedCaseClose = caseCloseCaptor.getValue();
+        assertSame(caseFile, savedCaseClose.getCaseFile());
+        assertSame(admin, savedCaseClose.getClosedBy());
+        assertEquals(
+                "피의자 검거 및 사건 처리 완료",
+                savedCaseClose.getCloseReason()
+        );
+
+        verify(caseRepository)
+                .findByCaseIdForUpdate("SMPA-2026-0042");
+        verify(caseCloseRepository)
+                .existsById("SMPA-2026-0042");
+        verifyNoInteractions(caseNumberGenerator);
+    }
+
+    @Test
+    void closeCase_withoutLogin_throwsUnauthorized() {
+        CaseCloseRequest request = new CaseCloseRequest();
+        ReflectionTestUtils.setField(
+                request,
+                "closeReason",
+                "피의자 검거 및 사건 처리 완료"
+        );
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.closeCase(
+                        null,
+                        "SMPA-2026-0042",
+                        request
+                )
+        );
+
+        assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
+        assertEquals(
+                "로그인 사용자 정보가 필요합니다.",
+                exception.getReason()
+        );
+
+        verifyNoInteractions(
+                userRepository,
+                caseRepository,
+                caseCloseRepository,
+                caseNumberGenerator
+        );
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = UserRole.class,
+            names = {"CITIZEN", "POLICE"}
+    )
+    void closeCase_nonAdmin_forbidden(UserRole role) {
+        User requester = new User(
+                "requester01", "test-hash", "요청자", "010-0000-9961"
+        );
+        ReflectionTestUtils.setField(requester, "userId", 10);
+        ReflectionTestUtils.setField(requester, "role", role);
+
+        CaseCloseRequest request = new CaseCloseRequest();
+        ReflectionTestUtils.setField(
+                request, "closeReason", "사건 처리 완료"
+        );
+
+        when(userRepository.findById(10))
+                .thenReturn(Optional.of(requester));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.closeCase(
+                        10, "SMPA-2026-0042", request
+                )
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        assertEquals(
+                "사건 종결은 관리자만 가능합니다.",
+                exception.getReason()
+        );
+
+        verify(userRepository).findById(10);
+        verifyNoInteractions(
+                caseRepository,
+                caseCloseRepository,
+                caseNumberGenerator
+        );
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = CaseStatus.class,
+            names = {"WAITING", "CLOSED", "CANCELED"}
+    )
+    void closeCase_notInvestigating_conflict(CaseStatus status) {
+        User admin = new User(
+                "admin01", "test-hash", "테스트관리자", "010-0000-9962"
+        );
+        ReflectionTestUtils.setField(admin, "userId", 10);
+        ReflectionTestUtils.setField(admin, "role", UserRole.ADMIN);
+
+        User reporter = new User(
+                "citizen01", "test-hash", "테스트시민", "010-0000-9963"
+        );
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                reporter,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                LocalDateTime.of(2026, 10, 18, 10, 0),
+                "테스트 장소"
+        );
+        ReflectionTestUtils.setField(caseFile, "status", status);
+
+        CaseCloseRequest request = new CaseCloseRequest();
+        ReflectionTestUtils.setField(
+                request, "closeReason", "사건 처리 완료"
+        );
+
+        when(userRepository.findById(10))
+                .thenReturn(Optional.of(admin));
+        when(caseRepository.findByCaseIdForUpdate("SMPA-2026-0042"))
+                .thenReturn(Optional.of(caseFile));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.closeCase(
+                        10, "SMPA-2026-0042", request
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(
+                "수사 중인 사건만 종결할 수 있습니다.",
+                exception.getReason()
+        );
+        assertEquals(status, caseFile.getStatus());
+
+        verifyNoInteractions(caseCloseRepository, caseNumberGenerator);
+    }
+
+    @Test
+    void closeCase_caseNotFound_throwsNotFound() {
+        User admin = new User(
+                "admin01", "test-hash", "테스트관리자", "010-0000-9964"
+        );
+        ReflectionTestUtils.setField(admin, "userId", 10);
+        ReflectionTestUtils.setField(admin, "role", UserRole.ADMIN);
+
+        CaseCloseRequest request = new CaseCloseRequest();
+        ReflectionTestUtils.setField(
+                request, "closeReason", "사건 처리 완료"
+        );
+
+        when(userRepository.findById(10))
+                .thenReturn(Optional.of(admin));
+        when(caseRepository.findByCaseIdForUpdate("SMPA-2026-9999"))
+                .thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.closeCase(
+                        10, "SMPA-2026-9999", request
+                )
+        );
+
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        assertEquals("사건을 찾을 수 없습니다.", exception.getReason());
+
+        verifyNoInteractions(caseCloseRepository, caseNumberGenerator);
+    }
+
+    @Test
+    void closeCase_existingCloseRecord_conflict() {
+        User admin = new User(
+                "admin01", "test-hash", "테스트관리자", "010-0000-9965"
+        );
+        ReflectionTestUtils.setField(admin, "userId", 10);
+        ReflectionTestUtils.setField(admin, "role", UserRole.ADMIN);
+
+        User officer = new User(
+                "police01", "test-hash", "테스트경찰", "010-0000-9966"
+        );
+        ReflectionTestUtils.setField(officer, "role", UserRole.POLICE);
+
+        User reporter = new User(
+                "citizen01", "test-hash", "테스트시민", "010-0000-9967"
+        );
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                reporter,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                LocalDateTime.of(2026, 10, 18, 10, 0),
+                "테스트 장소"
+        );
+        caseFile.assignOfficer(officer);
+
+        CaseCloseRequest request = new CaseCloseRequest();
+        ReflectionTestUtils.setField(
+                request, "closeReason", "사건 처리 완료"
+        );
+
+        when(userRepository.findById(10))
+                .thenReturn(Optional.of(admin));
+        when(caseRepository.findByCaseIdForUpdate("SMPA-2026-0042"))
+                .thenReturn(Optional.of(caseFile));
+        when(caseCloseRepository.existsById("SMPA-2026-0042"))
+                .thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.closeCase(
+                        10, "SMPA-2026-0042", request
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(
+                "이미 종결 기록이 존재합니다.",
+                exception.getReason()
+        );
+        assertEquals(CaseStatus.INVESTIGATING, caseFile.getStatus());
+
+        verify(caseCloseRepository, never()).save(any(CaseClose.class));
         verifyNoInteractions(caseNumberGenerator);
     }
 }

@@ -79,4 +79,8 @@ public class CaseFile {
 
         this.assignedOfficer = officer;
     }
+
+    public void close() {
+        this.status = CaseStatus.CLOSED;
+    }
 }
