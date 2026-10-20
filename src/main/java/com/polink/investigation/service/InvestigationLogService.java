@@ -1,5 +1,6 @@
 package com.polink.investigation.service;
 
+import com.polink.casefile.entity.CaseFile;
 import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.request.InvestigationLogCreateRequest;
 import com.polink.investigation.dto.response.InvestigationLogResponse;
@@ -50,16 +51,15 @@ public class InvestigationLogService {
         }
 
         // 기록을 등록할 사건 확인
-        if (!caseRepository.existsById(caseId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "사건 정보를 확인할 수 없어 수사기록을 등록할 수 없습니다."
-            );
-        }
+        CaseFile caseFile = caseRepository.findById(caseId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "사건 정보를 확인할 수 없어 수사기록을 등록할 수 없습니다."
+                ));
 
         InvestigationLog investigationLog =
                 new InvestigationLog(
-                        caseId,
+                        caseFile,
                         officer,
                         request.content(),
                         request.investigatedAt()
@@ -97,7 +97,7 @@ public class InvestigationLogService {
 
         List<InvestigationLog> logs =
                 investigationLogRepository
-                        .findByCaseIdOrderByInvestigatedAtAscLogIdAsc(caseId);
+                        .findByCaseFile_CaseIdOrderByInvestigatedAtAscLogIdAsc(caseId);
 
         List<InvestigationLogResponse> responses =
                 new ArrayList<>();
