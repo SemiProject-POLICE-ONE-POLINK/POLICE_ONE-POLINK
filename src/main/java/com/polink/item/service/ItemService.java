@@ -22,6 +22,9 @@ import com.polink.item.dto.ItemPageResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import com.polink.item.dto.ItemUpdateRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 /** 분실물·습득물의 등록 규칙을 담당한다. */
 @Service
@@ -207,7 +210,7 @@ public class ItemService {
         return ItemCreateResponse.from(itemRepository.save(item));
     }
 
-    /**
+    /*
      * 물품 유형별 번호 규칙
      * - 분실물(LOST): L-0001, L-0002, ...
      * - 습득물(FOUND): F-0001, F-0002, ...
@@ -259,6 +262,12 @@ public class ItemService {
             return;
         }
 
+        // 단위 테스트처럼 Spring 트랜잭션 밖에서 직접 호출된 경우에는
+        // 등록할 롤백 콜백이 없으므로 예외 없이 그대로 종료한다.
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCompletion(int status) {
@@ -274,4 +283,195 @@ public class ItemService {
     }
 
     private static final Logger log = LoggerFactory.getLogger(ItemService.class);
+
+    /*
+     * 경찰이 등록된 습득물의 기본 정보를 수정한다.
+     * 습득물은 보관 중(STORED) 상태일 때만 수정할 수 있다.
+     * 인계 대기 또는 반환 완료된 습득물은 수정할 수 없다.
+     */
+    @Transactional
+    public ItemDetailResponse updateFoundItem(
+            String itemId,
+            Integer currentPoliceId,
+            ItemUpdateRequest request
+    ) {
+        // 경찰 사용자 정보가 없으면 수정 요청을 처리할 수 없다.
+        if (currentPoliceId == null || currentPoliceId < 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "로그인 사용자 정보가 필요합니다."
+            );
+        }
+
+        // 수정 대상 물품이 없으면 기존 상세 조회와 동일하게 404를 반환한다.
+        Item item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new ItemNotFoundException(itemId));
+
+        // 경찰 수정 API에서는 습득물만 수정할 수 있다.
+        if (item.getItemType() != ItemType.FOUND) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "습득물만 수정할 수 있습니다."
+            );
+        }
+
+        // 반환 절차가 시작됐거나 완료된 습득물은 정보 변경을 막는다.
+        if (item.getStatus() != ItemStatus.STORED) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "보관 중 상태의 습득물만 수정할 수 있습니다."
+            );
+        }
+
+        // 유형, 등록자, 상태는 유지하고 기본 정보만 변경한다.
+        item.updateInfo(
+                request.itemName(),
+                request.category(),
+                request.description(),
+                request.location(),
+                request.occurredAt().atStartOfDay()
+        );
+
+        // Transaction 안에서 변경된 Entity는 JPA가 자동으로 UPDATE 한다.
+        return ItemDetailResponse.from(item);
+    }
+
+    /*
+     * 시민이 본인이 등록한 분실물의 기본 정보를 수정한다.
+     * 분실 중(LOST) 상태인 물품만 수정할 수 있다.
+     */
+    @Transactional
+    public ItemDetailResponse updateLostItem(
+            String itemId,
+            Integer currentUserId,
+            ItemUpdateRequest request
+    ) {
+        // 로그인한 사용자 정보가 없으면 수정 요청을 처리할 수 없다.
+        if (currentUserId == null || currentUserId < 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "로그인 사용자 정보가 필요합니다."
+            );
+        }
+
+        // 수정할 물품이 없으면 기존 상세 조회와 동일하게 404를 반환한다.
+        Item item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new ItemNotFoundException(itemId));
+
+        // 시민 수정 API에서는 분실물만 수정할 수 있다.
+        if (item.getItemType() != ItemType.LOST) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "분실물만 수정할 수 있습니다."
+            );
+        }
+
+        // 등록자와 로그인 사용자가 다르면 다른 사람의 글이므로 수정할 수 없다.
+        if (!item.getRegistrantId().equals(currentUserId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "본인이 등록한 분실물만 수정할 수 있습니다."
+            );
+        }
+
+        // 반환 절차가 시작됐거나 완료된 분실물은 정보 변경을 막는다.
+        if (item.getStatus() != ItemStatus.LOST) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "분실 중 상태의 물품만 수정할 수 있습니다."
+            );
+        }
+
+        // 유형, 등록자, 상태는 유지하고 기본 정보만 변경한다.
+        item.updateInfo(
+                request.itemName(),
+                request.category(),
+                request.description(),
+                request.location(),
+                request.occurredAt().atStartOfDay()
+        );
+
+        // Transaction 안에서 변경된 Entity는 JPA가 자동으로 UPDATE 한다.
+        return ItemDetailResponse.from(item);
+    }
+
+    /*
+     * 시민이 본인이 등록한 분실물에 이미지 한 장을 첨부한다.
+     * 이미 이미지가 첨부된 물품이거나, 반환 절차가 진행 중인 물품은 첨부할 수 없다.
+     *
+     * @param itemId        이미지를 첨부할 분실물 번호
+     * @param currentUserId 현재 로그인한 시민의 회원 번호
+     * @param image         업로드할 이미지 파일 한 장
+     * @return 이미지 경로가 연결된 물품 상세 정보
+     */
+    @Transactional
+    public ItemDetailResponse attachLostItemImage(
+            String itemId,
+            Integer currentUserId,
+            MultipartFile image
+    ) {
+        // 로그인한 사용자 정보가 없으면 이미지 첨부 요청을 처리할 수 없다.
+        if (currentUserId == null || currentUserId < 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "로그인 사용자 정보가 필요합니다."
+            );
+        }
+
+        // 이미지 파일을 보내지 않은 요청은 처리하지 않는다.
+        if (image == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "이미지 파일은 필수입니다."
+            );
+        }
+
+        // 대상 물품이 없으면 기존 상세 조회와 동일하게 404를 반환한다.
+        Item item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new ItemNotFoundException(itemId));
+
+        // 이미지 첨부 기능은 분실물에만 적용한다.
+        if (item.getItemType() != ItemType.LOST) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "분실물에만 이미지를 첨부할 수 있습니다."
+            );
+        }
+
+        // 다른 시민이 등록한 분실물에는 이미지를 첨부할 수 없다.
+        if (!item.getRegistrantId().equals(currentUserId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "본인이 등록한 분실물에만 이미지를 첨부할 수 있습니다."
+            );
+        }
+
+        // 반환 절차가 시작됐거나 완료된 분실물은 이미지를 변경할 수 없다.
+        if (item.getStatus() != ItemStatus.LOST) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "분실 중 상태의 물품에만 이미지를 첨부할 수 있습니다."
+            );
+        }
+
+        // 요구사항상 물품당 이미지는 한 장만 허용한다.
+        if (item.getImagePath() != null && !item.getImagePath().isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "이미지는 1개만 첨부할 수 있습니다."
+            );
+        }
+
+        // 기존 ItemImageService가 확장자·용량 검증 후 실제 파일을 저장한다.
+        String savedImagePath = itemImageService.save(image);
+
+        // 이후 DB 작업이 실패하면 방금 저장한 파일도 함께 삭제한다.
+        registerImageCleanupAfterRollback(savedImagePath);
+
+        // DB Entity에 이미지 파일 경로를 연결한다.
+        item.attachImage(savedImagePath);
+
+        // Transaction이 끝날 때 JPA가 변경된 imagePath를 자동으로 UPDATE 한다.
+        return ItemDetailResponse.from(item);
+    }
 }

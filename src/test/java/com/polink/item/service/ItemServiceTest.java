@@ -15,16 +15,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import java.time.LocalDate;
-
+import com.polink.item.dto.ItemDetailResponse;
+import com.polink.item.dto.ItemUpdateRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.multipart.MultipartFile;
 
 /** 실제 DB에 연결하지 않고 ItemService의 번호·조회 처리 규칙을 테스트한다. */
 @ExtendWith(MockitoExtension.class)
@@ -37,6 +39,10 @@ class ItemServiceTest {
     @SuppressWarnings("unused")
     @Mock
     private ItemImageService itemImageService;
+
+    // 실제 파일을 만들지 않고 이미지 업로드 상황을 흉내 내기 위한 가짜 파일이다.
+    @Mock
+    private MultipartFile image;
 
     // 가짜 의존성을 주입한 ItemService 생성
     @InjectMocks
@@ -257,5 +263,213 @@ class ItemServiceTest {
                 itemStatus,
                 null
         );
+    }
+
+    // 7. 시민이 본인이 등록한 분실물 기본 정보를 수정할 수 있는지 검사
+    @Test
+    @DisplayName("본인이 등록한 분실물을 수정한다")
+    void updateOwnLostItem() {
+        // 등록자 ID가 1번인 분실 중 상태의 가짜 물품을 준비한다.
+        Item item = savedItem("L-0001", ItemType.LOST, ItemStatus.LOST);
+
+        // Repository가 L-0001을 조회하면 위 가짜 물품을 반환하도록 설정한다.
+        when(itemRepository.findById("L-0001"))
+                .thenReturn(Optional.of(item));
+
+        // 수정할 물품 기본 정보를 요청 DTO로 만든다.
+        ItemUpdateRequest request = new ItemUpdateRequest(
+                "수정된 카드지갑",
+                "WALLET_CARD",
+                "수정된 물품 설명입니다.",
+                "청솔역 2번 출구",
+                LocalDate.of(2026, 10, 18)
+        );
+
+        // 로그인 사용자 ID=1이 본인 물품 수정을 요청한다.
+        ItemDetailResponse response = itemService.updateLostItem(
+                "L-0001",
+                1,
+                request
+        );
+
+        // API 응답과 실제 Entity의 값이 모두 변경됐는지 확인한다.
+        assertEquals("수정된 카드지갑", response.itemName());
+        assertEquals("청솔역 2번 출구", response.location());
+        assertEquals("수정된 카드지갑", item.getItemName());
+        assertEquals(
+                LocalDate.of(2026, 10, 18),
+                item.getOccurredAt().toLocalDate()
+        );
+
+        // 수정 전 물품 조회가 한 번 실행됐는지 확인한다.
+        verify(itemRepository).findById("L-0001");
+    }
+
+    // 8. 경찰이 보관 중인 습득물의 기본 정보를 수정할 수 있는지 검사
+    @Test
+    @DisplayName("경찰이 보관 중인 습득물을 수정한다")
+    void updateStoredFoundItem() {
+        // 보관 중 상태의 습득물 데이터를 준비한다.
+        Item item = savedItem("F-0001", ItemType.FOUND, ItemStatus.STORED);
+
+        // Repository가 F-0001을 조회하면 위 습득물을 반환하도록 설정한다.
+        when(itemRepository.findById("F-0001"))
+                .thenReturn(Optional.of(item));
+
+        // 경찰이 수정할 습득물 기본 정보를 만든다.
+        ItemUpdateRequest request = new ItemUpdateRequest(
+                "수정된 파란 우산",
+                "CLOTHING_GOODS",
+                "손잡이가 검은색인 파란 우산입니다.",
+                "청솔역 안내데스크",
+                LocalDate.of(2026, 10, 19)
+        );
+
+        // 경찰 사용자 ID=6이 습득물 수정을 요청한다.
+        ItemDetailResponse response = itemService.updateFoundItem(
+                "F-0001",
+                6,
+                request
+        );
+
+        // 응답과 실제 Entity의 기본 정보가 변경됐는지 확인한다.
+        assertEquals("수정된 파란 우산", response.itemName());
+        assertEquals("청솔역 안내데스크", response.location());
+        assertEquals("수정된 파란 우산", item.getItemName());
+
+        // 수정 후에도 습득물 유형과 보관 상태는 유지되어야 한다.
+        assertEquals(ItemType.FOUND, item.getItemType());
+        assertEquals(ItemStatus.STORED, item.getStatus());
+
+        // 수정 전에 대상 습득물을 한 번 조회했는지 확인한다.
+        verify(itemRepository).findById("F-0001");
+    }
+
+    // 9. 습득물 수정 Service에 분실물 번호를 전달하면 400으로 차단되는지 검사
+    @Test
+    @DisplayName("습득물 수정 시 분실물은 수정할 수 없다")
+    void rejectLostItemWhenUpdatingFoundItem() {
+        // 분실 중 상태의 분실물 데이터를 준비한다.
+        Item item = savedItem("L-0001", ItemType.LOST, ItemStatus.LOST);
+
+        // Repository가 L-0001을 조회하면 위 분실물을 반환하도록 설정한다.
+        when(itemRepository.findById("L-0001"))
+                .thenReturn(Optional.of(item));
+
+        ItemUpdateRequest request = new ItemUpdateRequest(
+                "수정 시도 물품",
+                "ETC",
+                "습득물 수정 API로 분실물을 수정하려는 요청입니다.",
+                "청솔역",
+                LocalDate.of(2026, 10, 19)
+        );
+
+        // 습득물 전용 수정 API에 분실물을 전달하면 예외가 발생해야 한다.
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> itemService.updateFoundItem("L-0001", 6, request)
+        );
+
+        // 물품 유형이 맞지 않는 경우 400 Bad Request여야 한다.
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+
+        // 대상 물품 조회까지만 실행되고 수정은 진행되지 않아야 한다.
+        verify(itemRepository).findById("L-0001");
+    }
+
+    // 10. 시민이 본인 분실물에 이미지 한 장을 첨부할 수 있는지 검사
+    @Test
+    @DisplayName("본인이 등록한 분실물에 이미지를 첨부한다")
+    void attachImageToOwnLostItem() {
+        // 이미지가 아직 없는 분실 중 상태의 물품을 준비한다.
+        Item item = savedItem("L-0001", ItemType.LOST, ItemStatus.LOST);
+
+        // Repository가 대상 분실물을 반환하도록 설정한다.
+        when(itemRepository.findById("L-0001"))
+                .thenReturn(Optional.of(item));
+
+        // 실제 파일 저장 대신, 저장됐다고 가정한 파일 경로를 반환한다.
+        when(itemImageService.save(image))
+                .thenReturn("C:\\temp\\polink-uploads\\item\\item-test.png");
+
+        // 등록자 ID=1인 시민이 자신의 분실물에 이미지를 첨부한다.
+        ItemDetailResponse response = itemService.attachLostItemImage(
+                "L-0001",
+                1,
+                image
+        );
+
+        // 응답과 Entity에 저장된 이미지 경로가 같은지 확인한다.
+        assertEquals(
+                "C:\\temp\\polink-uploads\\item\\item-test.png",
+                response.imagePath()
+        );
+        assertEquals(
+                "C:\\temp\\polink-uploads\\item\\item-test.png",
+                item.getImagePath()
+        );
+
+        // 대상 물품 조회와 이미지 파일 저장이 각각 한 번 실행돼야 한다.
+        verify(itemRepository).findById("L-0001");
+        verify(itemImageService).save(image);
+    }
+
+    // 11. 이미 이미지가 있는 분실물에는 두 번째 이미지를 첨부할 수 없는지 검사
+    @Test
+    @DisplayName("분실물에는 이미지 한 장만 첨부할 수 있다")
+    void rejectSecondImageForLostItem() {
+        // 이미 이미지 경로가 저장된 분실물 데이터를 준비한다.
+        Item item = new Item(
+                "L-0001",
+                1,
+                ItemType.LOST,
+                "기존 카드지갑",
+                "WALLET_CARD",
+                "기존 이미지가 있는 분실물입니다.",
+                "청솔역",
+                LocalDateTime.of(2026, 10, 17, 10, 0),
+                ItemStatus.LOST,
+                "C:\\temp\\polink-uploads\\item\\existing-image.png"
+        );
+
+        // Repository가 기존 이미지가 있는 분실물을 반환하도록 설정한다.
+        when(itemRepository.findById("L-0001"))
+                .thenReturn(Optional.of(item));
+
+        // 두 번째 이미지 첨부는 400 Bad Request 예외가 발생해야 한다.
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> itemService.attachLostItemImage("L-0001", 1, image)
+        );
+
+        // 요구사항인 “이미지 1개”를 위반했으므로 400이어야 한다.
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+
+        // 기존 이미지가 있으면 새 파일을 저장하려고 시도하면 안 된다.
+        verify(itemImageService, never()).save(image);
+    }
+
+    // 12. 다른 시민은 남의 분실물에 이미지를 첨부할 수 없는지 검사
+    @Test
+    @DisplayName("다른 시민은 분실물에 이미지를 첨부할 수 없다")
+    void rejectImageAttachmentForAnotherUsersLostItem() {
+        // 등록자 ID=1인 분실물 데이터를 준비한다.
+        Item item = savedItem("L-0001", ItemType.LOST, ItemStatus.LOST);
+
+        // Repository가 대상 분실물을 반환하도록 설정한다.
+        when(itemRepository.findById("L-0001"))
+                .thenReturn(Optional.of(item));
+
+        // 다른 시민 ID=2가 이미지 첨부를 시도하면 예외가 발생해야 한다.
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> itemService.attachLostItemImage("L-0001", 2, image)
+        );
+
+        // 본인 물품이 아니므로 403 Forbidden이어야 한다.
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+
+        // 권한 검증에서 막혔으므로 실제 파일 저장은 시도하면 안 된다.
+        verify(itemImageService, never()).save(image);
     }
 }

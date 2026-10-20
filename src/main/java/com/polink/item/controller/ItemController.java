@@ -19,6 +19,7 @@ import com.polink.item.dev.LocalCurrentUserProvider;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import com.polink.item.dto.ItemUpdateRequest;
 
 /**
  * 분실물·습득물 등록 요청을 받는 Controller다.
@@ -105,7 +106,7 @@ public class ItemController {
                 .body(response);
     }
 
-    /**
+    /*
      * GET /api/v1/items/{itemId}
      * 물품 번호는 분실물 L-0001 또는 습득물 F-0001 형식만 허용한다.
      */
@@ -124,4 +125,99 @@ public class ItemController {
         return ResponseEntity.ok(itemService.getItemDetail(itemId));
     }
 
+    /**
+     * PATCH /api/v1/items/{itemId}
+     * 시민은 본인이 등록한 분실물을 수정하고,
+     * 경찰은 보관 중인 습득물을 수정한다.
+     * 같은 URL을 역할에 따라 분기하므로 PATCH Mapping은 하나만 유지한다.
+     */
+    @PatchMapping(
+            value = "/{itemId}",
+            consumes = MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<ItemDetailResponse> updateItem(
+            @PathVariable String itemId,
+            @Valid @RequestBody ItemUpdateRequest request
+    ) {
+        // local 프로필이 아니면 임시 현재 사용자 정보를 사용할 수 없다.
+        LocalCurrentUserProvider currentUserProvider =
+                localCurrentUserProvider.getIfAvailable();
+
+        if (currentUserProvider == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "로그인 기능이 아직 연결되지 않았습니다."
+            );
+        }
+
+        // 로그인한 사용자 ID는 요청 본문이 아닌 서버의 사용자 정보에서 가져온다.
+        Integer currentUserId = currentUserProvider.getCurrentUserId();
+
+        // 사용자 역할별로 수정 가능한 물품 유형과 Service를 구분한다.
+        ItemDetailResponse response = switch (currentUserProvider.getCurrentUserRole()) {
+            case CITIZEN -> {
+                // 시민은 본인이 등록했고 분실 중인 분실물만 수정할 수 있다.
+                currentUserProvider.requireCitizen();
+                yield itemService.updateLostItem(itemId, currentUserId, request);
+            }
+
+            case POLICE -> {
+                // 경찰은 보관 중인 습득물만 수정할 수 있다.
+                currentUserProvider.requirePolice();
+                yield itemService.updateFoundItem(itemId, currentUserId, request);
+            }
+
+            // 관리자는 이번 수정 기능의 대상 역할이 아니므로 접근을 막는다.
+            case ADMIN -> throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "시민 또는 경찰 계정만 물품 정보를 수정할 수 있습니다."
+            );
+        };
+
+        // 수정된 물품 상세 정보를 200 OK로 반환한다.
+        return ResponseEntity.ok(response);
+    }
+
+    /*
+     * POST /api/v1/items/{itemId}/image
+     * 시민이 본인이 등록한 분실물에 이미지 한 장을 첨부한다.
+     * multipart/form-data 형식으로 image 필드에 파일 한 개를 전달한다.
+     */
+    @PostMapping(
+            value = "/{itemId}/image",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public ResponseEntity<ItemDetailResponse> attachLostItemImage(
+            @PathVariable String itemId,
+            @RequestPart("image") List<MultipartFile> images
+    ) {
+        // 이미지가 없거나 두 장 이상이면 “이미지 한 장” 요구사항에 맞지 않는다.
+        if (images == null || images.size() != 1) {
+            throw new IllegalArgumentException("이미지는 1개만 첨부할 수 있습니다.");
+        }
+
+        // local 프로필이 아니면 임시 현재 사용자 정보를 사용할 수 없다.
+        LocalCurrentUserProvider currentUserProvider =
+                localCurrentUserProvider.getIfAvailable();
+
+        if (currentUserProvider == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "로그인 기능이 아직 연결되지 않았습니다."
+            );
+        }
+
+        // 분실물 이미지 첨부는 시민 계정만 사용할 수 있다.
+        currentUserProvider.requireCitizen();
+
+        // Service가 등록자·물품 유형·상태·기존 이미지 여부를 추가 검증한다.
+        ItemDetailResponse response = itemService.attachLostItemImage(
+                itemId,
+                currentUserProvider.getCurrentUserId(),
+                images.get(0)
+        );
+
+        // 저장된 이미지 경로가 포함된 수정 후 상세 정보를 반환한다.
+        return ResponseEntity.ok(response);
+    }
 }
