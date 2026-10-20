@@ -1,6 +1,7 @@
 package com.polink.casefile.service;
 
 import com.polink.casefile.dto.response.MyCaseListResponse;
+import com.polink.casefile.repository.CaseCloseRepository;
 import com.polink.casefile.repository.CaseRepository;
 import com.polink.user.entity.User;
 import com.polink.user.entity.UserRole;
@@ -21,6 +22,9 @@ import org.springframework.data.domain.Pageable;
 import com.polink.casefile.dto.request.CaseOfficerRequest;
 import com.polink.casefile.dto.response.CaseOfficerResponse;
 import com.polink.casefile.entity.CaseStatus;
+import com.polink.casefile.dto.request.CaseCloseRequest;
+import com.polink.casefile.dto.response.CaseCloseResponse;
+import com.polink.casefile.entity.CaseClose;
 
 @Service
 public class CaseService {
@@ -28,13 +32,16 @@ public class CaseService {
     private final CaseRepository caseRepository;
     private final UserRepository userRepository;
     private final CaseNumberGenerator caseNumberGenerator;
+    private final CaseCloseRepository caseCloseRepository;
 
     public CaseService(CaseRepository caseRepository,
                        UserRepository userRepository,
-                       CaseNumberGenerator caseNumberGenerator) {
+                       CaseNumberGenerator caseNumberGenerator,
+                       CaseCloseRepository caseCloseRepository) {
         this.caseRepository = caseRepository;
         this.userRepository = userRepository;
         this.caseNumberGenerator = caseNumberGenerator;
+        this.caseCloseRepository = caseCloseRepository;
     }
 
     @Transactional(isolation = Isolation.REPEATABLE_READ)
@@ -252,6 +259,67 @@ public class CaseService {
         caseFile.assignOfficer(officer);
 
         return new CaseOfficerResponse(caseFile);
+    }
+
+    @Transactional
+    public CaseCloseResponse closeCase(
+            Integer adminId,
+            String caseId,
+            CaseCloseRequest request) {
+
+        if (adminId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "로그인 사용자 정보가 필요합니다."
+            );
+        }
+
+        User admin = userRepository.findById(adminId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "회원을 찾을 수 없습니다."
+                ));
+
+        if (admin.getRole() != UserRole.ADMIN) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "사건 종결은 관리자만 가능합니다."
+            );
+        }
+
+        CaseFile caseFile = caseRepository.findByCaseIdForUpdate(caseId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "사건을 찾을 수 없습니다."
+                ));
+
+        // 수사 중인 사건만 종결할 수 있다.
+        if (caseFile.getStatus() != CaseStatus.INVESTIGATING) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "수사 중인 사건만 종결할 수 있습니다."
+            );
+        }
+
+        if (caseCloseRepository.existsById(caseId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "이미 종결 기록이 존재합니다."
+            );
+        }
+
+        caseFile.close();
+
+        CaseClose caseClose = new CaseClose(
+                caseFile,
+                admin,
+                request.getCloseReason()
+        );
+
+        CaseClose savedCaseClose =
+                caseCloseRepository.save(caseClose);
+
+        return new CaseCloseResponse(savedCaseClose);
     }
 
     private User validateReporter(Integer reporterId) {
