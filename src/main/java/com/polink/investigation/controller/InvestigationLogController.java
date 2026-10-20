@@ -6,6 +6,8 @@ import com.polink.investigation.service.InvestigationLogService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,20 +28,16 @@ public class InvestigationLogController {
     createInvestigationLog(
             @PathVariable("caseId") String caseId,
 
-            // 인증 기능 연동 전 Postman 테스트용 임시 헤더
-            // 로그인 구현 후 인증 사용자 정보로 교체 후 해당부분 제거 예정
-            @RequestHeader(
-                    value = "X-User-Id",
-                    required = false
-            )
-            Integer loggedInUserId,
+            // 검증된 Bearer 토큰 — 토큰 없이 요청 시 null
+            @AuthenticationPrincipal Jwt jwt,
+
             @Valid @RequestBody
             InvestigationLogCreateRequest request
     ) {
         InvestigationLogResponse response =
                 investigationLogService.createInvestigationLog(
                         caseId,
-                        loggedInUserId,
+                        toLoggedInUserId(jwt),
                         request
                 );
 
@@ -53,17 +51,17 @@ public class InvestigationLogController {
     public ResponseEntity<List<InvestigationLogResponse>> getFindInvestigationLogs(
             @PathVariable("caseId") String caseId,
 
-            // 인증 기능 연동 전 Postman 테스트용 임시 헤더
-            // 로그인 구현 후 인증 사용자 정보로 교체 후 해당부분 제거 예정
-            @RequestHeader(
-                    value = "X-User-Id",
-                    required = false
-            )
-            Integer loggedInUserId
+            // 검증된 Bearer 토큰 — 토큰 없이 요청 시 null
+            @AuthenticationPrincipal Jwt jwt
     ) {
         List<InvestigationLogResponse> response =
-                investigationLogService.findInvestigationLogs(caseId, loggedInUserId);
+                investigationLogService.findInvestigationLogs(caseId, toLoggedInUserId(jwt));
 
         return ResponseEntity.ok(response);
+    }
+
+    // 토큰의 sub(회원 번호)를 로그인 사용자로 사용, 토큰이 없을 시 null → Service가 401 처리
+    private Integer toLoggedInUserId(Jwt jwt) {
+        return jwt == null ? null : Integer.valueOf(jwt.getSubject());
     }
 }

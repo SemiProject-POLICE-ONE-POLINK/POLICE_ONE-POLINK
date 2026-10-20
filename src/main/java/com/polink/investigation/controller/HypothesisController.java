@@ -6,6 +6,8 @@ import com.polink.investigation.service.HypothesisService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -23,13 +25,15 @@ public class HypothesisController {
     public ResponseEntity<HypothesisResponse> adoptHypothesis(
             @PathVariable("caseId") String caseId,
 
-            // 인증 연동 전 테스트용 임시 헤더
-            // JWT 연동 후 인증된 사용자 정보로 교체 예정
-            @RequestHeader(value = "X-User-Id", required = false)
-            Integer loggedInUserId,
+            // 검증된 Bearer 토큰 — 토큰 없이 요청 시 null
+            @AuthenticationPrincipal Jwt jwt,
 
             @Valid @RequestBody HypothesisSaveRequest request
     ) {
+
+        // 토큰의 회원 번호(sub)를 로그인 사용자 번호로 변환 — 토큰이 없을 시 null을 넘기고 Service에서 401 처리
+        Integer loggedInUserId =
+                jwt == null ? null : Integer.valueOf(jwt.getSubject());
         HypothesisResponse response =
                 hypothesisService.adoptHypothesis(
                         caseId,
