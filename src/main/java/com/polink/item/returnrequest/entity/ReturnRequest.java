@@ -41,7 +41,6 @@ public class ReturnRequest {
     private String foundItemId;
 
     // 승인·반려를 처리한 경찰관 번호다. 최초 신청 시에는 없다.
-    @SuppressWarnings("unused")
     @Column(name = "processed_by")
     private Integer processedBy;
 
@@ -56,7 +55,6 @@ public class ReturnRequest {
     @Column(name = "reject_reason", nullable = false, length = 500)
     private String rejectReason;
 
-    @SuppressWarnings("unused")
     @Column(name = "processed_at")
     private LocalDateTime processedAt;
 
@@ -79,5 +77,32 @@ public class ReturnRequest {
         this.requestReason = requestReason;
         this.rejectReason = "";
         this.createdAt = LocalDateTime.now();
+    }
+
+    /*
+     * 경찰관이 대기 중인 반환 신청을 승인한다.
+     */
+    public void approve(Integer policeId) {
+        this.status = ReturnRequestStatus.APPROVED;
+        this.processedBy = policeId;
+        this.processedAt = LocalDateTime.now();
+        this.rejectReason = "";
+    }
+
+    /*
+     * 경찰관이 대기 중인 반환 신청을 반려한다.
+     */
+    public void reject(Integer policeId, String rejectReason) {
+        this.status = ReturnRequestStatus.REJECTED;
+        this.processedBy = policeId;
+        this.processedAt = LocalDateTime.now();
+        this.rejectReason = rejectReason;
+    }
+
+    /*
+     * 실제 물품 인계가 끝난 반환 신청을 완료 처리한다.
+     */
+    public void complete() {
+        this.status = ReturnRequestStatus.COMPLETED;
     }
 }

@@ -97,4 +97,19 @@ public class Item {
         // 등록 시각은 클라이언트 시간을 신뢰하지 않고 서버 시간을 사용한다.
         this.createdAt = LocalDateTime.now();
     }
+
+    /*
+     * 반환 진행 상황에 맞게 물품 상태를 변경한다.
+     */
+    public void changeStatus(ItemStatus status) {
+        this.status = status;
+    }
+
+    /*
+     * 실제 인계가 완료된 물품의 반환 완료 시각을 기록한다.
+     */
+    public void completeReturn() {
+        this.status = ItemStatus.RETURNED;
+        this.returnedAt = LocalDateTime.now();
+    }
 }
