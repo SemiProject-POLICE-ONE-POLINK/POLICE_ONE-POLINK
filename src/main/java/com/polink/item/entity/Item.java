@@ -112,4 +112,32 @@ public class Item {
         this.status = ItemStatus.RETURNED;
         this.returnedAt = LocalDateTime.now();
     }
+
+    /*
+     * 물품의 기본 정보를 수정한다.
+     * 물품 유형, 등록자, 상태, 등록 시각은 변경하지 않는다.
+     */
+    public void updateInfo(
+            String itemName,
+            String category,
+            String description,
+            String location,
+            LocalDateTime occurredAt
+    ) {
+        this.itemName = itemName;
+        this.category = category;
+        this.description = description;
+        this.location = location;
+        this.occurredAt = occurredAt;
+    }
+
+    /*
+     * 물품에 연결할 이미지 파일 경로를 기록한다.
+     * 파일 저장과 이미지 검증은 ItemImageService가 담당한다.
+     *
+     * @param imagePath 서버에 저장된 이미지의 경로
+     */
+    public void attachImage(String imagePath) {
+        this.imagePath = imagePath;
+    }
 }

@@ -4,7 +4,7 @@ package com.polink.item.controller;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 // MockMvc: 실제 서버를 띄우지 않고 HTTP GET 요청을 흉내 낼 때 사용한다.
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.polink.item.dto.ItemDetailResponse;
 import com.polink.item.dto.ItemListResponse;
 import com.polink.item.dto.ItemPageResponse;
+import com.polink.item.dto.ItemUpdateRequest;
 import com.polink.item.entity.ItemStatus;
 import com.polink.item.entity.ItemType;
 import com.polink.item.exception.ItemExceptionHandler;
@@ -30,6 +31,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import com.polink.item.dev.LocalCurrentUserProvider;
+import com.polink.user.entity.UserRole;
+import org.springframework.http.MediaType;
+import org.springframework.beans.factory.ObjectProvider;
 
 // Mockito 기능을 JUnit 테스트에서 사용할 수 있게 연결한다.
 @ExtendWith(MockitoExtension.class)
@@ -39,6 +44,13 @@ class ItemControllerTest {
     @Mock
     private ItemService itemService;
 
+    // 실제 로그인 대신 현재 사용자 역할과 ID를 정하기 위한 가짜 사용자 제공자다.
+    @Mock
+    private LocalCurrentUserProvider currentUserProvider;
+
+    // local 전용 현재 사용자 제공자의 가짜 객체다.
+    @Mock
+    private ObjectProvider<LocalCurrentUserProvider> localCurrentUserProvider;
     // HTTP 요청을 가짜로 보내고 응답을 검사하는 테스트 도구다.
     private MockMvc mockMvc;
 
@@ -46,7 +58,9 @@ class ItemControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new ItemController(itemService))
+                .standaloneSetup(
+                        new ItemController(itemService, localCurrentUserProvider)
+                )
                 .setControllerAdvice(new ItemExceptionHandler())
                 .build();
     }
@@ -158,5 +172,142 @@ class ItemControllerTest {
 
         // 번호 형식이 틀리면 Service까지 요청이 전달되면 안 된다.
         verify(itemService, never()).getItemDetail("ABC");
+    }
+
+    @Test
+    void citizenUpdatesLostItem() throws Exception {
+        // local 프로필의 현재 사용자 제공자가 준비되어 있다고 가정한다.
+        given(localCurrentUserProvider.getIfAvailable())
+                .willReturn(currentUserProvider);
+
+        // 현재 사용자를 시민 ID=1로 설정한다.
+        given(currentUserProvider.getCurrentUserId()).willReturn(1);
+        given(currentUserProvider.getCurrentUserRole()).willReturn(UserRole.CITIZEN);
+
+        // 시민이 수정한 뒤 받게 될 가짜 상세 응답을 준비한다.
+        ItemDetailResponse response = new ItemDetailResponse(
+                "L-0001",
+                1,
+                ItemType.LOST,
+                "수정된 카드지갑",
+                "WALLET_CARD",
+                "수정된 설명입니다.",
+                "청솔역 2번 출구",
+                LocalDate.of(2026, 10, 18),
+                ItemStatus.LOST,
+                LocalDateTime.of(2026, 10, 20, 10, 0),
+                null,
+                null
+        );
+
+        // Controller가 분실물 수정 Service를 호출하면 위 응답을 돌려주도록 설정한다.
+        given(itemService.updateLostItem(
+                org.mockito.ArgumentMatchers.eq("L-0001"),
+                org.mockito.ArgumentMatchers.eq(1),
+                org.mockito.ArgumentMatchers.any(ItemUpdateRequest.class)
+        )).willReturn(response);
+
+        // 시민이 분실물 수정 요청을 보낸다.
+        mockMvc.perform(patch("/api/v1/items/L-0001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "itemName": "수정된 카드지갑",
+                                  "category": "WALLET_CARD",
+                                  "description": "수정된 설명입니다.",
+                                  "location": "청솔역 2번 출구",
+                                  "occurredAt": "2026-10-18"
+                                }
+                                """))
+                // 수정 성공 시 200과 수정된 물품명이 반환되어야 한다.
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itemId").value("L-0001"))
+                .andExpect(jsonPath("$.itemName").value("수정된 카드지갑"));
+
+        // 시민 권한을 검사했는지 확인한다.
+        verify(currentUserProvider).requireCitizen();
+
+        // 시민 요청이 분실물 수정 Service로 전달됐는지 확인한다.
+        verify(itemService).updateLostItem(
+                org.mockito.ArgumentMatchers.eq("L-0001"),
+                org.mockito.ArgumentMatchers.eq(1),
+                org.mockito.ArgumentMatchers.any(ItemUpdateRequest.class)
+        );
+
+        // 시민 요청이 습득물 수정 Service로 전달되면 안 된다.
+        verify(itemService, never()).updateFoundItem(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.any(ItemUpdateRequest.class)
+        );
+    }
+
+    // 경찰 요청은 습득물 수정 Service로 전달되는지 검사한다.
+    @Test
+    void policeUpdatesFoundItem() throws Exception {
+        // local 프로필의 현재 사용자 제공자가 준비되어 있다고 가정한다.
+        given(localCurrentUserProvider.getIfAvailable())
+                .willReturn(currentUserProvider);
+
+        // 현재 사용자를 경찰 ID=6으로 설정한다.
+        given(currentUserProvider.getCurrentUserId()).willReturn(6);
+        given(currentUserProvider.getCurrentUserRole()).willReturn(UserRole.POLICE);
+
+        // 경찰이 수정한 뒤 받게 될 가짜 상세 응답을 준비한다.
+        ItemDetailResponse response = new ItemDetailResponse(
+                "F-0001",
+                1,
+                ItemType.FOUND,
+                "수정된 파란 우산",
+                "CLOTHING_GOODS",
+                "안내데스크에 보관 중인 파란 우산입니다.",
+                "청솔역 안내데스크",
+                LocalDate.of(2026, 10, 18),
+                ItemStatus.STORED,
+                LocalDateTime.of(2026, 10, 20, 10, 0),
+                null,
+                null
+        );
+
+        // Controller가 습득물 수정 Service를 호출하면 위 응답을 돌려주도록 설정한다.
+        given(itemService.updateFoundItem(
+                org.mockito.ArgumentMatchers.eq("F-0001"),
+                org.mockito.ArgumentMatchers.eq(6),
+                org.mockito.ArgumentMatchers.any(ItemUpdateRequest.class)
+        )).willReturn(response);
+
+        // 경찰이 습득물 수정 요청을 보낸다.
+        mockMvc.perform(patch("/api/v1/items/F-0001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "itemName": "수정된 파란 우산",
+                                  "category": "CLOTHING_GOODS",
+                                  "description": "안내데스크에 보관 중인 파란 우산입니다.",
+                                  "location": "청솔역 안내데스크",
+                                  "occurredAt": "2026-10-18"
+                                }
+                                """))
+                // 수정 성공 시 200과 수정된 물품명이 반환되어야 한다.
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itemId").value("F-0001"))
+                .andExpect(jsonPath("$.itemName").value("수정된 파란 우산"));
+
+        // 경찰 권한을 검사했는지 확인한다.
+        verify(currentUserProvider).requirePolice();
+
+        // 경찰 요청이 습득물 수정 Service로 전달됐는지 확인한다.
+        verify(itemService).updateFoundItem(
+                org.mockito.ArgumentMatchers.eq("F-0001"),
+                org.mockito.ArgumentMatchers.eq(6),
+                org.mockito.ArgumentMatchers.any(ItemUpdateRequest.class)
+        );
+
+        // 경찰 요청이 분실물 수정 Service로 전달되면 안 된다.
+        verify(itemService, never()).updateLostItem(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.any(ItemUpdateRequest.class)
+        );
     }
 }

@@ -247,3 +247,107 @@ GET http://localhost:8080/api/v1/items/L-9999
 ### 15. 내 등록 물품 조회 → 200
 GET http://localhost:8080/api/v1/items/me?page=0&size=10
 ### 실행 전 확인: 서버를 먼저 실행하고, application.yaml의 app.dev-user-id는 시민 계정 1로 설정한다.
+
+### 분실물 수정 API 테스트
+### 실행 전 확인: application.yaml의 app.dev-user-id는 시민 계정 1로 설정한다.
+
+### 16. 내가 등록한 분실물 수정 → 200
+PATCH http://localhost:8080/api/v1/items/L-0116
+Content-Type: application/json
+
+{
+  "itemName": "수정된 검은 카드지갑",
+  "category": "WALLET_CARD",
+  "description": "교통카드와 학생증이 들어 있는 검은 카드지갑입니다.",
+  "location": "청솔역 2번 출구",
+  "occurredAt": "2026-10-17"
+}
+
+### 17. 습득물 수정 시도 → 400
+PATCH http://localhost:8080/api/v1/items/F-0216
+Content-Type: application/json
+
+{
+  "itemName": "수정 시도 우산",
+  "category": "CLOTHING_GOODS",
+  "description": "시민은 습득물을 수정할 수 없습니다.",
+  "location": "청솔역",
+  "occurredAt": "2026-10-17"
+}
+
+### 18. 다른 시민의 분실물 수정 시도 → 403
+PATCH http://localhost:8080/api/v1/items/L-0101
+Content-Type: application/json
+
+{
+  "itemName": "수정 시도 물품",
+  "category": "ETC",
+  "description": "다른 사용자의 물품은 수정할 수 없습니다.",
+  "location": "테스트 장소",
+  "occurredAt": "2026-10-17"
+}
+
+### 습득물 수정 API 테스트
+### 실행 전 확인: application.yaml의 app.dev-user-id를 경찰 계정 6으로 변경한다.
+
+### 19. 경찰이 보관 중인 습득물 수정 → 200
+PATCH http://localhost:8080/api/v1/items/F-0216
+Content-Type: application/json
+
+{
+  "itemName": "수정된 파란 우산",
+  "category": "CLOTHING_GOODS",
+  "description": "청솔역 안내데스크에 보관 중인 파란 우산입니다.",
+  "location": "청솔역 안내데스크",
+  "occurredAt": "2026-10-18"
+}
+
+### 20. 경찰이 분실물 수정 시도 → 400
+PATCH http://localhost:8080/api/v1/items/L-0116
+Content-Type: application/json
+
+{
+  "itemName": "경찰 수정 시도 분실물",
+  "category": "WALLET_CARD",
+  "description": "습득물 수정 API에서는 분실물을 수정할 수 없습니다.",
+  "location": "청솔역",
+  "occurredAt": "2026-10-18"
+}
+
+### 분실물 이미지 첨부 API 테스트
+### 실행 전 확인: application.yaml의 app.dev-user-id는 시민 계정 1이어야 한다.
+### item-test.png는 2MB 이하의 실제 PNG 이미지 파일이어야 한다.
+
+### 21. 내가 등록한 분실물에 이미지 첨부 → 200
+POST http://localhost:8080/api/v1/items/L-0116/image
+Content-Type: multipart/form-data; boundary=imageBoundary
+
+--imageBoundary
+Content-Disposition: form-data; name="image"; filename="textimage.webp"
+Content-Type: image/webp
+
+< ../../item/textimage.webp
+--imageBoundary--
+
+### 22. 이미 이미지가 있는 분실물에 두 번째 이미지 첨부 → 400
+POST http://localhost:8080/api/v1/items/L-0116/image
+Content-Type: multipart/form-data; boundary=imageBoundary
+
+--imageBoundary
+Content-Disposition: form-data; name="image"; filename="textimage.webp"
+Content-Type: image/webp
+
+< ../../item/textimage.webp
+--imageBoundary--
+
+### 23. 다른 시민의 분실물에 이미지 첨부 시도 → 403
+### 실행 전 확인: application.yaml의 app.dev-user-id를 시민 계정 2로 변경한다.
+POST http://localhost:8080/api/v1/items/L-0116/image
+Content-Type: multipart/form-data; boundary=imageBoundary
+
+--imageBoundary
+Content-Disposition: form-data; name="image"; filename="textimage.webp"
+Content-Type: image/webp
+
+< ../../item/textimage.webp
+--imageBoundary--
