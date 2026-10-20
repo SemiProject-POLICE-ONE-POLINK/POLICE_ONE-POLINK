@@ -26,6 +26,7 @@ import org.springframework.data.domain.Pageable;
 /** 분실물·습득물의 등록 규칙을 담당한다. */
 @Service
 @RequiredArgsConstructor
+
 // 조회 메서드는 실수로 DB를 수정하지 않도록 기본값을 readOnly로 둔다.
 @Transactional(readOnly = true)
 public class ItemService {
@@ -148,26 +149,41 @@ public class ItemService {
         return ItemDetailResponse.from(item);
     }
 
-    /**
-     * Controller에서 전달한 유형에 맞는 등록 메서드를 선택한다.
-     * switch를 사용하면 LOST와 FOUND 이외의 유형은 등록할 수 없다.
+    /*
+     * 로그인한 사용자의 ID를 받아 물품을 등록한다.
+     * registrantId는 요청 본문이 아니라 인증 정보에서 전달받는다.
      */
     @Transactional
-    public ItemCreateResponse registerItem(ItemCreateRequest request) {
-        return registerItem(request, null);
-    }
+    public ItemCreateResponse registerItem(
+            ItemCreateRequest request,
+            Integer registrantId,
+            MultipartFile image
+    ) {
+        if (registrantId == null || registrantId < 1) {
+            throw new IllegalArgumentException("로그인 사용자 정보가 필요합니다.");
+        }
 
-    /** 이미지가 포함된 multipart 요청에서 호출하는 등록 메서드다. */
-    @Transactional
-    public ItemCreateResponse registerItem(ItemCreateRequest request, MultipartFile image) {
         return switch (request.itemType()) {
-            case LOST -> register(request, ItemType.LOST, ItemStatus.LOST, image);
-            case FOUND -> register(request, ItemType.FOUND, ItemStatus.STORED, image);
+            case LOST -> register(
+                    request,
+                    registrantId,
+                    ItemType.LOST,
+                    ItemStatus.LOST,
+                    image
+            );
+            case FOUND -> register(
+                    request,
+                    registrantId,
+                    ItemType.FOUND,
+                    ItemStatus.STORED,
+                    image
+            );
         };
     }
 
     private ItemCreateResponse register(
             ItemCreateRequest request,
+            Integer registrantId,
             ItemType itemType,
             ItemStatus initialStatus,
             MultipartFile image
@@ -175,22 +191,19 @@ public class ItemService {
         String imagePath = itemImageService.save(image);
         registerImageCleanupAfterRollback(imagePath);
 
-        // DTO는 요청 데이터를 담는 상자이고, Item은 DB에 저장할 객체다.
         Item item = new Item(
                 createItemId(itemType),
-                request.registrantId(),
+                registrantId,
                 itemType,
                 request.itemName(),
                 request.category(),
                 request.description(),
                 request.location(),
-                // 요청은 날짜만 받는다.
-                // DB의 DATETIME 컬럼에는 해당 날짜의 자정(00:00:00)으로 저장한다.
                 request.occurredAt().atStartOfDay(),
                 initialStatus,
                 imagePath
         );
-        // save()가 INSERT를 실행하고, 저장된 Item을 반환한다.
+
         return ItemCreateResponse.from(itemRepository.save(item));
     }
 
