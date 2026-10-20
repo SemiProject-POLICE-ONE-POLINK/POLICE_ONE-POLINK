@@ -1,5 +1,6 @@
 package com.polink.investigation.service;
 
+import com.polink.casefile.entity.CaseFile;
 import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.request.WitnessCreateRequest;
 import com.polink.investigation.dto.response.StatementResponse;
@@ -43,16 +44,16 @@ public class WitnessService {
             WitnessCreateRequest request
     ) {
         // 1. 목격자를 등록할 사건이 있는지 확인
-        if (!caseRepository.existsById(caseId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "사건 정보를 확인할 수 없어 목격자를 등록할 수 없습니다."
-            );
-        }
+        CaseFile caseFile = caseRepository.findById(caseId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "사건 정보를 확인할 수 없어 목격자를 등록할 수 없습니다."
+                ));
+
 
         // 2. 같은 사건에 등록된 목격자를 조회해 다음 목격자 번호 생성
         List<Witness> savedWitnesses =
-                witnessRepository.findByCaseId(caseId);
+                witnessRepository.findByCaseFile_CaseId(caseId);
 
         String witnessId = generateWitnessId(caseId, savedWitnesses);
 
@@ -62,7 +63,7 @@ public class WitnessService {
         // 3. 입력받은 목격자 정보로 Entity 생성
         Witness witness = new Witness(
                 witnessId,
-                caseId,
+                caseFile,
                 request.name(),
                 request.phone(),
                 request.relationship(),
@@ -91,6 +92,7 @@ public class WitnessService {
         );
     }
 
+
     // 사건별 목격자 정보와 진술 이력을 함께 조회
     @Transactional(readOnly = true)
     public List<WitnessListResponse> findWitnessList(String caseId) {
@@ -105,7 +107,7 @@ public class WitnessService {
 
         // 2. 해당 사건의 목격자 목록 조회
         List<Witness> witnesses = new ArrayList<>(
-                witnessRepository.findByCaseId(caseId)
+                witnessRepository.findByCaseFile_CaseId(caseId)
         );
 
         // 목격자가 없으면 빈 목록 반환

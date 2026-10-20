@@ -1,5 +1,6 @@
 package com.polink.investigation.service;
 
+import com.polink.casefile.entity.CaseFile;
 import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.request.EvidenceCreateRequest;
 import com.polink.investigation.dto.response.EvidenceCreateResponse;
@@ -53,10 +54,14 @@ public class EvidenceService {
             MultipartFile file
     ) {
         // 1. 증거물을 등록할 사건이 존재하는지 확인
-        checkCaseExists(caseId);
+        // 없을 시 기존 등록 오류 처리
+        CaseFile caseFile = caseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "해당하는 사건을 찾을 수 없어 증거물을 등록할 수 없습니다."
+                ));
 
         // 2. 해당 사건에 저장된 증거물 목록 조회
-        List<Evidence> savedEvidences = evidenceRepository.findByCaseId(caseId);
+        List<Evidence> savedEvidences = evidenceRepository.findByCaseFile_CaseId(caseId);
 
         // 3. 다음 증거번호 생성
         String evidenceId = generateEvidenceId(caseId, savedEvidences);
@@ -64,7 +69,7 @@ public class EvidenceService {
         // 4. 요청 정보로 새 증거물 객체 생성
         Evidence evidence = new Evidence(
                 evidenceId,
-                caseId,
+                caseFile,
                 request.evidenceName(),
                 request.evidenceType(),
                 request.description(),
@@ -112,7 +117,7 @@ public class EvidenceService {
 
         // 해당 사건의 증거물을 정렬 가능한 목록으로 가져오기
         List<Evidence> evidences = new ArrayList<>(
-                evidenceRepository.findByCaseId(caseId)
+                evidenceRepository.findByCaseFile_CaseId(caseId)
         );
 
         // 증거번호 오름차순 정렬: 01 → 02 → 03

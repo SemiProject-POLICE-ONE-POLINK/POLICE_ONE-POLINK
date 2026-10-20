@@ -8,5 +8,5 @@ import java.util.List;
 public interface InvestigationLogRepository extends JpaRepository<InvestigationLog, Integer> {
 
     // 사건별 수사기록을 수사 일시·기록 번호 오름차순으로 조회
-    List<InvestigationLog> findByCaseIdOrderByInvestigatedAtAscLogIdAsc(String caseId);
+    List<InvestigationLog> findByCaseFile_CaseIdOrderByInvestigatedAtAscLogIdAsc(String caseId);
 }

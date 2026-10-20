@@ -1,5 +1,6 @@
 package com.polink.investigation.entity;
 
+import com.polink.casefile.entity.CaseFile;
 import com.polink.user.entity.User;
 import jakarta.persistence.*;
 
@@ -17,8 +18,9 @@ public class InvestigationLog {
     private Integer logId;
 
     // 수사기록이 속한 사건 번호
-    @Column(name = "case_id", length = 25, nullable = false)
-    private String caseId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "case_id", nullable = false)
+    private CaseFile caseFile;
 
     // 수사를 진행한 경찰관 회원 번호
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -36,8 +38,8 @@ public class InvestigationLog {
     public InvestigationLog() {
     }
 
-    public InvestigationLog(String caseId, User officer, String content, LocalDateTime investigatedAt) {
-        this.caseId = caseId;
+    public InvestigationLog(CaseFile caseFile, User officer, String content, LocalDateTime investigatedAt) {
+        this.caseFile = caseFile;
         this.officer = officer;
         this.content = content;
         this.investigatedAt = investigatedAt;
@@ -47,8 +49,8 @@ public class InvestigationLog {
         return logId;
     }
 
-    public String getCaseId() {
-        return caseId;
+    public CaseFile getCaseFile() {
+        return caseFile;
     }
 
     public User getOfficer() {

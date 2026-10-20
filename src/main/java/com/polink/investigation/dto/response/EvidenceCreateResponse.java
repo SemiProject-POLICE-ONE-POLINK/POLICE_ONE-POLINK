@@ -20,7 +20,7 @@ public record EvidenceCreateResponse(
     public static EvidenceCreateResponse from(Evidence evidence) {
         return new EvidenceCreateResponse(
                 evidence.getEvidenceId(),
-                evidence.getCaseId(),
+                evidence.getCaseFile().getCaseId(),
                 evidence.getEvidenceName(),
                 evidence.getEvidenceType(),
                 evidence.getDescription(),

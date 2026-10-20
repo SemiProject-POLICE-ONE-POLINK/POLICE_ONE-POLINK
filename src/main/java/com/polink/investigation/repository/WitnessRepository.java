@@ -8,5 +8,5 @@ import java.util.List;
 public interface WitnessRepository extends JpaRepository<Witness, String> {
 
     // 같은 사건의 목격자 목록 조회
-    List<Witness> findByCaseId(String caseId);
+    List<Witness> findByCaseFile_CaseId(String caseId);
 }
