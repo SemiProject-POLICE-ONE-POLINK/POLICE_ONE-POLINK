@@ -1,16 +1,52 @@
 ### 증거물 등록
-### 1. 파일 없는 정상 등록 → 201
+### 1. 담당 경찰관의 증거물 등록 → 201
 POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
+Authorization: Bearer {{policeToken}}
 Content-Type: application/json
 
 {
-  "evidenceName": "현장 사진",
+  "evidenceName": "권한 확인용 현장 사진",
   "evidenceType": "PHOTO",
-  "description": "현장 출입구 사진",
+  "description": "담당 경찰관의 등록 권한을 확인합니다.",
   "acquiredLocation": "현장 출입구"
 }
 
-### 2. 증거물명 누락 → 400
+### 2. 다른 경찰관의 증거물 등록 → 403
+POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
+Authorization: Bearer {{otherPoliceToken}}
+Content-Type: application/json
+
+{
+  "evidenceName": "등록 거부 확인",
+  "evidenceType": "PHOTO",
+  "description": "다른 경찰관의 등록을 거부하는지 확인합니다.",
+  "acquiredLocation": "테스트 장소"
+}
+
+### 3. 없는 사건에 증거물 등록 → 404
+POST http://localhost:8080/api/cases/SMPA-2026-9999/evidences
+Authorization: Bearer {{policeToken}}
+Content-Type: application/json
+
+{
+  "evidenceName": "없는 사건 등록 확인",
+  "evidenceType": "PHOTO",
+  "description": "없는 사건의 등록 요청을 확인합니다.",
+  "acquiredLocation": "테스트 장소"
+}
+
+### 4. 담당 경찰관의 증거물 조회 → 200
+GET http://localhost:8080/api/cases/SMPA-2026-0405/evidences
+Authorization: Bearer {{policeToken}}
+
+### 5. 로그인 없이 증거물 조회 → 401
+GET http://localhost:8080/api/cases/SMPA-2026-0405/evidences
+
+### 6. 다른 경찰관의 증거물 조회 → 403
+GET http://localhost:8080/api/cases/SMPA-2026-0405/evidences
+Authorization: Bearer {{otherPoliceToken}}
+
+### 7. 증거물명 누락 등록 → 400
 POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
 Content-Type: application/json
 
@@ -21,7 +57,7 @@ Content-Type: application/json
   "acquiredLocation": "현장 출입구"
 }
 
-### 3. 유형 미선택 → 400
+### 8. 유형 미선택 등록 → 400
 POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
 Content-Type: application/json
 
@@ -32,7 +68,7 @@ Content-Type: application/json
   "acquiredLocation": "현장 출입구"
 }
 
-### 4. 설명 누락 → 400
+### 9. 설명 누락 등록 → 400
 POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
 Content-Type: application/json
 
@@ -43,7 +79,7 @@ Content-Type: application/json
   "acquiredLocation": "현장 출입구"
 }
 
-### 5. 확보 장소 누락 → 400
+### 10. 확보 장소 누락 등록 → 400
 POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
 Content-Type: application/json
 
@@ -54,7 +90,7 @@ Content-Type: application/json
   "acquiredLocation": ""
 }
 
-### 6. 첨부파일 포함 정상 등록 → 201
+### 11. 첨부파일 포함 정상 등록 → 201
 POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
 Content-Type: multipart/form-data; boundary=upload
 
@@ -75,7 +111,7 @@ Content-Type: image/png
 < C:/Users/HYUN/Downloads/POLINK.png
 --upload--
 
-### 7. 미지원 확장자 → 400
+### 12. 미지원 확장자 → 400
 POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
 Content-Type: multipart/form-data; boundary=upload
 
@@ -96,7 +132,7 @@ Content-Type: application/octet-stream
 test
 --upload--
 
-### 8. 빈 파일 → 400
+### 13. 빈 파일 → 400
 POST http://localhost:8080/api/cases/SMPA-2026-0405/evidences
 Content-Type: multipart/form-data; boundary=upload
 
@@ -116,7 +152,3 @@ Content-Type: image/jpeg
 
 < C:/Users/HYUN/Downloads/empty.jpg
 --upload--
-
-### 증거물 조회
-### 9. 사건별 증거물 목록 조회 → 200
-GET http://localhost:8080/api/cases/SMPA-2026-0405/evidences

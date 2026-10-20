@@ -17,18 +17,16 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.ArrayList;
 import java.util.List;
 
+// 수사 기록 Service
 @Service
 public class InvestigationLogService {
 
     private final InvestigationLogRepository investigationLogRepository;
-    private final CaseRepository caseRepository;
-    private final UserRepository userRepository;
+    private final InvestigationAccessService investigationAccessService;
 
-
-    public InvestigationLogService(InvestigationLogRepository investigationLogRepository, CaseRepository caseRepository, UserRepository userRepository) {
+    public InvestigationLogService(InvestigationLogRepository investigationLogRepository, InvestigationAccessService investigationAccessService) {
         this.investigationLogRepository = investigationLogRepository;
-        this.caseRepository = caseRepository;
-        this.userRepository = userRepository;
+        this.investigationAccessService = investigationAccessService;
     }
 
     // 사건별 수사기록 등록
@@ -38,25 +36,17 @@ public class InvestigationLogService {
             Integer loggedInUserId,
             InvestigationLogCreateRequest request
     ) {
-        // 로그인한 사용자 확인
-        User officer = findLoggedInUser(loggedInUserId);
+        // 1. 로그인한 사용자가 수사중인 사건의 담당 경찰인지 확인
+        CaseFile caseFile =
+                investigationAccessService.findInvestigatingCase(
+                        caseId,
+                        loggedInUserId
+                );
 
-        // 경찰관만 수사기록 등록 가능
-        // 담당자 배정 기능 확인 후 수정 예정
-        if (officer.getRole() != UserRole.POLICE) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "수사기록을 등록할 권한이 없습니다."
-            );
-        }
+        // 2. 접근 검사를 통과한 사건의 담당 경찰을 작성자로 설정
+        User officer = caseFile.getAssignedOfficer();
 
-        // 기록을 등록할 사건 확인
-        CaseFile caseFile = caseRepository.findById(caseId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "사건 정보를 확인할 수 없어 수사기록을 등록할 수 없습니다."
-                ));
-
+        // 3. 입력한 수사 내용과 수사 일시로 기록 생성
         InvestigationLog investigationLog =
                 new InvestigationLog(
                         caseFile,
@@ -65,64 +55,40 @@ public class InvestigationLogService {
                         request.investigatedAt()
                 );
 
+        // 4. 저장 결과를 응답 DTO로 변환
         InvestigationLog savedLog =
                 investigationLogRepository.save(investigationLog);
 
         return InvestigationLogResponse.from(savedLog);
     }
 
-    // 사건별 수사기록 목록 조회
+    // 담당 경찰이 사건 상태와 관계없이 수사기록 조회
     @Transactional(readOnly = true)
     public List<InvestigationLogResponse> findInvestigationLogs(
             String caseId,
             Integer loggedInUserId
     ) {
-        User user = findLoggedInUser(loggedInUserId);
 
-        // 경찰관과 관리자만 수사기록 조회 가능
-        if (user.getRole() != UserRole.POLICE
-                && user.getRole() != UserRole.ADMIN) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "수사기록을 조회할 권한이 없습니다."
-            );
-        }
+        // 1. 해당 사건의 담당 경찰인지 확인
+        investigationAccessService.findAssignedCase(
+                caseId,
+                loggedInUserId
+        );
 
-        if (!caseRepository.existsById(caseId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "사건 정보를 확인할 수 없어 수사기록을 조회할 수 없습니다."
-            );
-        }
-
+        // 2. 수사 일시·기록 번호 오름차순 조회
         List<InvestigationLog> logs =
                 investigationLogRepository
-                        .findByCaseFile_CaseIdOrderByInvestigatedAtAscLogIdAsc(caseId);
+                        .findByCaseFile_CaseIdOrderByInvestigatedAtAscLogIdAsc(
+                                caseId
+                        );
 
-        List<InvestigationLogResponse> responses =
-                new ArrayList<>();
+        // 3. 조회 결과를 응답 DTO 목록으로 변환
+        List<InvestigationLogResponse> responses = new ArrayList<>();
 
         for (InvestigationLog log : logs) {
             responses.add(InvestigationLogResponse.from(log));
         }
 
         return responses;
-    }
-
-    // 로그인 사용자 번호로 회원 조회
-    private User findLoggedInUser(Integer loggedInUserId) {
-
-        if (loggedInUserId == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "로그인이 필요합니다."
-            );
-        }
-
-        return userRepository.findById(loggedInUserId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.UNAUTHORIZED,
-                        "로그인 정보를 확인할 수 없습니다."
-                ));
     }
 }

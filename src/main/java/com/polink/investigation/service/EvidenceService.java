@@ -1,7 +1,6 @@
 package com.polink.investigation.service;
 
 import com.polink.casefile.entity.CaseFile;
-import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.request.EvidenceCreateRequest;
 import com.polink.investigation.dto.response.EvidenceCreateResponse;
 import com.polink.investigation.dto.response.EvidenceListResponse;
@@ -9,13 +8,11 @@ import com.polink.investigation.entity.Evidence;
 import com.polink.investigation.repository.EvidenceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -28,37 +25,38 @@ public class EvidenceService {
 
     private final EvidenceRepository evidenceRepository;
     private final EvidenceFileService evidenceFileService;
-    private final CaseRepository caseRepository;
+    private final InvestigationAccessService investigationAccessService;
 
-    public EvidenceService(EvidenceRepository evidenceRepository, EvidenceFileService evidenceFileService, CaseRepository caseRepository) {
+    public EvidenceService(EvidenceRepository evidenceRepository, EvidenceFileService evidenceFileService, InvestigationAccessService investigationAccessService) {
         this.evidenceRepository = evidenceRepository;
         this.evidenceFileService = evidenceFileService;
-        this.caseRepository = caseRepository;
+        this.investigationAccessService = investigationAccessService;
     }
-
 
     // 첨부 파일이 없는 증거물 등록 (파일 위치에 null 값 전달)
     @Transactional
     public EvidenceCreateResponse createEvidence(
             String caseId,
+            Integer loggedInUserId,
             EvidenceCreateRequest request
     ) {
-        return createEvidence(caseId, request, null);
+        return createEvidence(caseId, loggedInUserId, request, null);
     }
 
-    // 첨부 파일이 있는 증거물 등록
+    // 담당 경찰이 수사중인 사건에 증거물 등록 — 첨부파일 선택
     @Transactional
     public EvidenceCreateResponse createEvidence(
             String caseId,
+            Integer loggedInUserId,
             EvidenceCreateRequest request,
             MultipartFile file
     ) {
-        // 1. 증거물을 등록할 사건이 존재하는지 확인
-        // 없을 시 기존 등록 오류 처리
-        CaseFile caseFile = caseRepository.findById(caseId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "해당하는 사건을 찾을 수 없어 증거물을 등록할 수 없습니다."
-                ));
+        // 1. 로그인·담당 경찰·수사중인 상태 인지 확인
+        CaseFile caseFile =
+                investigationAccessService.findInvestigatingCase(
+                        caseId,
+                        loggedInUserId
+                );
 
         // 2. 해당 사건에 저장된 증거물 목록 조회
         List<Evidence> savedEvidences = evidenceRepository.findByCaseFile_CaseId(caseId);
@@ -103,24 +101,24 @@ public class EvidenceService {
         return EvidenceCreateResponse.from(savedEvidence);
     }
 
-    // 사건별 증거물 목록 조회
+    // 담당 경찰이 사건별 증거물 목록 조회
     @Transactional(readOnly = true)
-    public List<EvidenceListResponse> findEvidenceList(String caseId) {
+    public List<EvidenceListResponse> findEvidenceList(
+            String caseId,
+            Integer loggedInUserId
+    ) {
 
-        // 사건이 없으면 HTTP 404로 처리
-        if (!caseRepository.existsById(caseId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "사건 정보를 확인할 수 없어 증거물 목록을 조회할 수 없습니다."
-            );
-        }
+        // 사건 상태와 관계없이 해당 사건의 담당 경찰관인지 확인
+        investigationAccessService.findAssignedCase(
+                caseId,
+                loggedInUserId
+        );
 
-        // 해당 사건의 증거물을 정렬 가능한 목록으로 가져오기
         List<Evidence> evidences = new ArrayList<>(
                 evidenceRepository.findByCaseFile_CaseId(caseId)
         );
 
-        // 증거번호 오름차순 정렬: 01 → 02 → 03
+        // 증거번호 오름차순 정렬
         evidences.sort(
                 Comparator.comparing(Evidence::getEvidenceId)
         );
@@ -138,7 +136,6 @@ public class EvidenceService {
 
     // DB 등록이 취소되면 저장된 첨부파일 정리
     private void registerFileCleanup(String filePath) {
-
         TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {
 
@@ -170,17 +167,7 @@ public class EvidenceService {
         );
     }
 
-    // 1-1. 접수된 사건이 없으면 증거물 등록 불가
-    private void checkCaseExists(String caseId) {
-
-        if (!caseRepository.existsById(caseId)) {
-            throw new IllegalArgumentException(
-                    "해당하는 사건을 찾을 수 없어 증거물을 등록할 수 없습니다."
-            );
-        }
-    }
-
-    // 3-1. 같은 사건에 저장된 증거물의 마지막 순번 다음 번호를 생성
+    // 같은 사건에 저장된 증거물의 마지막 순번 다음 번호를 생성
     private String generateEvidenceId(
             String caseId,
             List<Evidence> savedEvidences

@@ -6,6 +6,8 @@ import com.polink.investigation.service.StatementService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -22,6 +24,7 @@ public class StatementController {
     public ResponseEntity<StatementResponse> createStatement(
             @PathVariable("caseId") String caseId,
             @PathVariable("witnessId") String witnessId,
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody StatementCreateRequest request
     ) {
 
@@ -30,6 +33,7 @@ public class StatementController {
                 statementService.createStatement(
                         caseId,
                         witnessId,
+                        toLoggedInUserId(jwt),
                         request
                 );
 
@@ -37,5 +41,11 @@ public class StatementController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(response);
+    }
+    // 검증된 JWT에서 회원 번호 추출 — 토큰이 없으면 Service에서 401 처리
+    private Integer toLoggedInUserId(Jwt jwt) {
+        return jwt == null
+                ? null
+                : Integer.valueOf(jwt.getSubject());
     }
 }
