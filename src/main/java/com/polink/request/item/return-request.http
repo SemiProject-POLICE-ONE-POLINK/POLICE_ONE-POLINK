@@ -1,0 +1,27 @@
+@baseUrl = http://localhost:8080
+
+# 로그인 기능이 완성된 뒤 실제 토큰 값으로 바꾼다.
+@accessToken = 여기에_로그인_후_받은_토큰
+
+### RET-001 습득물 반환 신청
+POST {{baseUrl}}/api/v1/return-requests
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "lostItemId": "L-0001",
+  "foundItemId": "F-0001",
+  "requestReason": "내가 분실한 카드지갑입니다."
+}
+
+### RET-002 내 반환 신청 조회
+GET {{baseUrl}}/api/v1/return-requests/my?page=0&size=10
+Authorization: Bearer {{accessToken}}
+
+### RET-003 경찰 반환 신청 목록 조회
+GET {{baseUrl}}/api/v1/return-requests?status=PENDING&keyword=카드지갑&page=0&size=10
+Authorization: Bearer {{accessToken}}
+
+### RET-004 경찰 반환 신청 상세 조회
+GET {{baseUrl}}/api/v1/return-requests/1
+Authorization: Bearer {{accessToken}}

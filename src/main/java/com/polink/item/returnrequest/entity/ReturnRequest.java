@@ -1,0 +1,83 @@
+package com.polink.item.returnrequest.entity;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import java.time.LocalDateTime;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+/**
+ * tbl_return_request 테이블과 연결되는 반환 신청 엔티티다.
+ */
+@Entity
+@Table(name = "tbl_return_request")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class ReturnRequest {
+
+    // DB가 AUTO_INCREMENT로 만드는 반환 신청 번호다.
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "request_id")
+    private Integer requestId;
+
+    // 로그인 기능이 완성되면 인증된 시민의 userId가 들어온다.
+    @Column(name = "requester_id", nullable = false)
+    private Integer requesterId;
+
+    // 신청자가 등록한 분실물 번호다. 예: L-0001
+    @Column(name = "lost_item_id", nullable = false, length = 25)
+    private String lostItemId;
+
+    // 반환을 요청한 습득물 번호다. 예: F-0001
+    @Column(name = "found_item_id", nullable = false, length = 25)
+    private String foundItemId;
+
+    // 승인·반려를 처리한 경찰관 번호다. 최초 신청 시에는 없다.
+    @SuppressWarnings("unused")
+    @Column(name = "processed_by")
+    private Integer processedBy;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 25)
+    private ReturnRequestStatus status;
+
+    @Column(name = "request_reason", nullable = false, columnDefinition = "TEXT")
+    private String requestReason;
+
+    // 반려 전에는 빈 문자열로 저장한다.
+    @Column(name = "reject_reason", nullable = false, length = 500)
+    private String rejectReason;
+
+    @SuppressWarnings("unused")
+    @Column(name = "processed_at")
+    private LocalDateTime processedAt;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    /**
+     * 시민이 반환 신청을 생성할 때 사용한다.
+     */
+    public ReturnRequest(
+            Integer requesterId,
+            String lostItemId,
+            String foundItemId,
+            String requestReason
+    ) {
+        this.requesterId = requesterId;
+        this.lostItemId = lostItemId;
+        this.foundItemId = foundItemId;
+        this.status = ReturnRequestStatus.PENDING;
+        this.requestReason = requestReason;
+        this.rejectReason = "";
+        this.createdAt = LocalDateTime.now();
+    }
+}
