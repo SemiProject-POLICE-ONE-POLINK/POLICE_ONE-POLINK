@@ -24,8 +24,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 
     // 로그인, 비밀번호 암호화, 시민·경찰·관리자 권한 구분 기능에 사용한다.
-    //(JWT 인증·인가 전까지는 주석 처리)
-//    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+
+    // Authorization: Bearer 토큰의 JWT 검증
+    implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
 
     // 회원가입 시 비밀번호를 BCrypt로 해시 처리하고, 로그인 시 일치 여부를 검증한다.
     implementation 'org.springframework.security:spring-security-crypto'

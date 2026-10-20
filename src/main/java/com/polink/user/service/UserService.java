@@ -1,5 +1,6 @@
 package com.polink.user.service;
 
+import com.polink.user.dto.request.LoginRequest;
 import com.polink.user.dto.request.SignupRequest;
 import com.polink.user.dto.response.SignupResponse;
 import com.polink.user.entity.User;
@@ -22,6 +23,7 @@ public class UserService {
         this.passwordEncoder = passwordEncoder;
     }
 
+    // 회원가입: 중복 여부를 확인하고 비밀번호를 BCrypt로 변환한 뒤 회원을 저장
     @Transactional
     public SignupResponse signup(SignupRequest request) {
 
@@ -51,5 +53,28 @@ public class UserService {
                 savedUser.getUserId(),
                 savedUser.getUserName()
         );
+    }
+
+    // 로그인: 아이디로 회원을 찾고 입력 비밀번호가 저장된 해시와 일치하는지 확인
+    @Transactional(readOnly = true)
+    public User authenticate(LoginRequest request) {
+        User user = userRepository.findByUserName(request.getUserName())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "아이디 또는 비밀번호를 확인해주세요."
+                ));
+
+        // 입력 비밀번호와 DB에 저장된 BCrypt 해시를 비교
+        if (!passwordEncoder.matches(
+                request.getPassword(),
+                user.getPassword()
+        )) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "아이디 또는 비밀번호를 확인해주세요."
+            );
+        }
+
+        return user;
     }
 }

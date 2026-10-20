@@ -163,7 +163,7 @@ public class HypothesisService {
                             "근거 증거물 정보를 확인할 수 없습니다."
                     ));
 
-            if (!caseId.equals(evidence.getCaseId())) {
+            if (!caseId.equals(evidence.getCaseFile().getCaseId())) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "다른 사건의 증거물은 근거로 사용할 수 없습니다."
@@ -198,7 +198,7 @@ public class HypothesisService {
                             "근거 진술의 목격자 정보를 확인할 수 없습니다."
                     ));
 
-            if (!caseId.equals(witness.getCaseId())) {
+            if (!caseId.equals(witness.getCaseFile().getCaseId())) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "다른 사건의 진술은 근거로 사용할 수 없습니다."
