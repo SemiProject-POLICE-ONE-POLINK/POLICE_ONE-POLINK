@@ -1,7 +1,7 @@
 ### 정상: 담당 경찰이 가설 채택
 POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
 Content-Type: application/json
-X-User-Id: 7
+Authorization: Bearer {{policeToken}}
 
 {
   "content": "흰색 경차를 이용한 계획적인 침입 범행 가능성",
@@ -27,7 +27,7 @@ Content-Type: application/json
 ### 실패: 담당자가 아닌 경찰 → 403
 POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
 Content-Type: application/json
-X-User-Id: 8
+Authorization: Bearer {{otherPoliceToken}}
 
 {
   "content": "흰색 경차를 이용한 범행 가능성",
@@ -40,7 +40,7 @@ X-User-Id: 8
 ### 실패: 다른 사건의 증거물을 근거로 전달 → 400
 POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
 Content-Type: application/json
-X-User-Id: 7
+Authorization: Bearer {{policeToken}}
 
 {
   "content": "흰색 경차를 이용한 범행 가능성",
