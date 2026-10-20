@@ -1,0 +1,51 @@
+### 정상: 담당 경찰이 가설 채택
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Content-Type: application/json
+X-User-Id: 7
+
+{
+  "content": "흰색 경차를 이용한 계획적인 침입 범행 가능성",
+  "reason": "교차로 CCTV에서 흰색 경차가 확인되고, 목격자가 차량에 관한 진술을 정정했습니다.",
+  "additionalRecommendation": "차량 번호판 판독 결과를 확인합니다.",
+  "confidence": 64,
+  "evidenceIds": ["EV-2026-0405-01"],
+  "statementIds": [8]
+}
+
+### 실패: 로그인 정보 없음 → 401
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Content-Type: application/json
+
+{
+  "content": "흰색 경차를 이용한 범행 가능성",
+  "reason": "CCTV와 진술을 바탕으로 판단했습니다.",
+  "confidence": 64,
+  "evidenceIds": [],
+  "statementIds": []
+}
+
+### 실패: 담당자가 아닌 경찰 → 403
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Content-Type: application/json
+X-User-Id: 8
+
+{
+  "content": "흰색 경차를 이용한 범행 가능성",
+  "reason": "CCTV와 진술을 바탕으로 판단했습니다.",
+  "confidence": 64,
+  "evidenceIds": [],
+  "statementIds": []
+}
+
+### 실패: 다른 사건의 증거물을 근거로 전달 → 400
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Content-Type: application/json
+X-User-Id: 7
+
+{
+  "content": "흰색 경차를 이용한 범행 가능성",
+  "reason": "CCTV와 진술을 바탕으로 판단했습니다.",
+  "confidence": 64,
+  "evidenceIds": ["EV-2026-0401-01"],
+  "statementIds": []
+}
