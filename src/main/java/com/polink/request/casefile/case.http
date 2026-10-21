@@ -1,0 +1,62 @@
+@baseUrl = http://localhost:8080
+@citizenUserName = miran
+@citizenPassword = miran12!
+
+### 0. 시민 로그인 → 토큰 자동 저장 — 예상: 200
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "userName": "{{citizenUserName}}",
+  "password": "{{citizenPassword}}"
+}
+
+> {% client.global.set("citizenToken", response.body.accessToken); %}
+
+### 1. 토큰 없이 사건 등록 — 예상: 401
+POST {{baseUrl}}/api/v1/cases
+Content-Type: application/json
+
+{
+  "title": "토큰 없는 사건 등록 테스트",
+  "caseType": "THEFT",
+  "description": "토큰 없는 사건 등록 요청을 검증합니다.",
+  "occurredAt": "2026-10-22T10:00:00",
+  "location": "서울역"
+}
+
+### 2. 잘못된 토큰으로 사건 등록 — 예상: 401
+POST {{baseUrl}}/api/v1/cases
+Authorization: Bearer invalid.jwt.token
+Content-Type: application/json
+
+{
+  "title": "잘못된 토큰 사건 등록 테스트",
+  "caseType": "THEFT",
+  "description": "잘못된 토큰 사건 등록 요청을 검증합니다.",
+  "occurredAt": "2026-10-22T10:00:00",
+  "location": "서울역"
+}
+
+### 3. 정상 토큰으로 사건 등록 → 사건번호 자동 저장 — 예상: 201
+POST {{baseUrl}}/api/v1/cases
+Authorization: Bearer {{citizenToken}}
+Content-Type: application/json
+
+{
+  "title": "정상 JWT 사건 등록 테스트",
+  "caseType": "THEFT",
+  "description": "정상 로그인 사용자의 사건 등록 요청입니다.",
+  "occurredAt": "2026-10-22T10:00:00",
+  "location": "서울역"
+}
+
+> {% client.global.set("caseId", response.body.caseId); %}
+
+### 4. 내 사건 목록 조회 — 예상: 200
+GET {{baseUrl}}/api/v1/cases/my?page=0&size=10
+Authorization: Bearer {{citizenToken}}
+
+### 5. 사건 상세 조회 — 예상: 200
+GET {{baseUrl}}/api/v1/cases/{{caseId}}
+Authorization: Bearer {{citizenToken}}
