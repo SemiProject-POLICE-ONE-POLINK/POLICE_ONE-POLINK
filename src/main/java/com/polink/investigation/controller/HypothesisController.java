@@ -12,6 +12,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/cases/{caseId}/hypotheses")
 public class HypothesisController {
@@ -74,5 +76,23 @@ public class HypothesisController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(response);
+    }
+
+    // 담당 경찰이 사건에 저장된 가설 목록을 조회
+    @GetMapping
+    public ResponseEntity<List<HypothesisResponse>> getAdoptedHypotheses(
+            @PathVariable("caseId") String caseId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        Integer loggedInUserId =
+                jwt == null ? null : Integer.valueOf(jwt.getSubject());
+
+        List<HypothesisResponse> responses =
+                hypothesisService.findAdoptedHypotheses(
+                        caseId,
+                        loggedInUserId
+                );
+
+        return ResponseEntity.ok(responses);
     }
 }

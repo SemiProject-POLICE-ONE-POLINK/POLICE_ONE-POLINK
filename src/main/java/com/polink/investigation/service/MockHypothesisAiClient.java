@@ -41,7 +41,9 @@ public class MockHypothesisAiClient implements HypothesisAiClient {
                         "등록된 증거물의 내용을 확인해주세요.",
                         60,
                         evidenceIds,
-                        statementIds
+                        statementIds,
+                        List.of("[테스트용] 사건 자료를 함께 검토할 필요가 있습니다.")
+
                 ),
                 new HypothesisCandidateResponse(
                         "[테스트용] 가설 후보 2",
@@ -49,7 +51,8 @@ public class MockHypothesisAiClient implements HypothesisAiClient {
                         "목격자의 진술 이력을 확인해주세요.",
                         50,
                         evidenceIds,
-                        statementIds
+                        statementIds,
+                        List.of("[테스트용] 사건 자료를 함께 검토할 필요가 있습니다.")
                 ),
                 new HypothesisCandidateResponse(
                         "[테스트용] 가설 후보 3",
@@ -57,7 +60,8 @@ public class MockHypothesisAiClient implements HypothesisAiClient {
                         "기존 수사기록과 사건 내용을 확인해주세요.",
                         40,
                         evidenceIds,
-                        statementIds
+                        statementIds,
+                        List.of("[테스트용] 사건 자료를 함께 검토할 필요가 있습니다.")
                 )
         );
     }

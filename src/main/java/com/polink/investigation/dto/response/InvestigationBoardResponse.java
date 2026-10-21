@@ -14,6 +14,8 @@ public record InvestigationBoardResponse(
         List<BoardWitnessSummaryResponse> witnesses,
 
         int totalInvestigationLogCount,
-        List<InvestigationLogResponse> investigationLogs
+        List<InvestigationLogResponse> investigationLogs,
+
+        BoardHypothesisSummaryResponse latestHypothesis
 )  {
 }
