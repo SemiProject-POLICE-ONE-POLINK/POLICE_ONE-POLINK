@@ -42,6 +42,8 @@ public class ItemController {
      */
     @GetMapping
     public ResponseEntity<ItemPageResponse> getItems(
+            // Authorization: Bearer 토큰에서 검증된 로그인 사용자 정보다.
+            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) ItemType itemType,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String keyword,
@@ -53,6 +55,10 @@ public class ItemController {
             // 한 페이지의 기본 조회 개수는 10개다.
             @RequestParam(defaultValue = "10") int size
     ) {
+        // 목록 조회는 시민·경찰·관리자 모두 가능하다.
+        // 단, 로그인하지 않았거나 JWT의 사용자 식별값(sub)이 없으면 401을 반환한다.
+        requireLoggedInUserId(jwt);
+
         return ResponseEntity.ok(
                 itemService.getItems(itemType, category, keyword, status, page, size)
         );
@@ -101,8 +107,14 @@ public class ItemController {
      */
     @GetMapping("/{itemId}")
     public ResponseEntity<ItemDetailResponse> getItemDetail(
+            // Authorization: Bearer 토큰에서 검증된 로그인 사용자 정보다.
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable String itemId
     ) {
+        // 상세 조회는 시민·경찰·관리자 모두 가능하다.
+        // 토큰이 없거나 JWT의 sub Claim이 비정상이면 401을 반환한다.
+        requireLoggedInUserId(jwt);
+
         // 형식이 틀린 요청은 존재하지 않는 물품과 구분하여 400으로 처리한다.
         if (!itemId.matches("^[LF]-\\d{4}$")) {
             throw new IllegalArgumentException(
