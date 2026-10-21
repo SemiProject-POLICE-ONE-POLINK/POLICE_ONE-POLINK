@@ -302,17 +302,25 @@ public class ItemController {
 
     /*
      * GET /api/v1/items/statistics
-     * 경찰 계정이 전체 분실물·습득물 현황 통계를 조회한다.
+     * 경찰과 관리자 계정이 전체 분실물·습득물 현황 통계를 조회한다.
      */
+
     @GetMapping("/statistics")
     public ResponseEntity<ItemStatisticsResponse> getItemStatistics(
             @AuthenticationPrincipal Jwt jwt
     ) {
-        // 토큰 유효성 검증과 역할 추출을 함께 수행한다.
-        if (requireLoggedInUserRole(jwt) != UserRole.POLICE) {
+        // JWT가 유효한지 확인하고, 로그인 사용자의 역할을 가져온다.
+        UserRole currentUserRole = requireLoggedInUserRole(jwt);
+
+        /*
+         * 통계는 현황을 관리하는 기능이므로 경찰과 관리자만 조회할 수 있다.
+         * 시민 계정은 통계 조회 권한이 없으므로 403 Forbidden으로 차단한다.
+         */
+        if (currentUserRole != UserRole.POLICE
+                && currentUserRole != UserRole.ADMIN) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
-                    "경찰 계정만 물품 통계를 조회할 수 있습니다."
+                    "경찰 또는 관리자 계정만 물품 통계를 조회할 수 있습니다."
             );
         }
 
