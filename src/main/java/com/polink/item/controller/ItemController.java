@@ -15,11 +15,12 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.polink.item.dto.ItemPageResponse;
 import java.util.List;
-import com.polink.item.dev.LocalCurrentUserProvider;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import com.polink.item.dto.ItemUpdateRequest;
+import com.polink.user.entity.UserRole;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 /**
  * 분실물·습득물 등록 요청을 받는 Controller다.
@@ -30,13 +31,8 @@ import com.polink.item.dto.ItemUpdateRequest;
 @RequiredArgsConstructor
 public class ItemController {
 
+    // 물품 등록·수정·이미지 첨부 등의 실제 업무 규칙을 처리한다.
     private final ItemService itemService;
-    /*
-     * local 프로필에서만 LocalCurrentUserProvider Bean이 만들어진다.
-     * ObjectProvider를 쓰면 local이 아닌 환경에서도 애플리케이션이 시작된다.
-     */
-    private final ObjectProvider<LocalCurrentUserProvider> localCurrentUserProvider;
-
     /**
      * GET /api/v1/items?page=0&size=10
      * <p>
@@ -68,6 +64,7 @@ public class ItemController {
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ItemCreateResponse> registerItem(
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @ModelAttribute ItemCreateRequest request,
             @RequestPart(value = "image", required = false) List<MultipartFile> images
     ) {
@@ -79,24 +76,15 @@ public class ItemController {
         // 이미지가 없으면 null, 있으면 첫 번째 파일 한 개만 Service에 전달한다.
         MultipartFile image = images == null || images.isEmpty() ? null : images.get(0);
 
-        // 현재는 실제 로그인 대신 application.yaml의 app.dev-user-id를 사용한다.
-        LocalCurrentUserProvider currentUserProvider =
-                localCurrentUserProvider.getIfAvailable();
+        // JWT 토큰의 sub 값을 현재 로그인한 사용자 ID로 사용한다.
+        Integer currentUserId = requireLoggedInUserId(jwt);
 
-        // local 프로필이 아니면 임시 사용자 제공자가 없으므로 등록을 막는다.
-        if (currentUserProvider == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.SERVICE_UNAVAILABLE,
-                    "로그인 기능이 아직 연결되지 않았습니다."
-            );
-        }
-
-        // 시민 계정만 분실물·습득물 등록을 할 수 있다.
-        currentUserProvider.requireCitizen();
+        // 물품 등록은 시민 계정만 가능하다.
+        requireCitizen(jwt);
 
         ItemCreateResponse response = itemService.registerItem(
                 request,
-                currentUserProvider.getCurrentUserId(),
+                currentUserId,
                 image
         );
 
@@ -127,97 +115,152 @@ public class ItemController {
 
     /**
      * PATCH /api/v1/items/{itemId}
-     * 시민은 본인이 등록한 분실물을 수정하고,
-     * 경찰은 보관 중인 습득물을 수정한다.
-     * 같은 URL을 역할에 따라 분기하므로 PATCH Mapping은 하나만 유지한다.
+     * JWT의 role Claim에 따라 수정 가능한 물품 종류를 구분한다.
+     * 시민(CITIZEN): 본인이 등록했고 분실 중(LOST)인 분실물만 수정 가능
+     * 경찰(POLICE): 보관 중(STORED)인 습득물만 수정 가능
+     * 관리자(ADMIN): 물품 수정 기능의 대상 역할이 아니므로 접근 불가
      */
     @PatchMapping(
             value = "/{itemId}",
             consumes = MediaType.APPLICATION_JSON_VALUE
     )
     public ResponseEntity<ItemDetailResponse> updateItem(
+            // Authorization: Bearer {token}에서 검증된 JWT를 Spring Security가 주입한다.
+            @AuthenticationPrincipal Jwt jwt,
+
             @PathVariable String itemId,
+
+            // 요청 본문의 필수값·날짜 검증을 먼저 수행한다.
             @Valid @RequestBody ItemUpdateRequest request
     ) {
-        // local 프로필이 아니면 임시 현재 사용자 정보를 사용할 수 없다.
-        LocalCurrentUserProvider currentUserProvider =
-                localCurrentUserProvider.getIfAvailable();
+        // JWT의 sub Claim을 로그인한 사용자 ID로 변환한다.
+        // 토큰이 없거나 sub 값이 비정상이면 공통 메서드가 401을 반환한다.
+        Integer currentUserId = requireLoggedInUserId(jwt);
 
-        if (currentUserProvider == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.SERVICE_UNAVAILABLE,
-                    "로그인 기능이 아직 연결되지 않았습니다."
-            );
-        }
+        // JWT의 role Claim을 CITIZEN, POLICE, ADMIN enum으로 변환한다.
+        UserRole currentUserRole = requireLoggedInUserRole(jwt);
 
-        // 로그인한 사용자 ID는 요청 본문이 아닌 서버의 사용자 정보에서 가져온다.
-        Integer currentUserId = currentUserProvider.getCurrentUserId();
+        // 역할마다 호출할 Service와 수정 가능한 물품 종류를 명확히 구분한다.
+        ItemDetailResponse response = switch (currentUserRole) {
+            // 시민의 경우 Service가 등록자 일치 여부와 LOST 상태를 추가 검증한다.
+            case CITIZEN ->
+                    itemService.updateLostItem(itemId, currentUserId, request);
 
-        // 사용자 역할별로 수정 가능한 물품 유형과 Service를 구분한다.
-        ItemDetailResponse response = switch (currentUserProvider.getCurrentUserRole()) {
-            case CITIZEN -> {
-                // 시민은 본인이 등록했고 분실 중인 분실물만 수정할 수 있다.
-                currentUserProvider.requireCitizen();
-                yield itemService.updateLostItem(itemId, currentUserId, request);
-            }
+            // 경찰의 경우 Service가 FOUND 유형과 STORED 상태를 추가 검증한다.
+            case POLICE ->
+                    itemService.updateFoundItem(itemId, currentUserId, request);
 
-            case POLICE -> {
-                // 경찰은 보관 중인 습득물만 수정할 수 있다.
-                currentUserProvider.requirePolice();
-                yield itemService.updateFoundItem(itemId, currentUserId, request);
-            }
-
-            // 관리자는 이번 수정 기능의 대상 역할이 아니므로 접근을 막는다.
+            // 관리자는 통계 등 별도 관리 기능의 대상이며 물품 정보 수정은 할 수 없다.
             case ADMIN -> throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "시민 또는 경찰 계정만 물품 정보를 수정할 수 있습니다."
             );
         };
 
-        // 수정된 물품 상세 정보를 200 OK로 반환한다.
+        // 수정된 물품 상세 정보를 200 OK와 함께 반환한다.
         return ResponseEntity.ok(response);
     }
 
-    /*
+    /**
      * POST /api/v1/items/{itemId}/image
-     * 시민이 본인이 등록한 분실물에 이미지 한 장을 첨부한다.
-     * multipart/form-data 형식으로 image 필드에 파일 한 개를 전달한다.
+     * 로그인한 시민이 본인이 등록한 분실물에 이미지 한 장을 첨부한다.
+     * 파일은 multipart/form-data의 image 필드로 전달한다.
+     * 실제 등록자·물품 유형·상태·중복 이미지 검증은 Service가 담당한다.
      */
     @PostMapping(
             value = "/{itemId}/image",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
     public ResponseEntity<ItemDetailResponse> attachLostItemImage(
+            // Authorization 헤더의 Bearer 토큰에서 추출된 JWT다.
+            @AuthenticationPrincipal Jwt jwt,
+
+            // 이미지를 연결할 대상 분실물 번호다.
             @PathVariable String itemId,
+
+            // 하나의 image 필드로 전달된 업로드 파일 목록이다.
             @RequestPart("image") List<MultipartFile> images
     ) {
-        // 이미지가 없거나 두 장 이상이면 “이미지 한 장” 요구사항에 맞지 않는다.
+        // 요구사항상 분실물 한 건에는 이미지 한 장만 요청으로 전달할 수 있다.
         if (images == null || images.size() != 1) {
             throw new IllegalArgumentException("이미지는 1개만 첨부할 수 있습니다.");
         }
 
-        // local 프로필이 아니면 임시 현재 사용자 정보를 사용할 수 없다.
-        LocalCurrentUserProvider currentUserProvider =
-                localCurrentUserProvider.getIfAvailable();
+        // 토큰의 sub에서 로그인한 시민의 회원 번호를 가져온다.
+        Integer currentUserId = requireLoggedInUserId(jwt);
 
-        if (currentUserProvider == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.SERVICE_UNAVAILABLE,
-                    "로그인 기능이 아직 연결되지 않았습니다."
-            );
-        }
+        // 이미지 첨부는 시민 계정만 가능하다.
+        // 경찰·관리자 계정은 여기서 403 Forbidden으로 차단한다.
+        requireCitizen(jwt);
 
-        // 분실물 이미지 첨부는 시민 계정만 사용할 수 있다.
-        currentUserProvider.requireCitizen();
-
-        // Service가 등록자·물품 유형·상태·기존 이미지 여부를 추가 검증한다.
+        // Service가 본인 물품 여부, LOST 상태, 기존 이미지 존재 여부를 검사하고
+        // ItemImageService를 통해 실제 파일 저장과 imagePath 연결을 처리한다.
         ItemDetailResponse response = itemService.attachLostItemImage(
                 itemId,
-                currentUserProvider.getCurrentUserId(),
+                currentUserId,
                 images.get(0)
         );
 
-        // 저장된 이미지 경로가 포함된 수정 후 상세 정보를 반환한다.
+        // 파일 경로가 포함된 수정 후 물품 상세 정보를 200 OK로 반환한다.
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * Authorization Bearer 토큰에서 로그인 회원 번호(sub)를 추출한다.
+     * 토큰이 없거나 회원 번호 형식이 올바르지 않으면 401을 반환한다.
+     */
+    private Integer requireLoggedInUserId(Jwt jwt) {
+        if (jwt == null || jwt.getSubject() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "로그인이 필요합니다."
+            );
+        }
+
+        try {
+            return Integer.valueOf(jwt.getSubject());
+        } catch (NumberFormatException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "로그인 사용자 정보가 올바르지 않습니다."
+            );
+        }
+    }
+
+    /**
+     * JWT의 role Claim을 UserRole enum으로 변환한다.
+     * 토큰에 역할 정보가 없거나 지원하지 않는 역할이면 401을 반환한다.
+     */
+    private UserRole requireLoggedInUserRole(Jwt jwt) {
+        // 토큰 자체와 sub 값이 유효한지 먼저 확인한다.
+        requireLoggedInUserId(jwt);
+
+        String roleName = jwt.getClaimAsString("role");
+        if (roleName == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "로그인 사용자 역할 정보가 없습니다."
+            );
+        }
+
+        try {
+            return UserRole.valueOf(roleName);
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "로그인 사용자 역할 정보가 올바르지 않습니다."
+            );
+        }
+    }
+
+    /** 시민 계정만 사용할 수 있는 기능의 권한을 검사한다. */
+    private void requireCitizen(Jwt jwt) {
+        if (requireLoggedInUserRole(jwt) != UserRole.CITIZEN) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "시민 계정만 사용할 수 있는 기능입니다."
+            );
+        }
+    }
+
 }
