@@ -38,4 +38,3 @@ app:
   jwt:
     secret-base64: ${JWT_SECRET_BASE64}
     access-token-minutes: 60
-  ai:
