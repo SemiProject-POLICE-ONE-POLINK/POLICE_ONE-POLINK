@@ -1,18 +1,25 @@
 package com.polink.casefile.controller;
 
 import com.polink.casefile.dto.request.CaseCloseRequest;
-import com.polink.casefile.dto.response.CaseCloseResponse;
+import com.polink.casefile.dto.request.CaseCreateRequest;
+import com.polink.casefile.dto.request.CaseOfficerRequest;
+import com.polink.casefile.dto.response.*;
 import com.polink.casefile.entity.CaseClose;
 import com.polink.casefile.entity.CaseFile;
 import com.polink.casefile.entity.CaseStatus;
+import com.polink.casefile.entity.CaseType;
 import com.polink.casefile.exception.CaseExceptionHandler;
 import com.polink.casefile.service.CaseService;
+import com.polink.user.entity.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -20,10 +27,11 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -40,6 +48,9 @@ public class CaseControllerTest {
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new CaseController(caseService))
                 .setControllerAdvice(new CaseExceptionHandler())
+                .setCustomArgumentResolvers(
+                        new PageableHandlerMethodArgumentResolver()
+                )
                 .build();
     }
 
@@ -128,5 +139,282 @@ public class CaseControllerTest {
                 eq("SMPA-2026-0042"),
                 any(CaseCloseRequest.class)
         );
+    }
+
+    @Test
+    void createCase_success_returnsCreated() throws Exception {
+        CaseCreateResponse response =
+                new CaseCreateResponse(
+                        "SMPA-2026-0043",
+                        CaseStatus.WAITING
+                );
+
+        when(caseService.createCase(
+                eq(1),
+                any(CaseCreateRequest.class)
+        )).thenReturn(response);
+
+        mockMvc.perform(
+                        post("/api/v1/cases")
+                                .header("X-User-Id", 1)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                    {
+                                      "title": "휴대전화 절도",
+                                      "caseType": "THEFT",
+                                      "description": "지하철에서 휴대전화를 도난당했습니다.",
+                                      "occurredAt": "2026-10-21T10:30:00",
+                                      "location": "서울역"
+                                    }
+                                    """)
+                )
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.caseId")
+                        .value("SMPA-2026-0043"))
+                .andExpect(jsonPath("$.status")
+                        .value("WAITING"));
+
+        verify(caseService).createCase(
+                eq(1),
+                any(CaseCreateRequest.class)
+        );
+    }
+
+    @Test
+    void createCase_blankTitle_returnsBadRequest() throws Exception {
+        mockMvc.perform(
+                        post("/api/v1/cases")
+                                .header("X-User-Id", 1)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                    {
+                                      "title": " ",
+                                      "caseType": "THEFT",
+                                      "description": "사건 내용",
+                                      "occurredAt": "2026-10-21T10:30:00",
+                                      "location": "서울역"
+                                    }
+                                    """)
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message")
+                        .value("사건명은 필수입니다."));
+
+        verifyNoInteractions(caseService);
+    }
+
+    @Test
+    void getCases_success_returnsOk() throws Exception {
+        CaseListResponse response =
+                new CaseListResponse(
+                        new PageImpl<CaseFile>(List.of())
+                );
+
+        when(caseService.getCases(
+                eq(1),
+                any(Pageable.class)
+        )).thenReturn(response);
+
+        mockMvc.perform(
+                        get("/api/v1/cases")
+                                .header("X-User-Id", 1)
+                                .param("page", "0")
+                                .param("size", "10")
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.totalElements").value(0));
+
+        ArgumentCaptor<Pageable> pageableCaptor =
+                ArgumentCaptor.forClass(Pageable.class);
+
+        verify(caseService).getCases(
+                eq(1),
+                pageableCaptor.capture()
+        );
+
+        assertEquals(
+                0,
+                pageableCaptor.getValue().getPageNumber()
+        );
+        assertEquals(
+                10,
+                pageableCaptor.getValue().getPageSize()
+        );
+    }
+
+    @Test
+    void getMyCases_success_returnsOk() throws Exception {
+        MyCaseListResponse response =
+                new MyCaseListResponse(
+                        new PageImpl<CaseFile>(List.of())
+                );
+
+        when(caseService.getMyCases(
+                eq(1),
+                any(Pageable.class)
+        )).thenReturn(response);
+
+        mockMvc.perform(
+                        get("/api/v1/cases/my")
+                                .header("X-User-Id", 1)
+                                .param("page", "0")
+                                .param("size", "10")
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.totalElements").value(0));
+
+        verify(caseService).getMyCases(
+                eq(1),
+                any(Pageable.class)
+        );
+
+        verify(caseService, never())
+                .getCaseDetail(any(), anyString());
+    }
+
+    @Test
+    void getCaseDetail_success_returnsOk() throws Exception {
+        CaseFile caseFile = mock(CaseFile.class);
+
+        when(caseFile.getCaseId())
+                .thenReturn("SMPA-2026-0042");
+        when(caseFile.getTitle())
+                .thenReturn("휴대전화 절도");
+        when(caseFile.getCaseType())
+                .thenReturn(CaseType.THEFT);
+        when(caseFile.getDescription())
+                .thenReturn("지하철에서 휴대전화를 도난당했습니다.");
+        when(caseFile.getOccurredAt())
+                .thenReturn(
+                        LocalDateTime.of(2026, 10, 21, 10, 30)
+                );
+        when(caseFile.getLocation())
+                .thenReturn("서울역");
+        when(caseFile.getStatus())
+                .thenReturn(CaseStatus.WAITING);
+        when(caseFile.getAssignedOfficer())
+                .thenReturn(null);
+
+        CaseDetailResponse response =
+                new CaseDetailResponse(caseFile);
+
+        when(caseService.getCaseDetail(
+                1,
+                "SMPA-2026-0042"
+        )).thenReturn(response);
+
+        mockMvc.perform(
+                        get(
+                                "/api/v1/cases/{caseId}",
+                                "SMPA-2026-0042"
+                        )
+                                .header("X-User-Id", 1)
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.caseId")
+                        .value("SMPA-2026-0042"))
+                .andExpect(jsonPath("$.title")
+                        .value("휴대전화 절도"))
+                .andExpect(jsonPath("$.caseType")
+                        .value("THEFT"))
+                .andExpect(jsonPath("$.description")
+                        .value("지하철에서 휴대전화를 도난당했습니다."))
+                .andExpect(jsonPath("$.location")
+                        .value("서울역"))
+                .andExpect(jsonPath("$.status")
+                        .value("WAITING"));
+
+        verify(caseService).getCaseDetail(
+                1,
+                "SMPA-2026-0042"
+        );
+    }
+
+    @Test
+    void assignOfficer_success_returnsOk() throws Exception {
+        User officer = mock(User.class);
+        when(officer.getUserId())
+                .thenReturn(7);
+
+        CaseFile caseFile = mock(CaseFile.class);
+        when(caseFile.getCaseId())
+                .thenReturn("SMPA-2026-0042");
+        when(caseFile.getAssignedOfficer())
+                .thenReturn(officer);
+        when(caseFile.getStatus())
+                .thenReturn(CaseStatus.INVESTIGATING);
+
+        CaseOfficerResponse response =
+                new CaseOfficerResponse(caseFile);
+
+        when(caseService.assignOfficer(
+                eq(11),
+                eq("SMPA-2026-0042"),
+                any(CaseOfficerRequest.class)
+        )).thenReturn(response);
+
+        mockMvc.perform(
+                        patch(
+                                "/api/v1/cases/{caseId}/officer",
+                                "SMPA-2026-0042"
+                        )
+                                .header("X-User-Id", 11)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                    {
+                                      "officerId": 7
+                                    }
+                                    """)
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.caseId")
+                        .value("SMPA-2026-0042"))
+                .andExpect(jsonPath("$.assignedOfficerId")
+                        .value(7))
+                .andExpect(jsonPath("$.status")
+                        .value("INVESTIGATING"));
+
+        ArgumentCaptor<CaseOfficerRequest> requestCaptor =
+                ArgumentCaptor.forClass(CaseOfficerRequest.class);
+
+        verify(caseService).assignOfficer(
+                eq(11),
+                eq("SMPA-2026-0042"),
+                requestCaptor.capture()
+        );
+
+        assertEquals(
+                7,
+                requestCaptor.getValue().getOfficerId()
+        );
+    }
+
+    @Test
+    void assignOfficer_invalidOfficerId_returnsBadRequest()
+            throws Exception {
+
+        mockMvc.perform(
+                        patch(
+                                "/api/v1/cases/{caseId}/officer",
+                                "SMPA-2026-0042"
+                        )
+                                .header("X-User-Id", 11)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                    {
+                                      "officerId": 0
+                                    }
+                                    """)
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status")
+                        .value(400))
+                .andExpect(jsonPath("$.message")
+                        .value("회원 번호는 양수여야 합니다."));
+
+        verifyNoInteractions(caseService);
     }
 }
