@@ -1,18 +1,19 @@
 package com.polink.item.exception;
 
-import com.polink.item.controller.LocalReturnRequestController;
+import com.polink.item.controller.ReturnRequestController;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 로컬 반환 신청 API에서 발생한 입력·상태 오류를 처리한다.
  * 다른 도메인과 실제 로그인 기능에는 영향을 주지 않는다.
  */
-@RestControllerAdvice(assignableTypes = LocalReturnRequestController.class)
+@RestControllerAdvice(assignableTypes = ReturnRequestController.class)
 @Profile("local")
 public class ReturnRequestExceptionHandler {
 
@@ -54,5 +55,26 @@ public class ReturnRequestExceptionHandler {
     private ResponseEntity<ErrorResponse> badRequest(String message) {
         return ResponseEntity.badRequest()
                 .body(new ErrorResponse(400, message));
+    }
+
+    /*
+     * Controller가 권한·인증 검증 중 발생시키는 401, 403 예외를
+     * 필요한 상태 코드와 메시지만 담은 응답으로 변환한다.
+     * 기본 오류 응답의 내부 stack trace 노출을 막는다.
+     */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatus(
+            ResponseStatusException exception
+    ) {
+        String message = exception.getReason() == null
+                ? "요청을 처리할 수 없습니다."
+                : exception.getReason();
+
+        return ResponseEntity
+                .status(exception.getStatusCode())
+                .body(new ErrorResponse(
+                        exception.getStatusCode().value(),
+                        message
+                ));
     }
 }
