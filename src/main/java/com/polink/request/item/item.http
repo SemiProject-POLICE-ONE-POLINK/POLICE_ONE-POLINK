@@ -245,11 +245,10 @@ GET http://localhost:8080/api/v1/items/L-0101
 GET http://localhost:8080/api/v1/items/L-9999
 
 ### 15. 내 등록 물품 조회 → 200
-GET http://localhost:8080/api/v1/items/me?page=0&size=10
-### 실행 전 확인: 서버를 먼저 실행하고, application.yaml의 app.dev-user-id는 시민 계정 1로 설정한다.
-
-### 분실물 수정 API 테스트
-### 실행 전 확인: application.yaml의 app.dev-user-id는 시민 계정 1로 설정한다.
+### 시민 JWT 토큰을 가진 사용자 본인이 등록한 물품만 조회한다.
+### Authorization 값에는 로그인 API로 발급받은 시민 access token을 넣는다.
+GET http://localhost:8080/api/v1/items/my?page=0&size=10
+Authorization: Bearer {{citizenToken}}
 
 ### 16. 내가 등록한 분실물 수정 → 200
 PATCH http://localhost:8080/api/v1/items/L-0116

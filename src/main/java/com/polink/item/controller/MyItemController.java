@@ -28,10 +28,12 @@ public class MyItemController {
     private final ItemService itemService;
 
     /*
-     * GET /api/v1/items/me?page=0&size=10
+     * GET /api/v1/items/my?page=0&size=10
      * JWT로 로그인한 시민 본인이 등록한 물품만 최신 등록순으로 조회한다.
+     * URL의 my는 JWT subject(sub)의 사용자 ID를 기준으로
+     * "내가 등록한 물품"만 조회한다는 뜻이다.
      */
-    @GetMapping("/me")
+    @GetMapping("/my")
     public ResponseEntity<ItemPageResponse> getMyItems(
             // Authorization 헤더의 Bearer 토큰에서 Spring Security가 추출한 JWT다.
             @AuthenticationPrincipal Jwt jwt,
