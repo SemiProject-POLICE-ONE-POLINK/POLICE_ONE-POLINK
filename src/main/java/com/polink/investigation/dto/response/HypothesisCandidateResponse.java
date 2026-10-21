@@ -7,6 +7,7 @@ import java.util.List;
 // 아직 DB에 저장되지 않았으므로 hypothesisId는 포함하지 않음
 public record HypothesisCandidateResponse(
 
+        String candidateId,                    // 채택할 AI 후보를 찾기 위한 임시 번호
         String content,                        // AI가 제안한 가설 내용
         String reason,                         // AI가 제시한 판단 근거
         String additionalRecommendation,       // 추가로 확인할 수사 사항

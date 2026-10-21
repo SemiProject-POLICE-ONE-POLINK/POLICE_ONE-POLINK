@@ -3,6 +3,7 @@ package com.polink.investigation.service;
 import com.polink.casefile.entity.CaseFile;
 import com.polink.casefile.entity.CaseStatus;
 import com.polink.casefile.repository.CaseRepository;
+import com.polink.investigation.dto.ai.HypothesisAiCandidate;
 import com.polink.investigation.dto.ai.HypothesisAiInput;
 import com.polink.investigation.dto.response.HypothesisCandidateResponse;
 import com.polink.investigation.dto.response.HypothesisGenerateResponse;
@@ -19,7 +20,9 @@ import com.polink.user.entity.UserRole;
 import com.polink.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
@@ -32,8 +35,17 @@ public class HypothesisGenerationService {
     // AI 입력 자료를 전달하고 가설 후보를 받는 객체(테스트용)
     private final HypothesisAiClient hypothesisAiClient;
 
+    // 경찰관이 채택하기 전까지 생성된 후보를 임시 보관
+    private final HypothesisCandidateStore hypothesisCandidateStore;
+
+    // 사건 자료를 DB에서 읽는 동안에만 사용할 읽기 전용 트랜잭션
+    private final TransactionTemplate readOnlyTransaction;
+
     // AI가 반환한 가설의 필수값과 근거 번호 검증
     private final HypothesisResponseValidator hypothesisResponseValidator;
+
+    // 검증된 AI 가설 후보의 자료 부합도 점수 계산
+    private final HypothesisConfidenceCalculator hypothesisConfidenceCalculator;
 
     // 사건 기본 정보와 담당 경찰관 확인
     private final CaseRepository caseRepository;
@@ -53,8 +65,13 @@ public class HypothesisGenerationService {
     // 사건의 수사기록 조회
     private final InvestigationLogRepository investigationLogRepository;
 
-    public HypothesisGenerationService(HypothesisAiClient hypothesisAiClient, HypothesisResponseValidator hypothesisResponseValidator, CaseRepository caseRepository, UserRepository userRepository, EvidenceRepository evidenceRepository, WitnessRepository witnessRepository, StatementRepository statementRepository, InvestigationLogRepository investigationLogRepository) {
+    public HypothesisGenerationService(HypothesisAiClient hypothesisAiClient, HypothesisCandidateStore hypothesisCandidateStore, PlatformTransactionManager transactionManager, HypothesisResponseValidator hypothesisResponseValidator, HypothesisConfidenceCalculator hypothesisConfidenceCalculator, CaseRepository caseRepository, UserRepository userRepository, EvidenceRepository evidenceRepository, WitnessRepository witnessRepository, StatementRepository statementRepository, InvestigationLogRepository investigationLogRepository) {
         this.hypothesisAiClient = hypothesisAiClient;
+        this.hypothesisCandidateStore = hypothesisCandidateStore;
+        // DB 조회 시에만 사용할 트랜잭션 도구 생성
+        this.readOnlyTransaction = new TransactionTemplate(transactionManager);
+        this.hypothesisConfidenceCalculator = hypothesisConfidenceCalculator;
+        this.readOnlyTransaction.setReadOnly(true);
         this.hypothesisResponseValidator = hypothesisResponseValidator;
         this.caseRepository = caseRepository;
         this.userRepository = userRepository;
@@ -64,27 +81,58 @@ public class HypothesisGenerationService {
         this.investigationLogRepository = investigationLogRepository;
     }
 
-    // 사건 자료를 바탕으로 가설 후보 생성 — DB에 저장하지 않음(가짜 후보로 테스트)
-    @Transactional(readOnly = true)
+    // 사건 자료를 바탕으로 가설 후보 생성 — DB에 저장하지 않음(가설 후보로 테스트)
     public HypothesisGenerateResponse generateHypotheses(
             String caseId,
             Integer loggedInUserId
     ) {
 
-        // 권한·사건 상태를 확인하고 AI 입력 자료 구성
-        HypothesisAiInput input = buildAiInput(caseId, loggedInUserId);
+        // 담당 경찰·사건 상태를 확인하고 DB 자료를 읽는 동안만 트랜잭션 사용
+        HypothesisAiInput input = readOnlyTransaction.execute(
+                status -> buildAiInput(caseId, loggedInUserId)
+        );
 
-        // AI에 입력 자료를 전달하고 가설 후보 받기
-        List<HypothesisCandidateResponse> hypotheses =
+        // AI에서 점수가 없는 원본 후보를 받기
+        List<HypothesisAiCandidate> aiCandidates =
                 hypothesisAiClient.generate(input);
 
-        // 필수값·가설 개수·신뢰도·근거 번호 검증
-        hypothesisResponseValidator.validate(input, hypotheses);
+        // 후보의 필수값과 근거 번호를 먼저 검사
+        hypothesisResponseValidator.validate(input, aiCandidates);
 
-        // 사건번호와 생성된 후보 목록 반환
+        // 검증된 후보마다 서버가 점수를 계산해 화면용 응답으로 변환
+        List<HypothesisCandidateResponse> responses = new ArrayList<>();
+
+        for (HypothesisAiCandidate candidate : aiCandidates) {
+
+            // 검증된 원본 후보의 점수를 서버에서 계산
+            int confidence = hypothesisConfidenceCalculator.calculate(candidate);
+
+            // 원본 후보와 계산된 점수를 15분 동안 보관하고 임시 번호를 받음
+            String candidateId = hypothesisCandidateStore.put(
+                    input.caseId(),
+                    loggedInUserId,
+                    candidate,
+                    confidence
+            );
+
+            responses.add(
+                    new HypothesisCandidateResponse(
+                            candidateId,
+                            candidate.content(),
+                            candidate.reason(),
+                            candidate.additionalRecommendation(),
+                            confidence,
+                            candidate.evidenceIds(),
+                            candidate.statementIds(),
+                            candidate.circumstances()
+                    )
+            );
+        }
+
+        // 후보는 DB에 저장하지 않고 사건번호와 함께 반환
         return new HypothesisGenerateResponse(
                 input.caseId(),
-                hypotheses
+                responses
         );
     }
 
@@ -221,7 +269,7 @@ public class HypothesisGenerationService {
                         "사건 정보를 확인할 수 없습니다."
                 ));
 
-        // 5. 담당 경찰관이 없거나 로그인한 경찰관과 다르면 분석 불가
+        // 5. 담당 경찰이 없거나 로그인한 경찰관과 다르면 분석 불가
         User assignedOfficer = caseFile.getAssignedOfficer();
 
         if (assignedOfficer == null
