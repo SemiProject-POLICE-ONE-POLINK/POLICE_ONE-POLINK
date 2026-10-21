@@ -70,6 +70,17 @@ public interface ItemRepository extends JpaRepository<Item, String> {
             Pageable pageable
     );
 
+    /**
+     * AI 물품 매칭에 사용할 습득물 후보를 조회한다.
+     * 반환이 끝난 물품은 후보가 될 수 없으므로,
+     * FOUND 유형이면서 보관 중(STORED)인 물품만 조회한다.
+     * 최신 등록 물품부터 조회한 뒤 Service에서 유사도 점수순으로 다시 정렬한다.
+     */
+    List<Item> findByItemTypeAndStatusOrderByCreatedAtDescItemIdDesc(
+            ItemType itemType,
+            ItemStatus status
+    );
+
     long countByItemType(ItemType itemType);
 
     long countByStatus(ItemStatus status);

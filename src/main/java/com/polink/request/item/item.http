@@ -250,7 +250,18 @@ GET http://localhost:8080/api/v1/items/L-9999
 GET http://localhost:8080/api/v1/items/my?page=0&size=10
 Authorization: Bearer {{citizenToken}}
 
-### 16. 내가 등록한 분실물 수정 → 200
+### 16. AI 물품 매칭 조회 → 200
+### 시민이 본인이 등록한 분실물 번호를 보내면,
+### 보관 중인 습득물 후보와 각 후보의 매칭 근거를 반환한다.
+POST http://localhost:8080/api/v1/ai/item-matches
+Content-Type: application/json
+Authorization: Bearer {{citizenToken}}
+
+{
+  "lostItemId": "L-0105"
+}
+
+### 17. 내가 등록한 분실물 수정 → 200
 PATCH http://localhost:8080/api/v1/items/L-0116
 Content-Type: application/json
 
@@ -262,7 +273,7 @@ Content-Type: application/json
   "occurredAt": "2026-10-17"
 }
 
-### 17. 습득물 수정 시도 → 400
+### 18. 습득물 수정 시도 → 400
 PATCH http://localhost:8080/api/v1/items/F-0216
 Content-Type: application/json
 
@@ -274,7 +285,7 @@ Content-Type: application/json
   "occurredAt": "2026-10-17"
 }
 
-### 18. 다른 시민의 분실물 수정 시도 → 403
+### 19. 다른 시민의 분실물 수정 시도 → 403
 PATCH http://localhost:8080/api/v1/items/L-0101
 Content-Type: application/json
 
@@ -289,7 +300,7 @@ Content-Type: application/json
 ### 습득물 수정 API 테스트
 ### 실행 전 확인: application.yaml의 app.dev-user-id를 경찰 계정 6으로 변경한다.
 
-### 19. 경찰이 보관 중인 습득물 수정 → 200
+### 20. 경찰이 보관 중인 습득물 수정 → 200
 PATCH http://localhost:8080/api/v1/items/F-0216
 Content-Type: application/json
 
@@ -301,7 +312,7 @@ Content-Type: application/json
   "occurredAt": "2026-10-18"
 }
 
-### 20. 경찰이 분실물 수정 시도 → 400
+### 21. 경찰이 분실물 수정 시도 → 400
 PATCH http://localhost:8080/api/v1/items/L-0116
 Content-Type: application/json
 
@@ -317,7 +328,7 @@ Content-Type: application/json
 ### 실행 전 확인: application.yaml의 app.dev-user-id는 시민 계정 1이어야 한다.
 ### item-test.png는 2MB 이하의 실제 PNG 이미지 파일이어야 한다.
 
-### 21. 내가 등록한 분실물에 이미지 첨부 → 200
+### 22. 내가 등록한 분실물에 이미지 첨부 → 200
 POST http://localhost:8080/api/v1/items/L-0116/image
 Content-Type: multipart/form-data; boundary=imageBoundary
 
@@ -328,7 +339,7 @@ Content-Type: image/webp
 < ../../item/textimage.webp
 --imageBoundary--
 
-### 22. 이미 이미지가 있는 분실물에 두 번째 이미지 첨부 → 400
+### 23. 이미 이미지가 있는 분실물에 두 번째 이미지 첨부 → 400
 POST http://localhost:8080/api/v1/items/L-0116/image
 Content-Type: multipart/form-data; boundary=imageBoundary
 
@@ -339,7 +350,7 @@ Content-Type: image/webp
 < ../../item/textimage.webp
 --imageBoundary--
 
-### 23. 다른 시민의 분실물에 이미지 첨부 시도 → 403
+### 24. 다른 시민의 분실물에 이미지 첨부 시도 → 403
 ### 실행 전 확인: application.yaml의 app.dev-user-id를 시민 계정 2로 변경한다.
 POST http://localhost:8080/api/v1/items/L-0116/image
 Content-Type: multipart/form-data; boundary=imageBoundary

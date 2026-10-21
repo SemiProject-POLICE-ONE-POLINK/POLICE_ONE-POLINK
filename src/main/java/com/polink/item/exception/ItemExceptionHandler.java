@@ -10,18 +10,21 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
+import com.polink.item.controller.ItemMatchController;
 
 /*
- * ItemController와 MyItemController에서 발생한 예외를
+ * ItemController, MyItemController, ItemMatchController에서 발생한 예외를
  * 공통 JSON 오류 응답으로 변환한다.
  * 다른 도메인(회원·수사 등)의 예외 처리에는 영향을 주지 않는다.
- *
  * 기본 오류 응답의 내부 stack trace가 노출되지 않도록 막는다.
  */
+
 @RestControllerAdvice(assignableTypes = {
         ItemController.class,
-        MyItemController.class
+        MyItemController.class,
+        ItemMatchController.class
 })
+
 public class ItemExceptionHandler {
 
     /*
