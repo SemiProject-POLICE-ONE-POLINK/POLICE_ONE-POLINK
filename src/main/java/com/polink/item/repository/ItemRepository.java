@@ -11,6 +11,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import com.polink.item.dto.ItemCategoryCountResponse;
 import java.util.List;
+import java.time.LocalDateTime;
 
 /** tbl_item의 저장·조회 기능을 Spring Data JPA로 제공한다. */
 public interface ItemRepository extends JpaRepository<Item, String> {
@@ -28,7 +29,10 @@ public interface ItemRepository extends JpaRepository<Item, String> {
     /**
      * 목록 화면의 선택 검색 조건으로 물품을 페이지 단위로 조회한다.
      * 조건 값이 null이면 해당 조건은 적용하지 않는다.
-     * Pageable은 page와 size를 받아 필요한 데이터만 조회한다.
+     * location은 포함 검색이고,
+     * startDate는 발생일의 시작 시각,
+     * endDateExclusive는 종료일 다음 날 00:00이다.
+     * 종료일 다음 날보다 "작은" 조건을 사용해 종료일 하루 전체를 포함한다.
      */
     @Query(
             value = """
@@ -40,6 +44,10 @@ public interface ItemRepository extends JpaRepository<Item, String> {
                   and (:keyword is null
                        or lower(item.itemName) like concat('%', lower(:keyword), '%')
                        or lower(item.description) like concat('%', lower(:keyword), '%'))
+                  and (:location is null
+                       or lower(item.location) like concat('%', lower(:location), '%'))
+                  and (:startDate is null or item.occurredAt >= :startDate)
+                  and (:endDateExclusive is null or item.occurredAt < :endDateExclusive)
                 order by item.createdAt desc, item.itemId desc
                 """,
             countQuery = """
@@ -51,13 +59,20 @@ public interface ItemRepository extends JpaRepository<Item, String> {
                   and (:keyword is null
                        or lower(item.itemName) like concat('%', lower(:keyword), '%')
                        or lower(item.description) like concat('%', lower(:keyword), '%'))
+                  and (:location is null
+                       or lower(item.location) like concat('%', lower(:location), '%'))
+                  and (:startDate is null or item.occurredAt >= :startDate)
+                  and (:endDateExclusive is null or item.occurredAt < :endDateExclusive)
                 """
     )
     Page<Item> findItemsByConditions(
             @Param("itemType") ItemType itemType,
             @Param("category") String category,
             @Param("keyword") String keyword,
+            @Param("location") String location,
             @Param("status") ItemStatus status,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDateExclusive") LocalDateTime endDateExclusive,
             Pageable pageable
     );
 

@@ -28,7 +28,8 @@ import org.springframework.web.server.ResponseStatusException;
 import com.polink.item.dto.ItemStatisticsResponse;
 import java.util.EnumMap;
 import java.util.Map;
-
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /** 분실물·습득물의 등록 규칙을 담당한다. */
 @Service
@@ -42,16 +43,18 @@ public class ItemService {
     private final ItemRepository itemRepository;
     private final ItemImageService itemImageService;
 
-    /**
-     * 물품 목록을 검색 조건과 페이지 번호에 맞춰 조회한다.
-     * page는 0부터 시작한다.
-     * size는 한 페이지에서 보여 줄 물품 개수다.
+    /*
+     * 물품 목록을 선택 검색 조건과 페이지 번호에 맞춰 조회한다.
+     * 발생일은 startDate와 endDate 범위에 포함된 물품만 조회한다.
      */
     public ItemPageResponse getItems(
             ItemType itemType,
             String category,
             String keyword,
+            String location,
             ItemStatus status,
+            LocalDate startDate,
+            LocalDate endDate,
             int page,
             int size
     ) {
@@ -65,15 +68,36 @@ public class ItemService {
             throw new IllegalArgumentException("페이지 크기는 1 이상 100 이하여야 합니다.");
         }
 
+        // 시작일이 종료일보다 늦으면 의미 없는 검색 범위다.
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException("시작일은 종료일보다 늦을 수 없습니다.");
+        }
+
+        /*
+         * Item.occurredAt은 LocalDateTime 타입이다.
+         * startDate는 해당 날짜 00:00부터 포함한다.
+         * endDate는 다음 날 00:00 미만으로 조회해, 선택한 종료일 하루 전체를 포함한다.
+         */
+        LocalDateTime startDateTime = startDate == null
+                ? null
+                : startDate.atStartOfDay();
+
+        LocalDateTime endDateExclusive = endDate == null
+                ? null
+                : endDate.plusDays(1).atStartOfDay();
+
         // page와 size를 Spring Data JPA에 전달한다.
         Pageable pageable = PageRequest.of(page, size);
 
-        // DB에서 필요한 페이지 데이터와 전체 개수를 함께 조회한다.
+        // DB에서 필터에 맞는 페이지 데이터와 전체 개수를 함께 조회한다.
         Page<Item> itemPage = itemRepository.findItemsByConditions(
                 itemType,
                 normalize(category),
                 normalize(keyword),
+                normalize(location),
                 status,
+                startDateTime,
+                endDateExclusive,
                 pageable
         );
 
