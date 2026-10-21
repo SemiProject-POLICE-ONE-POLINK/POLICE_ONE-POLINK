@@ -17,13 +17,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.MethodParameter;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.bind.support.WebDataBinderFactory;
+import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.method.support.ModelAndViewContainer;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -42,13 +49,39 @@ public class CaseControllerTest {
     private CaseService caseService;
 
     private MockMvc mockMvc;
+    private Jwt requestJwt;
 
     @BeforeEach
     void setUp() {
+        requestJwt = createJwt("1", "CITIZEN");
+
+        HandlerMethodArgumentResolver jwtResolver =
+                new HandlerMethodArgumentResolver() {
+                    @Override
+                    public boolean supportsParameter(
+                            MethodParameter parameter
+                    ) {
+                        return parameter.hasParameterAnnotation(
+                                AuthenticationPrincipal.class
+                        ) && parameter.getParameterType().equals(Jwt.class);
+                    }
+
+                    @Override
+                    public Object resolveArgument(
+                            MethodParameter parameter,
+                            ModelAndViewContainer mavContainer,
+                            NativeWebRequest webRequest,
+                            WebDataBinderFactory binderFactory
+                    ) {
+                        return requestJwt;
+                    }
+                };
+
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new CaseController(caseService))
                 .setControllerAdvice(new CaseExceptionHandler())
                 .setCustomArgumentResolvers(
+                        jwtResolver,
                         new PageableHandlerMethodArgumentResolver()
                 )
                 .build();
@@ -56,9 +89,10 @@ public class CaseControllerTest {
 
     @Test
     void closeCase_blankReason_returnsBadRequest() throws Exception {
+        requestJwt = createJwt("11", "ADMIN");
+
         mockMvc.perform(
                         post("/api/v1/cases/{caseId}/close", "SMPA-2026-0042")
-                                .header("X-User-Id", 11)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{\"closeReason\":\"  \"}")
                 )
@@ -72,6 +106,8 @@ public class CaseControllerTest {
 
     @Test
     void closeCase_success_returnsOk() throws Exception {
+        requestJwt = createJwt("11", "ADMIN");
+
         CaseFile caseFile = mock(CaseFile.class);
         when(caseFile.getStatus()).thenReturn(CaseStatus.CLOSED);
 
@@ -90,7 +126,6 @@ public class CaseControllerTest {
 
         mockMvc.perform(
                         post("/api/v1/cases/{caseId}/close", "SMPA-2026-0042")
-                                .header("X-User-Id", 11)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{\"closeReason\":\"사건 처리 완료\"}")
                 )
@@ -114,7 +149,9 @@ public class CaseControllerTest {
     }
 
     @Test
-    void closeCase_withoutHeader_returnsUnauthorized() throws Exception {
+    void closeCase_withoutJwt_returnsUnauthorized() throws Exception {
+        requestJwt = null;
+
         when(caseService.closeCase(
                 isNull(),
                 eq("SMPA-2026-0042"),
@@ -156,17 +193,16 @@ public class CaseControllerTest {
 
         mockMvc.perform(
                         post("/api/v1/cases")
-                                .header("X-User-Id", 1)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
-                                    {
-                                      "title": "휴대전화 절도",
-                                      "caseType": "THEFT",
-                                      "description": "지하철에서 휴대전화를 도난당했습니다.",
-                                      "occurredAt": "2026-10-21T10:30:00",
-                                      "location": "서울역"
-                                    }
-                                    """)
+                                        {
+                                          "title": "휴대전화 절도",
+                                          "caseType": "THEFT",
+                                          "description": "지하철에서 휴대전화를 도난당했습니다.",
+                                          "occurredAt": "2026-10-21T10:30:00",
+                                          "location": "서울역"
+                                        }
+                                        """)
                 )
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.caseId")
@@ -184,17 +220,16 @@ public class CaseControllerTest {
     void createCase_blankTitle_returnsBadRequest() throws Exception {
         mockMvc.perform(
                         post("/api/v1/cases")
-                                .header("X-User-Id", 1)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
-                                    {
-                                      "title": " ",
-                                      "caseType": "THEFT",
-                                      "description": "사건 내용",
-                                      "occurredAt": "2026-10-21T10:30:00",
-                                      "location": "서울역"
-                                    }
-                                    """)
+                                        {
+                                          "title": " ",
+                                          "caseType": "THEFT",
+                                          "description": "사건 내용",
+                                          "occurredAt": "2026-10-21T10:30:00",
+                                          "location": "서울역"
+                                        }
+                                        """)
                 )
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
@@ -218,7 +253,6 @@ public class CaseControllerTest {
 
         mockMvc.perform(
                         get("/api/v1/cases")
-                                .header("X-User-Id", 1)
                                 .param("page", "0")
                                 .param("size", "10")
                 )
@@ -258,7 +292,6 @@ public class CaseControllerTest {
 
         mockMvc.perform(
                         get("/api/v1/cases/my")
-                                .header("X-User-Id", 1)
                                 .param("page", "0")
                                 .param("size", "10")
                 )
@@ -311,7 +344,6 @@ public class CaseControllerTest {
                                 "/api/v1/cases/{caseId}",
                                 "SMPA-2026-0042"
                         )
-                                .header("X-User-Id", 1)
                 )
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.caseId")
@@ -335,6 +367,8 @@ public class CaseControllerTest {
 
     @Test
     void assignOfficer_success_returnsOk() throws Exception {
+        requestJwt = createJwt("11", "ADMIN");
+
         User officer = mock(User.class);
         when(officer.getUserId())
                 .thenReturn(7);
@@ -361,13 +395,12 @@ public class CaseControllerTest {
                                 "/api/v1/cases/{caseId}/officer",
                                 "SMPA-2026-0042"
                         )
-                                .header("X-User-Id", 11)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
-                                    {
-                                      "officerId": 7
-                                    }
-                                    """)
+                                        {
+                                          "officerId": 7
+                                        }
+                                        """)
                 )
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.caseId")
@@ -396,18 +429,19 @@ public class CaseControllerTest {
     void assignOfficer_invalidOfficerId_returnsBadRequest()
             throws Exception {
 
+        requestJwt = createJwt("11", "ADMIN");
+
         mockMvc.perform(
                         patch(
                                 "/api/v1/cases/{caseId}/officer",
                                 "SMPA-2026-0042"
                         )
-                                .header("X-User-Id", 11)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
-                                    {
-                                      "officerId": 0
-                                    }
-                                    """)
+                                        {
+                                          "officerId": 0
+                                        }
+                                        """)
                 )
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status")
@@ -416,5 +450,13 @@ public class CaseControllerTest {
                         .value("회원 번호는 양수여야 합니다."));
 
         verifyNoInteractions(caseService);
+    }
+
+    private Jwt createJwt(String subject, String role) {
+        return Jwt.withTokenValue("test-access-token")
+                .header("alg", "none")
+                .subject(subject)
+                .claim("role", role)
+                .build();
     }
 }
