@@ -4,6 +4,7 @@ import com.polink.casefile.entity.CaseFile;
 import com.polink.casefile.entity.CaseStatus;
 import com.polink.casefile.repository.CaseRepository;
 import com.polink.investigation.dto.HypothesisBasis;
+import com.polink.investigation.dto.ai.HypothesisAiCandidate;
 import com.polink.investigation.dto.request.HypothesisSaveRequest;
 import com.polink.investigation.dto.response.HypothesisResponse;
 import com.polink.investigation.entity.Evidence;
@@ -20,6 +21,8 @@ import com.polink.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -31,6 +34,7 @@ import java.util.List;
 @Service
 public class HypothesisService {
 
+    private final HypothesisCandidateStore hypothesisCandidateStore;
     private final HypothesisRepository hypothesisRepository;
     private final CaseRepository caseRepository;
     private final UserRepository userRepository;
@@ -39,7 +43,8 @@ public class HypothesisService {
     private final WitnessRepository witnessRepository;
     private final ObjectMapper objectMapper;
 
-    public HypothesisService(HypothesisRepository hypothesisRepository, CaseRepository caseRepository, UserRepository userRepository, EvidenceRepository evidenceRepository, StatementRepository statementRepository, WitnessRepository witnessRepository, ObjectMapper objectMapper) {
+    public HypothesisService(HypothesisCandidateStore hypothesisCandidateStore, HypothesisRepository hypothesisRepository, CaseRepository caseRepository, UserRepository userRepository, EvidenceRepository evidenceRepository, StatementRepository statementRepository, WitnessRepository witnessRepository, ObjectMapper objectMapper) {
+        this.hypothesisCandidateStore = hypothesisCandidateStore;
         this.hypothesisRepository = hypothesisRepository;
         this.caseRepository = caseRepository;
         this.userRepository = userRepository;
@@ -90,15 +95,28 @@ public class HypothesisService {
             );
         }
 
-        List<String> evidenceIds = request.evidenceIds();
-        List<Integer> statementIds = request.statementIds();
+        // 요청에 담긴 임시 번호로 서버에 보관된 원본 후보 조회
+        HypothesisCandidateStore.StoredCandidate stored =
+                hypothesisCandidateStore.find(request.candidateId())
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "선택한 가설 후보를 확인할 수 없습니다. 다시 생성해 주세요."
+                        ));
 
-        // 이전 요청처럼 정황 필드가 없으면 빈 목록으로 저장
-        List<String> circumstances =
-                request.circumstances() == null
-                        ? List.of()
-                        : request.circumstances();
+        // 다른 사건이나 다른 경찰에게 생성된 후보는 채택할 수 없음
+        if (!stored.caseId().equals(caseId)
+                || !stored.officerId().equals(officer.getUserId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "이 가설 후보를 채택할 권한이 없습니다."
+            );
+        }
+        // 화면이 보낸 내용이 아니라 서버에 보관한 AI 원본 후보를 사용
+        HypothesisAiCandidate candidate = stored.candidate();
 
+        List<String> evidenceIds = candidate.evidenceIds();
+        List<Integer> statementIds = candidate.statementIds();
+        List<String> circumstances = candidate.circumstances();
 
         validateEvidenceIds(caseId, evidenceIds);
         validateStatementIds(caseId, statementIds);
@@ -114,14 +132,24 @@ public class HypothesisService {
         Hypothesis hypothesis = new Hypothesis(
                 caseFile,
                 officer,
-                request.content(),
-                request.reason(),
-                request.additionalRecommendation(),
-                request.confidence(),
+                candidate.content(),
+                candidate.reason(),
+                candidate.additionalRecommendation(),
+                stored.confidence(),
                 basisJson
         );
 
         Hypothesis saved = hypothesisRepository.save(hypothesis);
+
+        // DB 트랜잭션이 정상 완료된 뒤에만 임시 후보 제거
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        hypothesisCandidateStore.remove(request.candidateId());
+                    }
+                }
+        );
 
         return new HypothesisResponse(
                 saved.getHypothesisId(),

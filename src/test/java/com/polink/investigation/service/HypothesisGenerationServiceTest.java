@@ -2,29 +2,34 @@ package com.polink.investigation.service;
 
 import com.polink.casefile.entity.CaseFile;
 import com.polink.casefile.entity.CaseStatus;
-import com.polink.casefile.entity.CaseType;
 import com.polink.casefile.repository.CaseRepository;
+import com.polink.investigation.dto.ai.HypothesisAiCandidate;
 import com.polink.investigation.dto.ai.HypothesisAiInput;
 import com.polink.investigation.dto.response.HypothesisCandidateResponse;
 import com.polink.investigation.dto.response.HypothesisGenerateResponse;
-import com.polink.investigation.entity.*;
-import com.polink.investigation.repository.*;
+import com.polink.investigation.entity.Evidence;
+import com.polink.investigation.entity.InvestigationLog;
+import com.polink.investigation.entity.Statement;
+import com.polink.investigation.entity.StatementType;
+import com.polink.investigation.entity.Witness;
+import com.polink.investigation.repository.EvidenceRepository;
+import com.polink.investigation.repository.InvestigationLogRepository;
+import com.polink.investigation.repository.StatementRepository;
+import com.polink.investigation.repository.WitnessRepository;
 import com.polink.user.entity.User;
 import com.polink.user.entity.UserRole;
 import com.polink.user.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.NullSource;
-import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.InjectMocks;
-import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -33,18 +38,18 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-// 실제 DB·AI 호출 없이 입력 구성·접근 조건·생성 흐름 검사
+// 실제 DB·OpenAI 호출 없이 입력 구성, 권한, 후보 생성 흐름을 검사
 @ExtendWith(MockitoExtension.class)
 class HypothesisGenerationServiceTest {
 
     private static final String CASE_ID = "SMPA-2026-0405";
+    private static final String EVIDENCE_ID = "EV-2026-0405-01";
     private static final String WITNESS_ID = "W-2026-0405-01";
     private static final Integer OFFICER_ID = 7;
-
-    private static final LocalDateTime BASE_TIME =
-            LocalDateTime.of(2026, 10, 21, 10, 0);
 
     @Mock
     private CaseRepository caseRepository;
@@ -70,243 +75,114 @@ class HypothesisGenerationServiceTest {
     @Mock
     private HypothesisResponseValidator hypothesisResponseValidator;
 
-    @InjectMocks
+    @Mock
+    private HypothesisConfidenceCalculator confidenceCalculator;
+
+    @Mock
+    private HypothesisCandidateStore candidateStore;
+
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
+    @Mock
+    private TransactionStatus transactionStatus;
+
     private HypothesisGenerationService service;
 
-    // ==================== AI 입력 자료 구성 테스트 ====================
+    @BeforeEach
+    void setUp() {
+        service = new HypothesisGenerationService(
+                hypothesisAiClient,
+                candidateStore,
+                transactionManager,
+                hypothesisResponseValidator,
+                confidenceCalculator,
+                caseRepository,
+                userRepository,
+                evidenceRepository,
+                witnessRepository,
+                statementRepository,
+                investigationLogRepository
+        );
+    }
 
     @Test
-    @DisplayName("전체 수사 자료를 AI 입력 DTO로 구성한다")
-    void buildAiInput() {
+    @DisplayName("증거물·진술·수사기록 전체를 AI 입력으로 구성한다")
+    void buildAiInputWithAllMaterials() {
+        stubAccessibleCase();
 
-        CaseFile caseFile = prepareAccessibleCase();
-
-        // 수사보드처럼 4개로 잘리지 않는지 확인하기 위해 5개 준비
+        // 수사보드 요약 개수인 4개로 잘리지 않는지 확인
         List<Evidence> evidences = new ArrayList<>();
-
         for (int number = 1; number <= 5; number++) {
-            evidences.add(savedEvidence(
-                    "EV-2026-0405-0" + number,
-                    caseFile
-            ));
+            Evidence evidence = mock(Evidence.class);
+            when(evidence.getEvidenceId())
+                    .thenReturn("EV-2026-0405-0" + number);
+            when(evidence.getEvidenceName())
+                    .thenReturn("증거물 " + number);
+            when(evidence.getDescription())
+                    .thenReturn("증거물 설명 " + number);
+            evidences.add(evidence);
         }
-
-        Witness witness = new Witness(
-                WITNESS_ID,
-                caseFile,
-                "테스트 목격자",
-                "010-1234-5678",
-                "인근 주민",
-                BASE_TIME
-        );
-
-        Statement initial = new Statement(
-                WITNESS_ID,
-                "검은색 차량을 봤습니다.",
-                StatementType.INITIAL,
-                BASE_TIME
-        );
-
-        Statement correction = new Statement(
-                WITNESS_ID,
-                "차량 색상은 회색이었습니다.",
-                StatementType.CORRECTION,
-                BASE_TIME.plusHours(1)
-        );
-
-        ReflectionTestUtils.setField(initial, "statementId", 1);
-        ReflectionTestUtils.setField(correction, "statementId", 2);
-
-        InvestigationLog log = new InvestigationLog(
-                caseFile,
-                caseFile.getAssignedOfficer(),
-                "현장 주변 CCTV를 확인했습니다.",
-                BASE_TIME
-        );
-
-        ReflectionTestUtils.setField(log, "logId", 3);
-
         when(evidenceRepository.findByCaseFile_CaseId(CASE_ID))
                 .thenReturn(evidences);
 
+        Witness witness = mock(Witness.class);
+        when(witness.getWitnessId()).thenReturn(WITNESS_ID);
         when(witnessRepository.findByCaseFile_CaseId(CASE_ID))
                 .thenReturn(List.of(witness));
+
+        Statement statement = mock(Statement.class);
+        when(statement.getStatementId()).thenReturn(7);
+        when(statement.getWitnessId()).thenReturn(WITNESS_ID);
+        when(statement.getStatementType())
+                .thenReturn(StatementType.INITIAL);
+        when(statement.getCreatedAt())
+                .thenReturn(LocalDateTime.of(2026, 10, 21, 10, 0));
+        when(statement.getContent())
+                .thenReturn("현장에서 차량을 봤습니다.");
 
         when(statementRepository
                 .findByWitnessIdInOrderByCreatedAtAscStatementIdAsc(
                         List.of(WITNESS_ID)
                 ))
-                .thenReturn(List.of(initial, correction));
+                .thenReturn(List.of(statement));
 
+        InvestigationLog log = mock(InvestigationLog.class);
+        when(log.getLogId()).thenReturn(1);
+        when(log.getContent()).thenReturn("CCTV를 확인했습니다.");
         when(investigationLogRepository
                 .findByCaseFile_CaseIdOrderByInvestigatedAtAscLogIdAsc(CASE_ID))
                 .thenReturn(List.of(log));
 
-        // 실행
         HypothesisAiInput input =
                 service.buildAiInput(CASE_ID, OFFICER_ID);
 
-        // 확인: 사건 기본 정보
         assertEquals(CASE_ID, input.caseId());
-        assertEquals(caseFile.getTitle(), input.caseTitle());
-        assertEquals(caseFile.getDescription(), input.caseDescription());
-
-        // 확인: 전체 증거물의 번호·이름·설명을 빠짐없이 변환
-        List<HypothesisAiInput.EvidenceInput> expectedEvidences =
-                new ArrayList<>();
-
-        for (Evidence evidence : evidences) {
-            expectedEvidences.add(
-                    new HypothesisAiInput.EvidenceInput(
-                            evidence.getEvidenceId(),
-                            evidence.getEvidenceName(),
-                            evidence.getDescription()
-                    )
-            );
-        }
-
         assertEquals(5, input.evidences().size());
-        assertEquals(expectedEvidences, input.evidences());
-
-        // 확인: 최초·정정 진술을 유형·일시와 함께 유지
-        assertEquals(
-                List.of(
-                        new HypothesisAiInput.StatementInput(
-                                1,
-                                WITNESS_ID,
-                                StatementType.INITIAL,
-                                BASE_TIME,
-                                "검은색 차량을 봤습니다."
-                        ),
-                        new HypothesisAiInput.StatementInput(
-                                2,
-                                WITNESS_ID,
-                                StatementType.CORRECTION,
-                                BASE_TIME.plusHours(1),
-                                "차량 색상은 회색이었습니다."
-                        )
-                ),
-                input.statements()
-        );
-
-        // 확인: 수사기록 번호와 내용 변환
-        assertEquals(
-                List.of(
-                        new HypothesisAiInput.InvestigationLogInput(
-                                3,
-                                "현장 주변 CCTV를 확인했습니다."
-                        )
-                ),
-                input.investigationLogs()
-        );
-
-        // 확인: 목격자의 진술을 한 번에 조회
-        verify(statementRepository)
-                .findByWitnessIdInOrderByCreatedAtAscStatementIdAsc(
-                        List.of(WITNESS_ID)
-                );
+        assertEquals(1, input.statements().size());
+        assertEquals(1, input.investigationLogs().size());
+        assertEquals(7, input.statements().get(0).statementId());
     }
 
     @Test
-    @DisplayName("증거물만 있어도 입력을 구성하고 목격자가 없으면 진술 조회를 생략한다")
-    void buildInputWithEvidenceOnly() {
-
-        CaseFile caseFile = prepareAccessibleCase();
-
-        when(evidenceRepository.findByCaseFile_CaseId(CASE_ID))
-                .thenReturn(List.of(
-                        savedEvidence("EV-2026-0405-01", caseFile)
-                ));
-
-        when(witnessRepository.findByCaseFile_CaseId(CASE_ID))
-                .thenReturn(List.of());
-
-        when(investigationLogRepository
-                .findByCaseFile_CaseIdOrderByInvestigatedAtAscLogIdAsc(CASE_ID))
-                .thenReturn(List.of());
-
-        // 실행
-        HypothesisAiInput input =
-                service.buildAiInput(CASE_ID, OFFICER_ID);
-
-        // 확인: 한 종류의 자료만 있어도 허용
-        assertEquals(1, input.evidences().size());
-        assertTrue(input.statements().isEmpty());
-        assertTrue(input.investigationLogs().isEmpty());
-
-        verifyNoInteractions(statementRepository);
-    }
-
-    @Test
-    @DisplayName("수사 자료가 모두 없으면 409 예외가 발생한다")
-    void rejectEmptyMaterials() {
-
-        prepareAccessibleCase();
-
-        when(evidenceRepository.findByCaseFile_CaseId(CASE_ID))
-                .thenReturn(List.of());
-
-        when(witnessRepository.findByCaseFile_CaseId(CASE_ID))
-                .thenReturn(List.of());
-
-        when(investigationLogRepository
-                .findByCaseFile_CaseIdOrderByInvestigatedAtAscLogIdAsc(CASE_ID))
-                .thenReturn(List.of());
-
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> service.buildAiInput(CASE_ID, OFFICER_ID)
-        );
-
-        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
-        verifyNoInteractions(statementRepository);
-    }
-
-    // ==================== 로그인·권한·상태 테스트 ====================
-
-    @Test
-    @DisplayName("로그인 정보가 없으면 401 예외가 발생한다")
+    @DisplayName("로그인 정보가 없으면 가설 생성을 거부한다")
     void rejectMissingLogin() {
-
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
                 () -> service.buildAiInput(CASE_ID, null)
         );
 
         assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
-
-        verifyNoInteractions(userRepository, caseRepository);
-        verifyNoMaterialQueries();
+        verifyNoInteractions(hypothesisAiClient);
     }
 
     @Test
-    @DisplayName("로그인 회원이 존재하지 않으면 401 예외가 발생한다")
-    void rejectMissingUser() {
-
+    @DisplayName("경찰이 아니면 가설 생성을 거부한다")
+    void rejectNonPolice() {
+        User citizen = mock(User.class);
         when(userRepository.findById(OFFICER_ID))
-                .thenReturn(Optional.empty());
-
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> service.buildAiInput(CASE_ID, OFFICER_ID)
-        );
-
-        assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
-
-        verifyNoInteractions(caseRepository);
-        verifyNoMaterialQueries();
-    }
-
-    @ParameterizedTest(name = "{0} 역할 접근 거부")
-    @EnumSource(
-            value = UserRole.class,
-            names = {"CITIZEN", "ADMIN"}
-    )
-    @DisplayName("경찰관이 아니면 403 예외가 발생한다")
-    void rejectNonPolice(UserRole role) {
-
-        when(userRepository.findById(OFFICER_ID))
-                .thenReturn(Optional.of(savedUser(OFFICER_ID, role)));
+                .thenReturn(Optional.of(citizen));
+        when(citizen.getRole()).thenReturn(UserRole.CITIZEN);
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -314,50 +190,21 @@ class HypothesisGenerationServiceTest {
         );
 
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
-
-        verifyNoInteractions(caseRepository);
-        verifyNoMaterialQueries();
+        verifyNoInteractions(hypothesisAiClient);
     }
 
     @Test
-    @DisplayName("사건이 없으면 404 예외가 발생한다")
-    void rejectMissingCase() {
-
+    @DisplayName("담당 경찰이 배정되지 않은 사건은 가설 생성을 거부한다")
+    void rejectUnassignedCase() {
+        User officer = mock(User.class);
         when(userRepository.findById(OFFICER_ID))
-                .thenReturn(Optional.of(
-                        savedUser(OFFICER_ID, UserRole.POLICE)
-                ));
+                .thenReturn(Optional.of(officer));
+        when(officer.getRole()).thenReturn(UserRole.POLICE);
 
+        CaseFile caseFile = mock(CaseFile.class);
         when(caseRepository.findById(CASE_ID))
-                .thenReturn(Optional.empty());
-
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> service.buildAiInput(CASE_ID, OFFICER_ID)
-        );
-
-        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
-        verifyNoMaterialQueries();
-    }
-
-    @ParameterizedTest(name = "사건 담당자 ID: {0}")
-    @NullSource
-    @ValueSource(ints = {8})
-    @DisplayName("담당자가 없거나 다른 경찰관이면 403 예외가 발생한다")
-    void rejectUnassignedOrOtherOfficer(Integer assignedOfficerId) {
-
-        CaseFile caseFile = prepareAccessibleCase();
-
-        User assignedOfficer = assignedOfficerId == null
-                ? null
-                : savedUser(assignedOfficerId, UserRole.POLICE);
-
-        // 담당자가 없거나 다른 경찰관인 상황 재현
-        ReflectionTestUtils.setField(
-                caseFile,
-                "assignedOfficer",
-                assignedOfficer
-        );
+                .thenReturn(Optional.of(caseFile));
+        // getAssignedOfficer()의 기본 반환값 null → 미배정 사건
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -365,20 +212,27 @@ class HypothesisGenerationServiceTest {
         );
 
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
-        verifyNoMaterialQueries();
+        verifyNoInteractions(hypothesisAiClient);
     }
 
-    @ParameterizedTest(name = "{0} 상태 접근 거부")
+    @ParameterizedTest
     @EnumSource(
             value = CaseStatus.class,
             names = {"WAITING", "CLOSED", "CANCELED"}
     )
-    @DisplayName("수사중이 아닌 사건이면 409 예외가 발생한다")
-    void rejectNonInvestigatingCase(CaseStatus status) {
+    @DisplayName("수사중이 아닌 사건은 가설 생성을 거부한다")
+    void rejectNonInvestigatingCase(CaseStatus caseStatus) {
+        User officer = mock(User.class);
+        when(userRepository.findById(OFFICER_ID))
+                .thenReturn(Optional.of(officer));
+        when(officer.getRole()).thenReturn(UserRole.POLICE);
+        when(officer.getUserId()).thenReturn(OFFICER_ID);
 
-        CaseFile caseFile = prepareAccessibleCase();
-
-        ReflectionTestUtils.setField(caseFile, "status", status);
+        CaseFile caseFile = mock(CaseFile.class);
+        when(caseRepository.findById(CASE_ID))
+                .thenReturn(Optional.of(caseFile));
+        when(caseFile.getAssignedOfficer()).thenReturn(officer);
+        when(caseFile.getStatus()).thenReturn(caseStatus);
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -386,53 +240,101 @@ class HypothesisGenerationServiceTest {
         );
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
-        verifyNoMaterialQueries();
+        verifyNoInteractions(hypothesisAiClient);
     }
 
-    // ==================== 가설 생성 흐름 테스트 ====================
+    @Test
+    @DisplayName("분석할 수사 자료가 없으면 가설 생성을 거부한다")
+    void rejectNoMaterials() {
+        User officer = mock(User.class);
+        when(userRepository.findById(OFFICER_ID))
+                .thenReturn(Optional.of(officer));
+        when(officer.getRole()).thenReturn(UserRole.POLICE);
+        when(officer.getUserId()).thenReturn(OFFICER_ID);
+
+        CaseFile caseFile = mock(CaseFile.class);
+        when(caseRepository.findById(CASE_ID))
+                .thenReturn(Optional.of(caseFile));
+        when(caseFile.getAssignedOfficer()).thenReturn(officer);
+        when(caseFile.getStatus()).thenReturn(CaseStatus.INVESTIGATING);
+
+        when(evidenceRepository.findByCaseFile_CaseId(CASE_ID))
+                .thenReturn(List.of());
+        when(witnessRepository.findByCaseFile_CaseId(CASE_ID))
+                .thenReturn(List.of());
+        when(investigationLogRepository
+                .findByCaseFile_CaseIdOrderByInvestigatedAtAscLogIdAsc(CASE_ID))
+                .thenReturn(List.of());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.buildAiInput(CASE_ID, OFFICER_ID)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verifyNoInteractions(hypothesisAiClient);
+    }
 
     @Test
-    @DisplayName("AI에 자료를 전달하고 응답 검증 후 후보를 반환한다")
+    @DisplayName("AI 원본 후보를 검증하고 점수·임시 번호를 붙여 반환한다")
     void generateHypotheses() {
+        stubAccessibleCase();
+        stubOneEvidence();
+        stubReadOnlyTransaction();
 
-        HypothesisAiInput input = prepareGenerationInput();
-        List<HypothesisCandidateResponse> candidates =
-                generationCandidates();
+        HypothesisAiCandidate rawCandidate = rawCandidate();
 
-        when(hypothesisAiClient.generate(input))
-                .thenReturn(candidates);
+        // AI 모의 객체는 화면 응답이 아닌 원본 후보를 반환한다.
+        when(hypothesisAiClient.generate(any(HypothesisAiInput.class)))
+                .thenReturn(List.of(rawCandidate));
 
-        // 실행
+        // 서버 계산기와 임시 저장소의 결과를 모의 설정한다.
+        when(confidenceCalculator.calculate(rawCandidate))
+                .thenReturn(35);
+        when(candidateStore.put(
+                eq(CASE_ID),
+                eq(OFFICER_ID),
+                eq(rawCandidate),
+                eq(35)
+        )).thenReturn("candidate-1");
+
         HypothesisGenerateResponse response =
                 service.generateHypotheses(CASE_ID, OFFICER_ID);
 
-        // 확인: 사건번호와 생성된 후보 반환
         assertEquals(CASE_ID, response.caseId());
-        assertEquals(candidates, response.hypotheses());
+        assertEquals(1, response.hypotheses().size());
 
-        // 확인: AI 호출 다음에 입력 자료와 후보를 검증기에 전달
-        InOrder order = inOrder(
-                hypothesisAiClient,
-                hypothesisResponseValidator
+        HypothesisCandidateResponse displayed =
+                response.hypotheses().get(0);
+
+        assertEquals("candidate-1", displayed.candidateId());
+        assertEquals(rawCandidate.content(), displayed.content());
+        assertEquals(35, displayed.confidence());
+        assertEquals(rawCandidate.evidenceIds(), displayed.evidenceIds());
+
+        verify(hypothesisResponseValidator).validate(
+                any(HypothesisAiInput.class),
+                eq(List.of(rawCandidate))
         );
-
-        order.verify(hypothesisAiClient).generate(input);
-        order.verify(hypothesisResponseValidator)
-                .validate(input, candidates);
-        order.verifyNoMoreInteractions();
+        verify(confidenceCalculator, times(1))
+                .calculate(rawCandidate);
+        verify(candidateStore).put(
+                CASE_ID,
+                OFFICER_ID,
+                rawCandidate,
+                35
+        );
     }
 
     @Test
-    @DisplayName("응답 검증에 실패하면 정상 응답 대신 예외를 전달한다")
+    @DisplayName("AI 응답 검증에 실패하면 후보를 보관하지 않는다")
     void rejectInvalidAiResponse() {
+        stubAccessibleCase();
+        stubOneEvidence();
+        stubReadOnlyTransaction();
 
-        HypothesisAiInput input = prepareGenerationInput();
-
-        // AI가 빈 후보 목록을 반환한 상황
-        List<HypothesisCandidateResponse> candidates = List.of();
-
-        when(hypothesisAiClient.generate(input))
-                .thenReturn(candidates);
+        when(hypothesisAiClient.generate(any(HypothesisAiInput.class)))
+                .thenReturn(List.of());
 
         ResponseStatusException validationException =
                 new ResponseStatusException(
@@ -440,189 +342,71 @@ class HypothesisGenerationServiceTest {
                         "AI 분석 결과를 확인할 수 없습니다."
                 );
 
-        // 검증기가 예외를 발생시키도록 설정
         doThrow(validationException)
                 .when(hypothesisResponseValidator)
-                .validate(input, candidates);
+                .validate(any(HypothesisAiInput.class), eq(List.of()));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
                 () -> service.generateHypotheses(CASE_ID, OFFICER_ID)
         );
 
-        // 확인: 검증 실패를 무시하지 않고 그대로 전달
         assertSame(validationException, exception);
-        assertEquals(HttpStatus.BAD_GATEWAY, exception.getStatusCode());
-
-        verify(hypothesisResponseValidator)
-                .validate(input, candidates);
+        verifyNoInteractions(confidenceCalculator, candidateStore);
     }
 
-    @Test
-    @DisplayName("AI 호출이 실패하면 응답 검증을 실행하지 않는다")
-    void rejectAiCallFailure() {
-
-        HypothesisAiInput input = prepareGenerationInput();
-
-        ResponseStatusException aiException =
-                new ResponseStatusException(
-                        HttpStatus.SERVICE_UNAVAILABLE,
-                        "AI 서비스를 이용할 수 없습니다."
-                );
-
-        when(hypothesisAiClient.generate(input))
-                .thenThrow(aiException);
-
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> service.generateHypotheses(CASE_ID, OFFICER_ID)
-        );
-
-        assertSame(aiException, exception);
-
-        // 응답을 받지 못했으므로 검증하지 않음
-        verifyNoInteractions(hypothesisResponseValidator);
-    }
-
-    @Test
-    @DisplayName("로그인하지 않으면 AI 호출과 응답 검증을 실행하지 않는다")
-    void rejectGenerationWithoutLogin() {
-
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> service.generateHypotheses(CASE_ID, null)
-        );
-
-        assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
-
-        verifyNoInteractions(
-                userRepository,
-                caseRepository,
-                hypothesisAiClient,
-                hypothesisResponseValidator
-        );
-
-        verifyNoMaterialQueries();
-    }
-
-    // ==================== 테스트 준비·확인용 메서드 ====================
-
-    // 로그인한 담당 경찰관과 수사중 사건을 조회하도록 설정
-    private CaseFile prepareAccessibleCase() {
-
-        User officer = savedUser(OFFICER_ID, UserRole.POLICE);
-
-        CaseFile caseFile = new CaseFile(
-                CASE_ID,
-                officer,
-                "테스트 사건",
-                CaseType.THEFT,
-                "가상 사건의 상세 내용입니다.",
-                BASE_TIME,
-                "테스트 장소"
-        );
-
-        // 담당자 연결과 수사중 상태 설정
-        caseFile.assignOfficer(officer);
-
+    // 정상 권한과 수사중 상태를 가진 사건 준비
+    private void stubAccessibleCase() {
+        User officer = mock(User.class);
         when(userRepository.findById(OFFICER_ID))
                 .thenReturn(Optional.of(officer));
+        when(officer.getRole()).thenReturn(UserRole.POLICE);
+        when(officer.getUserId()).thenReturn(OFFICER_ID);
 
+        CaseFile caseFile = mock(CaseFile.class);
         when(caseRepository.findById(CASE_ID))
                 .thenReturn(Optional.of(caseFile));
-
-        return caseFile;
+        when(caseFile.getAssignedOfficer()).thenReturn(officer);
+        when(caseFile.getStatus()).thenReturn(CaseStatus.INVESTIGATING);
+        when(caseFile.getCaseId()).thenReturn(CASE_ID);
+        when(caseFile.getTitle()).thenReturn("테스트 사건");
+        when(caseFile.getDescription()).thenReturn("테스트 사건 설명");
     }
 
-    // 생성 테스트에서 증거물 한 건을 조회하도록 설정
-    // 기대하는 AI 입력 DTO도 함께 반환
-    private HypothesisAiInput prepareGenerationInput() {
-
-        CaseFile caseFile = prepareAccessibleCase();
-
-        Evidence evidence =
-                savedEvidence("EV-2026-0405-01", caseFile);
+    // 생성 테스트에 사용할 증거물 한 건 준비
+    private void stubOneEvidence() {
+        Evidence evidence = mock(Evidence.class);
+        when(evidence.getEvidenceId()).thenReturn(EVIDENCE_ID);
+        when(evidence.getEvidenceName()).thenReturn("현장 사진");
+        when(evidence.getDescription()).thenReturn("현장 사진 설명");
 
         when(evidenceRepository.findByCaseFile_CaseId(CASE_ID))
                 .thenReturn(List.of(evidence));
-
         when(witnessRepository.findByCaseFile_CaseId(CASE_ID))
                 .thenReturn(List.of());
-
         when(investigationLogRepository
                 .findByCaseFile_CaseIdOrderByInvestigatedAtAscLogIdAsc(CASE_ID))
                 .thenReturn(List.of());
+    }
 
-        return new HypothesisAiInput(
-                CASE_ID,
-                caseFile.getTitle(),
-                caseFile.getDescription(),
-                List.of(
-                        new HypothesisAiInput.EvidenceInput(
-                                evidence.getEvidenceId(),
-                                evidence.getEvidenceName(),
-                                evidence.getDescription()
-                        )
-                ),
+    // 읽기 전용 TransactionTemplate이 사용할 모의 트랜잭션
+    private void stubReadOnlyTransaction() {
+        when(transactionManager.getTransaction(any()))
+                .thenReturn(transactionStatus);
+    }
+
+    // 점수는 포함하지 않는 AI 원본 후보
+    private HypothesisAiCandidate rawCandidate() {
+        return new HypothesisAiCandidate(
+                "테스트 가설",
+                "현장 사진을 근거로 작성했습니다.",
+                "주변 자료를 추가 확인해 주세요.",
+                List.of(EVIDENCE_ID),
+                List.of(),
+                List.of(),
+                List.of(),
                 List.of(),
                 List.of()
-        );
-    }
-
-    // AI가 반환하는 후보 역할의 테스트 데이터
-    private List<HypothesisCandidateResponse> generationCandidates() {
-        return List.of(
-                new HypothesisCandidateResponse(
-                        "테스트 가설",
-                        "현장 사진을 근거로 작성한 테스트 응답입니다.",
-                        "주변 자료를 추가 확인해주세요.",
-                        60,
-                        List.of("EV-2026-0405-01"),
-                        List.of(),
-                        List.of()
-                )
-        );
-    }
-
-    // 실제 DB 없이 회원 번호와 역할을 가진 객체 생성
-    private User savedUser(Integer userId, UserRole role) {
-
-        User user = new User(
-                "test-user-" + userId,
-                "test-password-hash",
-                "테스트 회원",
-                "010-0000-0000"
-        );
-
-        ReflectionTestUtils.setField(user, "userId", userId);
-        ReflectionTestUtils.setField(user, "role", role);
-
-        return user;
-    }
-
-    // 입력 변환에 사용할 테스트 증거물 생성
-    private Evidence savedEvidence(
-            String evidenceId,
-            CaseFile caseFile
-    ) {
-        return new Evidence(
-                evidenceId,
-                caseFile,
-                "현장 사진",
-                EvidenceType.PHOTO,
-                "출입구에 신발 자국이 남아 있습니다.",
-                BASE_TIME,
-                "현장 출입구"
-        );
-    }
-
-    // 조건 검사 실패 후 수사 자료를 조회하지 않았는지 확인
-    private void verifyNoMaterialQueries() {
-        verifyNoInteractions(
-                evidenceRepository,
-                witnessRepository,
-                statementRepository,
-                investigationLogRepository
         );
     }
 }

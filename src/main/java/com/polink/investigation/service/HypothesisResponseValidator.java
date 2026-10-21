@@ -1,7 +1,7 @@
 package com.polink.investigation.service;
 
+import com.polink.investigation.dto.ai.HypothesisAiCandidate;
 import com.polink.investigation.dto.ai.HypothesisAiInput;
-import com.polink.investigation.dto.response.HypothesisCandidateResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -16,7 +16,7 @@ public class HypothesisResponseValidator {
 
     public void validate(
             HypothesisAiInput input,
-            List<HypothesisCandidateResponse> hypotheses
+            List<HypothesisAiCandidate> hypotheses
     ) {
 
         // 1. 가설이 없거나 3개를 초과하면 거부
@@ -41,7 +41,7 @@ public class HypothesisResponseValidator {
         }
 
         // 4. 가설 후보를 하나씩 검사
-        for (HypothesisCandidateResponse hypothesis : hypotheses) {
+        for (HypothesisAiCandidate hypothesis : hypotheses) {
 
             // 후보 자체가 없으면 거부
             if (hypothesis == null) {
@@ -55,18 +55,13 @@ public class HypothesisResponseValidator {
                     || hypothesis.reason().isBlank()) {
                 throw invalidResponse();
             }
-            // 신뢰도는 0~100 범위의 정수
-            Integer confidence = hypothesis.confidence();
-
-            if (confidence == null
-                    || confidence < 0
-                    || confidence > 100) {
-                throw invalidResponse();
-            }
 
             // 근거가 없을 시 null이 아닌 빈 목록으로 반환
             if (hypothesis.evidenceIds() == null
                     || hypothesis.statementIds() == null
+                    || hypothesis.opposingEvidenceIds() == null     // 가설과 반대되는 증거 번호
+                    || hypothesis.opposingStatementIds() == null    // 가설과 반대되는 진술 번호
+                    || hypothesis.corroborations() == null
                     || hypothesis.circumstances() == null) {
                 throw invalidResponse();
             }
@@ -78,7 +73,7 @@ public class HypothesisResponseValidator {
                 }
             }
 
-            // 입력 자료에 없는 증거물을 근거로 제시하면 거부
+            // 입력 자료에 없는 증거물을 근거로 제시할 시 오류 발생
             for (String evidenceId : hypothesis.evidenceIds()) {
                 if (evidenceId == null
                         || evidenceId.isBlank()
@@ -87,7 +82,7 @@ public class HypothesisResponseValidator {
                 }
             }
 
-            // 입력 자료에 없는 진술을 근거로 제시하면 거부
+            // 입력 자료에 없는 진술을 근거로 제시할 시 오류 발생
             for (Integer statementId : hypothesis.statementIds()) {
                 if (statementId == null
                         || !allowedStatementIds.contains(statementId)) {
@@ -95,8 +90,51 @@ public class HypothesisResponseValidator {
                 }
             }
 
+            // 입력 자료에 없는 증거물을 반대 근거로 제시할 시 오류 발생
+            for (String evidenceId : hypothesis.opposingEvidenceIds()) {
+                if (evidenceId == null
+                        || evidenceId.isBlank()
+                        || !allowedEvidenceIds.contains(evidenceId)) {
+                    throw invalidResponse();
+                }
+            }
+
+            // 입력 자료에 없는 진술을 반대 근거로 제시할 시 오류 발생
+            for (Integer statementId : hypothesis.opposingStatementIds()) {
+                if (statementId == null
+                        || !allowedStatementIds.contains(statementId)) {
+                    throw invalidResponse();
+                }
+            }
+
+            // 교차 확인에 사용한 증거물·진술이 실제로 가설의 지지 근거인지 검사
+            for (HypothesisAiCandidate.Corroboration corroboration
+                    : hypothesis.corroborations()) {
+
+                if (corroboration == null
+                        || corroboration.sharedFact() == null
+                        || corroboration.sharedFact().isBlank()
+                        || !hypothesis.evidenceIds().contains(corroboration.evidenceId())
+                        || !hypothesis.statementIds().contains(corroboration.statementId())) {
+                    throw invalidResponse();
+                }
+            }
+
+            // 같은 자료 번호가 반복되어 점수에 중복 반영되지 않도록 검사
+            validateNoDuplicateIds(hypothesis.evidenceIds());
+            validateNoDuplicateIds(hypothesis.statementIds());
+            validateNoDuplicateIds(hypothesis.opposingEvidenceIds());
+            validateNoDuplicateIds(hypothesis.opposingStatementIds());
         }
     }
+
+    // 한 목록에 같은 번호가 두 번 이상 있으면 AI 응답을 사용하지 않는다.
+    private <T> void validateNoDuplicateIds(List<T> ids) {
+        if (new HashSet<>(ids).size() != ids.size()) {
+            throw invalidResponse();
+        }
+    }
+
 
     // 외부 AI가 올바르지 않은 응답을 반환한 경우 사용
     private ResponseStatusException invalidResponse() {
