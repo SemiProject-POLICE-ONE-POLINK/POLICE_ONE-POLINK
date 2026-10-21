@@ -120,13 +120,13 @@ class EvidenceFileServiceTest {
 
     // 5. 10MB를 초과한 파일은 저장 전에 거부되는지 검사
     @Test
-    @DisplayName("10MB를 초과한 파일은 등록할 수 없다")
+    @DisplayName("2MB를 초과한 파일은 등록할 수 없다")
     void rejectOversizedFile() {
         // 실제 대용량 파일 대신 크기 정보를 반환하는 가짜 파일 사용
         MultipartFile file = mock(MultipartFile.class);
 
         when(file.isEmpty()).thenReturn(false);
-        when(file.getSize()).thenReturn(10L * 1024 * 1024 + 1);
+        when(file.getSize()).thenReturn(2L * 1024 * 1024 + 1);
 
         assertThrows(
                 IllegalArgumentException.class,
