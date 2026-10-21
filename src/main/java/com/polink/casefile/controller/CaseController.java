@@ -3,17 +3,14 @@ package com.polink.casefile.controller;
 import com.polink.casefile.dto.request.CaseCloseRequest;
 import com.polink.casefile.dto.request.CaseCreateRequest;
 import com.polink.casefile.dto.request.CaseOfficerRequest;
-import com.polink.casefile.dto.response.CaseCloseResponse;
-import com.polink.casefile.dto.response.CaseCreateResponse;
-import com.polink.casefile.dto.response.CaseDetailResponse;
-import com.polink.casefile.dto.response.CaseListResponse;
-import com.polink.casefile.dto.response.CaseOfficerResponse;
-import com.polink.casefile.dto.response.MyCaseListResponse;
+import com.polink.casefile.dto.response.*;
 import com.polink.casefile.service.CaseService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -28,13 +25,11 @@ public class CaseController {
 
     @PostMapping
     public ResponseEntity<CaseCreateResponse> createCase(
-            // JWT 연동 전 개발 테스트용 헤더. 인증 연동 시 교체한다.
-            @RequestHeader(value = "X-User-Id", required = false)
-            Integer reporterId,
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CaseCreateRequest request
     ) {
         CaseCreateResponse response =
-                caseService.createCase(reporterId, request);
+                caseService.createCase(toLoggedInUserId(jwt), request);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -43,26 +38,22 @@ public class CaseController {
 
     @GetMapping
     public ResponseEntity<CaseListResponse> getCases(
-            // JWT 연동 전 개발 테스트용 헤더. 인증 연동 시 교체한다.
-            @RequestHeader(value = "X-User-Id", required = false)
-            Integer userId,
+            @AuthenticationPrincipal Jwt jwt,
             Pageable pageable
     ) {
         CaseListResponse response =
-                caseService.getCases(userId, pageable);
+                caseService.getCases(toLoggedInUserId(jwt), pageable);
 
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/my")
     public ResponseEntity<MyCaseListResponse> getMyCases(
-            // JWT 연동 전 개발 테스트용 헤더. 인증 연동 시 교체한다.
-            @RequestHeader(value = "X-User-Id", required = false)
-            Integer userId,
+            @AuthenticationPrincipal Jwt jwt,
             Pageable pageable
     ) {
         MyCaseListResponse response =
-                caseService.getMyCases(userId, pageable);
+                caseService.getMyCases(toLoggedInUserId(jwt), pageable);
 
         return ResponseEntity.ok(response);
     }
@@ -70,12 +61,10 @@ public class CaseController {
     @GetMapping("/{caseId}")
     public ResponseEntity<CaseDetailResponse> getCaseDetail(
             @PathVariable("caseId") String caseId,
-            // JWT 연동 전 개발 테스트용 헤더. 인증 연동 시 교체한다.
-            @RequestHeader(value = "X-User-Id", required = false)
-            Integer userId
+            @AuthenticationPrincipal Jwt jwt
     ) {
         CaseDetailResponse response =
-                caseService.getCaseDetail(userId, caseId);
+                caseService.getCaseDetail(toLoggedInUserId(jwt), caseId);
 
         return ResponseEntity.ok(response);
     }
@@ -83,13 +72,11 @@ public class CaseController {
     @PatchMapping("/{caseId}/officer")
     public ResponseEntity<CaseOfficerResponse> assignOfficer(
             @PathVariable("caseId") String caseId,
-            // JWT 연동 전 개발 테스트용 헤더. 인증 연동 시 교체한다.
-            @RequestHeader(value = "X-User-Id", required = false)
-            Integer adminId,
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CaseOfficerRequest request
     ) {
         CaseOfficerResponse response =
-                caseService.assignOfficer(adminId, caseId, request);
+                caseService.assignOfficer(toLoggedInUserId(jwt), caseId, request);
 
         return ResponseEntity.ok(response);
     }
@@ -97,14 +84,18 @@ public class CaseController {
     @PostMapping("/{caseId}/close")
     public ResponseEntity<CaseCloseResponse> closeCase(
             @PathVariable("caseId") String caseId,
-            // JWT 연동 전 개발 테스트용 헤더. 인증 연동 시 교체한다.
-            @RequestHeader(value = "X-User-Id", required = false)
-            Integer adminId,
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CaseCloseRequest request
     ) {
         CaseCloseResponse response =
-                caseService.closeCase(adminId, caseId, request);
+                caseService.closeCase(toLoggedInUserId(jwt), caseId, request);
 
         return ResponseEntity.ok(response);
+    }
+
+    private Integer toLoggedInUserId(Jwt jwt) {
+        return jwt == null
+                ? null
+                : Integer.valueOf(jwt.getSubject());
     }
 }
