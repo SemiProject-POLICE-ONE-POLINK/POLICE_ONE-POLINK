@@ -13,8 +13,8 @@ import java.util.Set;
 @Service
 public class EvidenceFileService {
 
-    // 모든 요청에 공통으로 적용하는 최대 파일 크기: 10MB
-    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024;
+    // 첨부 파일 최대 크기: 2MB
+    private static final long MAX_FILE_SIZE = 2 * 1024 * 1024;
 
     // 등록 가능한 파일 확장자 목록
     private static final Set<String> ALLOWED_EXTENSIONS =
@@ -44,7 +44,7 @@ public class EvidenceFileService {
 
         if (file.getSize() > MAX_FILE_SIZE) {
             throw new IllegalArgumentException(
-                    "파일은 10MB 이하만 첨부할 수 있습니다."
+                    "파일은 2MB 이하만 첨부할 수 있습니다."
             );
         }
 
