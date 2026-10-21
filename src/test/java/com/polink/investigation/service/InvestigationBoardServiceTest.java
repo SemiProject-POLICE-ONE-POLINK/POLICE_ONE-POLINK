@@ -62,6 +62,9 @@ class InvestigationBoardServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private HypothesisService hypothesisService;
+
     @InjectMocks
     private InvestigationBoardService investigationBoardService;
 
@@ -171,6 +174,9 @@ class InvestigationBoardServiceTest {
                         savedLog(5, officer, "추가 탐문", BASE_TIME.plusHours(5))
                 ));
 
+        when(hypothesisService.findAdoptedHypotheses(CASE_ID, OFFICER_ID))
+                .thenReturn(List.of());
+
         InvestigationBoardResponse response =
                 investigationBoardService.findInvestigationBoard(
                         CASE_ID,
@@ -254,12 +260,14 @@ class InvestigationBoardServiceTest {
                 .findByCaseFile_CaseIdOrderByInvestigatedAtAscLogIdAsc(CASE_ID))
                 .thenReturn(List.of());
 
+
         InvestigationBoardResponse response =
                 investigationBoardService.findInvestigationBoard(
                         CASE_ID,
                         OFFICER_ID
                 );
 
+        assertNull(response.latestHypothesis());
         assertEquals(0, response.totalEvidenceCount());
         assertNotNull(response.evidences());
         assertTrue(response.evidences().isEmpty());

@@ -49,3 +49,26 @@ Authorization: Bearer {{policeToken}}
   "evidenceIds": ["EV-2026-0401-01"],
   "statementIds": []
 }
+
+### 1. 담당 경찰 조회 — 예상: 200, 저장된 가설 목록
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Authorization: Bearer <shin의 accessToken>
+
+### 2. 다른 경찰 조회 — 예상: 403
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Authorization: Bearer <baek의 accessToken>
+
+### 3. 시민 조회 — 예상: 403
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Authorization: Bearer <miran의 accessToken>
+
+### 4. 토큰 없이 조회 — 예상: 401
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+
+### 5. 저장된 가설이 없는 담당 사건 조회 — 예상: 200, []
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0409/hypotheses
+Authorization: Bearer <oh의 accessToken>
+
+### 6. 존재하지 않는 사건 조회 — 예상: 404
+GET http://localhost:8080/api/v1/cases/SMPA-2026-9999/hypotheses
+Authorization: Bearer <shin의 accessToken>

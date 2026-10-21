@@ -64,10 +64,18 @@ public class HypothesisResponseValidator {
                 throw invalidResponse();
             }
 
-            // 근거가 없을 때는 null이 아닌 빈 목록으로 받아야 함
+            // 근거가 없을 시 null이 아닌 빈 목록으로 반환
             if (hypothesis.evidenceIds() == null
-                    || hypothesis.statementIds() == null) {
+                    || hypothesis.statementIds() == null
+                    || hypothesis.circumstances() == null) {
                 throw invalidResponse();
+            }
+
+            // 정황이 있다면 각 문장에 실제 내용 존재 필요
+            for (String circumstance : hypothesis.circumstances()) {
+                if (circumstance == null || circumstance.isBlank()) {
+                    throw invalidResponse();
+                }
             }
 
             // 입력 자료에 없는 증거물을 근거로 제시하면 거부
@@ -86,6 +94,7 @@ public class HypothesisResponseValidator {
                     throw invalidResponse();
                 }
             }
+
         }
     }
 

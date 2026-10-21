@@ -578,6 +578,7 @@ class HypothesisGenerationServiceTest {
                         "주변 자료를 추가 확인해주세요.",
                         60,
                         List.of("EV-2026-0405-01"),
+                        List.of(),
                         List.of()
                 )
         );

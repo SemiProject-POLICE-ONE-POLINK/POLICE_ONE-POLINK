@@ -24,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.ArrayList;
 import java.util.List;
 
 // 가설 채택·저장 담당 Service
@@ -92,12 +93,20 @@ public class HypothesisService {
         List<String> evidenceIds = request.evidenceIds();
         List<Integer> statementIds = request.statementIds();
 
+        // 이전 요청처럼 정황 필드가 없으면 빈 목록으로 저장
+        List<String> circumstances =
+                request.circumstances() == null
+                        ? List.of()
+                        : request.circumstances();
+
+
         validateEvidenceIds(caseId, evidenceIds);
         validateStatementIds(caseId, statementIds);
 
         HypothesisBasis basis = new HypothesisBasis(
                 evidenceIds,
-                statementIds
+                statementIds,
+                circumstances
         );
 
         String basisJson = writeBasisJson(basis);
@@ -129,7 +138,7 @@ public class HypothesisService {
         );
     }
 
-    // 임시 로그인 회원 번호로 사용자 조회
+    // 인증된 회원 번호로 사용자 조회
     private User findLoggedInUser(Integer loggedInUserId) {
         if (loggedInUserId == null) {
             throw new ResponseStatusException(
@@ -208,6 +217,7 @@ public class HypothesisService {
         }
 
     }
+
     // 근거 번호 목록을 basis_json 컬럼에 저장할 문자열로 변환
     private String writeBasisJson(HypothesisBasis basis) {
         try {
@@ -215,6 +225,76 @@ public class HypothesisService {
         } catch (JacksonException exception) {
             throw new IllegalStateException(
                     "가설 정보 저장에 실패하였습니다..", exception
+            );
+        }
+    }
+
+    // 담당 경찰이 사건에 저장된 가설을 최신 채택순으로 조회
+    @Transactional(readOnly = true)
+    public List<HypothesisResponse> findAdoptedHypotheses(
+            String caseId,
+            Integer loggedInUserId
+    ) {
+        User officer = findLoggedInUser(loggedInUserId);
+
+        if (officer.getRole() != UserRole.POLICE) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "수사 가설을 조회할 권한이 없습니다."
+            );
+        }
+
+        CaseFile caseFile = caseRepository.findById(caseId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "사건 정보를 확인할 수 없습니다."
+                ));
+
+        User assignedOfficer = caseFile.getAssignedOfficer();
+        if (assignedOfficer == null
+                || !assignedOfficer.getUserId().equals(officer.getUserId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "이 사건의 수사 가설을 조회할 권한이 없습니다."
+            );
+        }
+
+        List<Hypothesis> hypotheses =
+                hypothesisRepository.findAdoptedByCaseId(caseId);
+
+        List<HypothesisResponse> responses = new ArrayList<>();
+
+        for (Hypothesis hypothesis : hypotheses) {
+            responses.add(new HypothesisResponse(
+                    hypothesis.getHypothesisId(),
+                    hypothesis.getCaseFile().getCaseId(),
+                    hypothesis.getContent(),
+                    hypothesis.getReason(),
+                    hypothesis.getAdditionalRecommendation(),
+                    hypothesis.getConfidence(),
+                    hypothesis.getSource(),
+                    readBasisJson(hypothesis.getBasisJson()),
+                    hypothesis.getAdoptedBy().getUserId(),
+                    hypothesis.getAdoptedBy().getName(),
+                    hypothesis.getAdoptedAt()
+            ));
+        }
+
+        return responses;
+    }
+
+    // DB에 저장된 근거 번호 JSON을 응답 DTO로 복원
+    private HypothesisBasis readBasisJson(String basisJson) {
+        if (basisJson == null || basisJson.isBlank()) {
+            return new HypothesisBasis(List.of(), List.of(), List.of());
+        }
+
+        try {
+            return objectMapper.readValue(basisJson, HypothesisBasis.class);
+        } catch (JacksonException exception) {
+            throw new IllegalStateException(
+                    "저장된 가설의 근거 정보를 읽을 수 없습니다.",
+                    exception
             );
         }
     }

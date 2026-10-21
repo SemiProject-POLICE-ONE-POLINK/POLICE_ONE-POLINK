@@ -146,7 +146,8 @@ class HypothesisResponseValidatorTest {
                         null,
                         60,
                         List.of(EVIDENCE_ID),
-                        List.of(STATEMENT_ID)
+                        List.of(STATEMENT_ID),
+                        List.of()
                 );
 
         assertRejected(List.of(candidate));
@@ -165,7 +166,8 @@ class HypothesisResponseValidatorTest {
                         null,
                         60,
                         List.of(EVIDENCE_ID),
-                        List.of(STATEMENT_ID)
+                        List.of(STATEMENT_ID),
+                        List.of()
                 );
 
         assertRejected(List.of(candidate));
@@ -245,7 +247,8 @@ class HypothesisResponseValidatorTest {
                 null,
                 confidence,
                 evidenceIds,
-                statementIds
+                statementIds,
+                List.of()
         );
     }
 

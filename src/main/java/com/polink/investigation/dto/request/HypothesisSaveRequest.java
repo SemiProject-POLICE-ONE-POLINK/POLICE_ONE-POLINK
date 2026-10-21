@@ -30,6 +30,9 @@ public record HypothesisSaveRequest(
 
         // 가설의 판단 근거에 대한 진술 정보
         @NotNull(message = "진술 근거 정보가 누락되었습니다.")
-        List<Integer> statementIds
+        List<Integer> statementIds,
+
+        // 가설을 뒷받침하는 AI의 정황 해석(선택)
+        List<@NotBlank(message = "선택한 가설의 정황 정보가 올바르지 않습니다.") String> circumstances
 ) {
 }

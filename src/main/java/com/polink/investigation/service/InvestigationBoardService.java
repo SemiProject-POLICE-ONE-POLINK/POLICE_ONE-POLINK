@@ -2,11 +2,7 @@ package com.polink.investigation.service;
 
 import com.polink.casefile.entity.CaseFile;
 import com.polink.casefile.repository.CaseRepository;
-import com.polink.investigation.dto.response.BoardCaseResponse;
-import com.polink.investigation.dto.response.BoardEvidenceSummaryResponse;
-import com.polink.investigation.dto.response.BoardWitnessSummaryResponse;
-import com.polink.investigation.dto.response.InvestigationBoardResponse;
-import com.polink.investigation.dto.response.InvestigationLogResponse;
+import com.polink.investigation.dto.response.*;
 import com.polink.investigation.entity.Evidence;
 import com.polink.investigation.entity.InvestigationLog;
 import com.polink.investigation.entity.Statement;
@@ -41,6 +37,7 @@ public class InvestigationBoardService {
     private final StatementRepository statementRepository;
     private final InvestigationLogRepository investigationLogRepository;
     private final UserRepository userRepository;
+    private final HypothesisService hypothesisService;
 
     public InvestigationBoardService(
             CaseRepository caseRepository,
@@ -48,7 +45,7 @@ public class InvestigationBoardService {
             WitnessRepository witnessRepository,
             StatementRepository statementRepository,
             InvestigationLogRepository investigationLogRepository,
-            UserRepository userRepository
+            UserRepository userRepository, HypothesisService hypothesisService
     ) {
         this.caseRepository = caseRepository;
         this.evidenceRepository = evidenceRepository;
@@ -56,6 +53,7 @@ public class InvestigationBoardService {
         this.statementRepository = statementRepository;
         this.investigationLogRepository = investigationLogRepository;
         this.userRepository = userRepository;
+        this.hypothesisService = hypothesisService;
     }
 
     // 사건별 수사보드 통합 조회
@@ -147,6 +145,25 @@ public class InvestigationBoardService {
         List<InvestigationLogResponse> investigationLogResponses =
                 createInvestigationLogSummaries(investigationLogs);
 
+        // 저장된 가설은 최신 채택순으로 조회
+        List<HypothesisResponse> adoptedHypotheses =
+                hypothesisService.findAdoptedHypotheses(
+                        caseId,
+                        loggedInUserId
+                );
+
+        // 저장된 가설이 없으면 수사보드에 표시할 카드가 없으므로 null 유지
+        BoardHypothesisSummaryResponse latestHypothesis = null;
+
+        if (!adoptedHypotheses.isEmpty()) {
+            // 최신순 목록의 첫 번째 가설에 증거물·진술 내용을 연결해 카드로 변환
+            latestHypothesis = createLatestHypothesisSummary(
+                    adoptedHypotheses.get(0),
+                    evidences,
+                    witnesses
+            );
+        }
+
         // 사건 기본 정보와 각 수사 자료의 전체 개수·요약 목록을 하나로 구성
         return new InvestigationBoardResponse(
                 caseInfo,
@@ -155,7 +172,8 @@ public class InvestigationBoardService {
                 totalWitnessCount,
                 witnessResponses,
                 totalInvestigationLogCount,
-                investigationLogResponses
+                investigationLogResponses,
+                latestHypothesis
         );
     }
 
@@ -271,7 +289,7 @@ public class InvestigationBoardService {
             List<InvestigationLog> investigationLogs
     ) {
         // 수사보드에는 최신 기록이 먼저 보이도록 수사 일시 내림차순 정렬
-    // 수사 일시가 같다면 기록 번호가 큰 기록을 먼저 표시
+        // 수사 일시가 같다면 기록 번호가 큰 기록을 먼저 표시
         investigationLogs.sort(
                 Comparator.comparing(
                                 InvestigationLog::getInvestigatedAt
@@ -318,5 +336,92 @@ public class InvestigationBoardService {
                         HttpStatus.UNAUTHORIZED,
                         "로그인 정보를 확인할 수 없습니다."
                 ));
+    }
+
+    // 최근 채택 가설의 근거 번호를 수사보드에 표시할 증거물·진술 정보로 변환
+    private BoardHypothesisSummaryResponse createLatestHypothesisSummary(
+            HypothesisResponse hypothesis,
+            List<Evidence> evidences,
+            List<Witness> witnesses
+    ) {
+        // 이 사건의 증거물을 번호로 빠르게 찾을 수 있도록 정리
+        Map<String, Evidence> evidenceById = new HashMap<>();
+        for (Evidence evidence : evidences) {
+            evidenceById.put(evidence.getEvidenceId(), evidence);
+        }
+
+        // 이 사건의 목격자를 번호로 빠르게 찾을 수 있도록 정리
+        Map<String, Witness> witnessById = new HashMap<>();
+        for (Witness witness : witnesses) {
+            witnessById.put(witness.getWitnessId(), witness);
+        }
+
+        List<BoardHypothesisSummaryResponse.EvidenceBasis> evidenceBases =
+                new ArrayList<>();
+
+        // 가설의 증거물 번호를 실제 증거물 이름·설명에 연결
+        for (String evidenceId : hypothesis.basis().evidenceIds()) {
+            Evidence evidence = evidenceById.get(evidenceId);
+            if (evidence != null) {
+                evidenceBases.add(
+                        new BoardHypothesisSummaryResponse.EvidenceBasis(
+                                evidence.getEvidenceId(),
+                                evidence.getEvidenceName(),
+                                evidence.getDescription()
+                        )
+                );
+            }
+        }
+
+        // 근거 진술을 한 번에 조회해 번호별로 정리
+        Map<Integer, Statement> statementById = new HashMap<>();
+        if (!hypothesis.basis().statementIds().isEmpty()) {
+            for (Statement statement : statementRepository.findAllById(
+                    hypothesis.basis().statementIds()
+            )) {
+                statementById.put(statement.getStatementId(), statement);
+            }
+        }
+
+        List<BoardHypothesisSummaryResponse.StatementBasis> statementBases =
+                new ArrayList<>();
+        // 가설에 저장된 진술 번호 순서대로 목격자 이름·진술 유형·내용을 연결
+        for (Integer statementId : hypothesis.basis().statementIds()) {
+            Statement statement = statementById.get(statementId);
+
+            // 삭제 등으로 진술을 찾을 수 없다면 표시하지 않음
+            if (statement == null) {
+                continue;
+            }
+
+            Witness witness = witnessById.get(statement.getWitnessId());
+
+            // 이 사건의 목격자와 연결되지 않는 진술은 표시하지 않음
+            if (witness == null) {
+                continue;
+            }
+
+            statementBases.add(
+                    new BoardHypothesisSummaryResponse.StatementBasis(
+                            statement.getStatementId(),
+                            witness.getName(),
+                            statement.getStatementType(),
+                            statement.getContent()
+                    )
+            );
+        }
+        // 가설 기본 정보와 연결된 근거 자료·정황을 하나의 카드 응답으로 구성
+        return new BoardHypothesisSummaryResponse(
+                hypothesis.hypothesisId(),
+                hypothesis.content(),
+                hypothesis.reason(),
+                hypothesis.confidence(),
+                hypothesis.source(),
+                hypothesis.adoptedByName(),
+                hypothesis.adoptedAt(),
+                evidenceBases,
+                statementBases,
+                hypothesis.basis().circumstances()
+        );
     }
 }
