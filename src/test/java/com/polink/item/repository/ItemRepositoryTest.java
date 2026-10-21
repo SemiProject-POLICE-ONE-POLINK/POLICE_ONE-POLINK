@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.data.domain.PageRequest;
-
+import com.polink.item.dto.ItemCategoryCountResponse;
 
 // Verifies that tbl_item entities are stored and queried in the H2 test database.
 @SuppressWarnings("NonAsciiCharacters")
@@ -78,5 +78,44 @@ class ItemRepositoryTest {
                 ItemStatus.STORED,
                 PageRequest.of(0, 10)
         ).getContent().stream().map(Item::getItemId).toList());
+    }
+
+    @Test
+    @DisplayName("카테고리별 물품 개수를 많은 순서로 집계한다")
+    void 카테고리별_물품_개수를_많은_순서로_집계한다() {
+        // 전자기기 카테고리 물품 두 건을 저장한다.
+        itemRepository.save(new Item(
+                "L-0001", 1, ItemType.LOST, "검은 휴대폰", "ELECTRONICS",
+                "검은색 휴대폰입니다.", "서울역", LocalDateTime.now(),
+                ItemStatus.LOST, null
+        ));
+        itemRepository.save(new Item(
+                "F-0001", 2, ItemType.FOUND, "흰색 충전기", "ELECTRONICS",
+                "흰색 휴대용 충전기입니다.", "시청역", LocalDateTime.now(),
+                ItemStatus.STORED, null
+        ));
+
+        // 지갑·카드 카테고리 물품 한 건을 저장한다.
+        itemRepository.save(new Item(
+                "F-0002", 2, ItemType.FOUND, "갈색 지갑", "WALLET_CARD",
+                "교통카드가 들어 있는 지갑입니다.", "강남역", LocalDateTime.now(),
+                ItemStatus.STORED, null
+        ));
+
+        // 저장한 데이터를 즉시 DB에 반영해 집계 쿼리가 조회할 수 있게 한다.
+        itemRepository.flush();
+
+        // 카테고리별 개수 집계 쿼리를 실행한다.
+        List<ItemCategoryCountResponse> categoryCounts =
+                itemRepository.countItemsByCategory();
+
+        // 물품 수가 많은 ELECTRONICS가 첫 번째 결과여야 한다.
+        assertEquals(2, categoryCounts.size());
+        assertEquals("ELECTRONICS", categoryCounts.get(0).category());
+        assertEquals(2L, categoryCounts.get(0).count());
+
+        // 물품 수가 한 건인 WALLET_CARD가 두 번째 결과여야 한다.
+        assertEquals("WALLET_CARD", categoryCounts.get(1).category());
+        assertEquals(1L, categoryCounts.get(1).count());
     }
 }

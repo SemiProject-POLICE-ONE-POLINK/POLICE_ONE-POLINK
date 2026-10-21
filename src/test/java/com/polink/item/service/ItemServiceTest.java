@@ -27,6 +27,8 @@ import com.polink.item.dto.ItemUpdateRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
+import com.polink.item.dto.ItemCategoryCountResponse;
+import com.polink.item.dto.ItemStatisticsResponse;
 
 /** 실제 DB에 연결하지 않고 ItemService의 번호·조회 처리 규칙을 테스트한다. */
 @ExtendWith(MockitoExtension.class)
@@ -471,5 +473,53 @@ class ItemServiceTest {
 
         // 권한 검증에서 막혔으므로 실제 파일 저장은 시도하면 안 된다.
         verify(itemImageService, never()).save(image);
+    }
+
+    @Test
+    @DisplayName("물품 통계는 유형, 상태, 카테고리별 개수를 함께 반환한다")
+    void getItemStatistics() {
+        // 전체 물품 수를 Repository가 5개로 반환하도록 설정한다.
+        when(itemRepository.count()).thenReturn(5L);
+
+        // 분실물 2개, 습득물 3개라는 유형별 집계 결과를 준비한다.
+        when(itemRepository.countByItemType(ItemType.LOST)).thenReturn(2L);
+        when(itemRepository.countByItemType(ItemType.FOUND)).thenReturn(3L);
+
+        // 네 가지 물품 상태별 집계 결과를 준비한다.
+        when(itemRepository.countByStatus(ItemStatus.LOST)).thenReturn(2L);
+        when(itemRepository.countByStatus(ItemStatus.STORED)).thenReturn(2L);
+        when(itemRepository.countByStatus(ItemStatus.HANDOVER_PENDING)).thenReturn(0L);
+        when(itemRepository.countByStatus(ItemStatus.RETURNED)).thenReturn(1L);
+
+        // 카테고리별 집계 쿼리가 반환할 결과를 준비한다.
+        when(itemRepository.countItemsByCategory()).thenReturn(List.of(
+                new ItemCategoryCountResponse("ELECTRONICS", 2L),
+                new ItemCategoryCountResponse("WALLET_CARD", 1L)
+        ));
+
+        // Service의 통계 조합 메서드를 실행한다.
+        ItemStatisticsResponse response = itemService.getItemStatistics();
+
+        // 전체 물품 수가 Repository 결과와 같은지 확인한다.
+        assertEquals(5L, response.totalCount());
+
+        // 유형별 집계 결과가 응답 Map에 올바르게 담겼는지 확인한다.
+        assertEquals(2L, response.itemTypeCounts().get(ItemType.LOST));
+        assertEquals(3L, response.itemTypeCounts().get(ItemType.FOUND));
+
+        // 상태별 집계 결과가 응답 Map에 올바르게 담겼는지 확인한다.
+        assertEquals(2L, response.statusCounts().get(ItemStatus.LOST));
+        assertEquals(2L, response.statusCounts().get(ItemStatus.STORED));
+        assertEquals(0L, response.statusCounts().get(ItemStatus.HANDOVER_PENDING));
+        assertEquals(1L, response.statusCounts().get(ItemStatus.RETURNED));
+
+        // 카테고리 집계 결과가 응답 목록에 포함됐는지 확인한다.
+        assertEquals(2, response.categoryCounts().size());
+        assertEquals("ELECTRONICS", response.categoryCounts().get(0).category());
+        assertEquals(2L, response.categoryCounts().get(0).count());
+
+        // 통계에 필요한 Repository 메서드가 호출됐는지 확인한다.
+        verify(itemRepository).count();
+        verify(itemRepository).countItemsByCategory();
     }
 }

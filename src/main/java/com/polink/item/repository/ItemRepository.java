@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import com.polink.item.dto.ItemCategoryCountResponse;
+import java.util.List;
 
 /** tbl_item의 저장·조회 기능을 Spring Data JPA로 제공한다. */
 public interface ItemRepository extends JpaRepository<Item, String> {
@@ -67,4 +69,18 @@ public interface ItemRepository extends JpaRepository<Item, String> {
             Integer registrantId,
             Pageable pageable
     );
+
+    long countByItemType(ItemType itemType);
+
+    long countByStatus(ItemStatus status);
+    @Query("""
+        select new com.polink.item.dto.ItemCategoryCountResponse(
+            item.category,
+            count(item)
+        )
+        from Item item
+        group by item.category
+        order by count(item) desc, item.category asc
+        """)
+    List<ItemCategoryCountResponse> countItemsByCategory();
 }
