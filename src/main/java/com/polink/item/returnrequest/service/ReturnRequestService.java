@@ -20,6 +20,7 @@ import org.springframework.data.domain.Pageable;
 import com.polink.item.returnrequest.dto.PoliceReturnRequestListResponse;
 import com.polink.item.returnrequest.entity.ReturnRequestStatus;
 import com.polink.item.returnrequest.dto.ReturnRequestDetailResponse;
+import com.polink.item.returnrequest.dto.ReturnRequestCompleteResponse;
 
 /*
  * 반환 신청의 등록과 조회 규칙을 담당한다.
@@ -189,10 +190,11 @@ public class ReturnRequestService {
 
     /*
      * 승인된 반환 신청의 실제 물품 인계를 완료한다.
-     * 완료되면 신청과 연결된 두 물품을 모두 반환 완료 상태로 변경한다.
+     * 완료되면 신청과 연결된 두 물품을 모두 반환 완료 상태로 변경하고,
+     * 완료 시각을 API 응답으로 전달한다.
      */
     @Transactional
-    public void completeReturnRequest(Integer requestId) {
+    public ReturnRequestCompleteResponse completeReturnRequest(Integer requestId) {
         if (requestId == null || requestId < 1) {
             throw new IllegalArgumentException("반환 신청 번호는 1 이상이어야 합니다.");
         }
@@ -225,10 +227,17 @@ public class ReturnRequestService {
             throw new IllegalArgumentException("인계 완료 가능한 상태의 습득물이 아닙니다.");
         }
 
-        // 반환 신청은 완료, 두 물품은 반환 완료 및 반환 시각 기록 처리한다.
+        // 하나의 트랜잭션 안에서 신청과 두 물품 상태를 함께 완료 처리한다.
         returnRequest.complete();
         lostItem.completeReturn();
         foundItem.completeReturn();
+
+        // 두 물품은 같은 완료 처리에서 갱신된다.
+        // 분실물에 기록된 완료 시각을 대표 완료 시각으로 응답한다.
+        return new ReturnRequestCompleteResponse(
+                returnRequest.getRequestId(),
+                lostItem.getReturnedAt()
+        );
     }
 
     /*

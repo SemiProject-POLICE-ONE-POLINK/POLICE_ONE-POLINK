@@ -34,6 +34,7 @@ import org.springframework.data.domain.PageRequest;
 import static org.mockito.ArgumentMatchers.isNull;
 import com.polink.item.returnrequest.dto.PoliceReturnRequestListResponse;
 import com.polink.item.returnrequest.dto.ReturnRequestDetailResponse;
+import com.polink.item.returnrequest.dto.ReturnRequestCompleteResponse;
 
 /*
  * 실제 DB 없이 반환 신청 Service의 업무 규칙을 테스트한다.
@@ -736,18 +737,29 @@ class ReturnRequestServiceTest {
         when(itemRepository.findById("F-0001"))
                 .thenReturn(Optional.of(foundItem));
 
-        returnRequestService.completeReturnRequest(1);
+        // when: 반환 완료 처리 후, API에 전달할 완료 정보도 받는다.
+        ReturnRequestCompleteResponse response =
+                returnRequestService.completeReturnRequest(1);
 
+        // then: 반환 신청은 완료 상태가 되어야 한다.
         assertEquals(
                 ReturnRequestStatus.COMPLETED,
                 returnRequest.getStatus()
         );
 
+        // 분실물도 반환 완료 상태가 되고, 완료 시각이 기록되어야 한다.
         assertEquals(ItemStatus.RETURNED, lostItem.getStatus());
         assertNotNull(lostItem.getReturnedAt());
 
+        // 습득물도 반환 완료 상태가 되고, 완료 시각이 기록되어야 한다.
         assertEquals(ItemStatus.RETURNED, foundItem.getStatus());
         assertNotNull(foundItem.getReturnedAt());
+
+        // then: 응답에도 실제 반환 완료 시각이 포함되어야 한다.
+        assertNotNull(response.returnedAt());
+
+        // Service가 응답한 시각은 분실물에 기록된 반환 완료 시각과 같아야 한다.
+        assertEquals(lostItem.getReturnedAt(), response.returnedAt());
     }
 
     /*
@@ -780,4 +792,6 @@ class ReturnRequestServiceTest {
         // 신청 상태 검증에서 실패했으므로 물품을 조회하면 안 된다.
         verifyNoInteractions(itemRepository);
     }
+
+
 }
