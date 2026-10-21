@@ -1,5 +1,6 @@
 package com.polink.casefile.exception;
 
+import com.polink.casefile.controller.CaseAiSearchController;
 import com.polink.casefile.controller.CaseController;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -8,7 +9,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
-@RestControllerAdvice(assignableTypes = {CaseController.class})
+@RestControllerAdvice(assignableTypes = {
+        CaseController.class,
+        CaseAiSearchController.class
+})
 public class CaseExceptionHandler {
 
     public record ErrorResponse(int status, String message) {
