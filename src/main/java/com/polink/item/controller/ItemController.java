@@ -21,8 +21,9 @@ import com.polink.item.dto.ItemUpdateRequest;
 import com.polink.user.entity.UserRole;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import com.polink.item.dto.ItemStatisticsResponse;
 
-/**
+/*
  * 분실물·습득물 등록 요청을 받는 Controller다.
  * Controller는 HTTP 요청을 받고, 실제 등록 규칙은 ItemService에 맡긴다.
  */
@@ -33,7 +34,7 @@ public class ItemController {
 
     // 물품 등록·수정·이미지 첨부 등의 실제 업무 규칙을 처리한다.
     private final ItemService itemService;
-    /**
+    /*
      * GET /api/v1/items?page=0&size=10
      * <p>
      * 검색 조건은 모두 선택값이다.
@@ -57,7 +58,7 @@ public class ItemController {
         );
     }
 
-    /**
+    /*
      * POST /api/v1/items
      * multipart/form-data의 일반 입력값을 ItemCreateRequest에 연결한다.
      * image는 선택 이미지 파일 한 개다.
@@ -113,7 +114,7 @@ public class ItemController {
         return ResponseEntity.ok(itemService.getItemDetail(itemId));
     }
 
-    /**
+    /*
      * PATCH /api/v1/items/{itemId}
      * JWT의 role Claim에 따라 수정 가능한 물품 종류를 구분한다.
      * 시민(CITIZEN): 본인이 등록했고 분실 중(LOST)인 분실물만 수정 가능
@@ -161,7 +162,7 @@ public class ItemController {
         return ResponseEntity.ok(response);
     }
 
-    /**
+    /*
      * POST /api/v1/items/{itemId}/image
      * 로그인한 시민이 본인이 등록한 분실물에 이미지 한 장을 첨부한다.
      * 파일은 multipart/form-data의 image 필드로 전달한다.
@@ -205,7 +206,7 @@ public class ItemController {
         return ResponseEntity.ok(response);
     }
 
-    /**
+    /*
      * Authorization Bearer 토큰에서 로그인 회원 번호(sub)를 추출한다.
      * 토큰이 없거나 회원 번호 형식이 올바르지 않으면 401을 반환한다.
      */
@@ -227,7 +228,7 @@ public class ItemController {
         }
     }
 
-    /**
+    /*
      * JWT의 role Claim을 UserRole enum으로 변환한다.
      * 토큰에 역할 정보가 없거나 지원하지 않는 역할이면 401을 반환한다.
      */
@@ -263,4 +264,22 @@ public class ItemController {
         }
     }
 
+    /*
+     * GET /api/v1/items/statistics
+     * 경찰 계정이 전체 분실물·습득물 현황 통계를 조회한다.
+     */
+    @GetMapping("/statistics")
+    public ResponseEntity<ItemStatisticsResponse> getItemStatistics(
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        // 토큰 유효성 검증과 역할 추출을 함께 수행한다.
+        if (requireLoggedInUserRole(jwt) != UserRole.POLICE) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "경찰 계정만 물품 통계를 조회할 수 있습니다."
+            );
+        }
+
+        return ResponseEntity.ok(itemService.getItemStatistics());
+    }
 }

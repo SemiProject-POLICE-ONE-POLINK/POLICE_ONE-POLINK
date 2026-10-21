@@ -25,6 +25,10 @@ import org.springframework.data.domain.Pageable;
 import com.polink.item.dto.ItemUpdateRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import com.polink.item.dto.ItemStatisticsResponse;
+import java.util.EnumMap;
+import java.util.Map;
+
 
 /** 분실물·습득물의 등록 규칙을 담당한다. */
 @Service
@@ -144,7 +148,9 @@ public class ItemService {
         );
     }
 
-    /** 물품 번호로 한 건의 상세 정보를 조회한다. */
+    /**
+     * 물품 번호로 한 건의 상세 정보를 조회한다.
+     */
     public ItemDetailResponse getItemDetail(String itemId) {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException(itemId));
@@ -235,7 +241,9 @@ public class ItemService {
         return prefix + String.format("%04d", nextNumber);
     }
 
-    /** 마지막 번호(L-0115 또는 F-0215)에서 숫자 부분만 꺼낸다. */
+    /**
+     * 마지막 번호(L-0115 또는 F-0215)에서 숫자 부분만 꺼낸다.
+     */
     private int extractNumber(String itemId, String prefix) {
         if (!itemId.startsWith(prefix)) {
             throw new IllegalStateException("물품 번호 형식이 올바르지 않습니다: " + itemId);
@@ -248,7 +256,9 @@ public class ItemService {
         }
     }
 
-    /** 공백만 보낸 검색 조건은 조건 없이 조회한다는 뜻의 null로 바꾼다. */
+    /**
+     * 공백만 보낸 검색 조건은 조건 없이 조회한다는 뜻의 null로 바꾼다.
+     */
     private String normalize(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -256,7 +266,9 @@ public class ItemService {
         return value.trim();
     }
 
-    /** DB 트랜잭션이 실패하면, DB에 연결되지 못한 이미지 파일을 삭제한다. */
+    /**
+     * DB 트랜잭션이 실패하면, DB에 연결되지 못한 이미지 파일을 삭제한다.
+     */
     private void registerImageCleanupAfterRollback(String imagePath) {
         if (imagePath == null) {
             return;
@@ -473,5 +485,34 @@ public class ItemService {
 
         // Transaction이 끝날 때 JPA가 변경된 imagePath를 자동으로 UPDATE 한다.
         return ItemDetailResponse.from(item);
+    }
+
+    /*
+     * 전체 물품을 유형·상태·카테고리 기준으로 집계한다.
+     * Controller에서 경찰 권한을 확인한 뒤 이 메서드를 호출한다.
+     */
+    public ItemStatisticsResponse getItemStatistics() {
+        Map<ItemType, Long> itemTypeCounts = new EnumMap<>(ItemType.class);
+        for (ItemType itemType : ItemType.values()) {
+            itemTypeCounts.put(
+                    itemType,
+                    itemRepository.countByItemType(itemType)
+            );
+        }
+
+        Map<ItemStatus, Long> statusCounts = new EnumMap<>(ItemStatus.class);
+        for (ItemStatus itemStatus : ItemStatus.values()) {
+            statusCounts.put(
+                    itemStatus,
+                    itemRepository.countByStatus(itemStatus)
+            );
+        }
+
+        return new ItemStatisticsResponse(
+                itemRepository.count(),
+                itemTypeCounts,
+                statusCounts,
+                itemRepository.countItemsByCategory()
+        );
     }
 }

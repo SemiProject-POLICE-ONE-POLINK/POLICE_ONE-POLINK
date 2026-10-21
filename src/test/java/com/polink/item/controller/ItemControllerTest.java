@@ -36,7 +36,11 @@ import com.polink.user.entity.UserRole;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
-
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import com.polink.item.dto.ItemCategoryCountResponse;
+import com.polink.item.dto.ItemStatisticsResponse;
+import java.util.Map;
+import org.springframework.web.server.ResponseStatusException;
 
 // Mockito 기능을 JUnit 테스트에서 사용할 수 있게 연결한다.
 @ExtendWith(MockitoExtension.class)
@@ -310,4 +314,72 @@ class ItemControllerTest {
                 org.mockito.ArgumentMatchers.any(ItemUpdateRequest.class)
         );
     }
+
+    @Test
+    void policeGetsItemStatistics() {
+
+        // 경찰관(POLICE) 권한을 가진 사용자 정보 설정
+        given(jwt.getSubject()).willReturn("6");
+        given(jwt.getClaimAsString("role"))
+                .willReturn(UserRole.POLICE.name());
+
+        // 물품 통계 조회 시 반환할 테스트 데이터 생성
+        ItemStatisticsResponse response = new ItemStatisticsResponse(
+                5, // 전체 물품 수
+                Map.of(
+                        // 물품 등록 유형별 개수
+                        ItemType.LOST, 2L,   // 분실물 2개
+                        ItemType.FOUND, 3L   // 습득물 3개
+                ),
+                Map.of(
+                        // 물품 상태별 개수
+                        ItemStatus.LOST, 2L,             // 분실 상태 2개
+                        ItemStatus.STORED, 2L,           // 보관 중 2개
+                        ItemStatus.HANDOVER_PENDING, 0L, // 인계 대기 0개
+                        ItemStatus.RETURNED, 1L          // 반환 완료 1개
+                ),
+                // 물품 카테고리별 개수
+                List.of(new ItemCategoryCountResponse("ELECTRONICS", 2L))
+        );
+
+        // 물품 통계 조회 서비스 호출 시 테스트 데이터가 반환되도록 설정
+        given(itemService.getItemStatistics()).willReturn(response);
+
+        // 경찰관 권한으로 물품 통계 조회 요청 실행
+        ResponseEntity<ItemStatisticsResponse> result = new ItemController(itemService)
+                .getItemStatistics(jwt);
+
+        // HTTP 응답 상태 코드가 200(OK)인지 확인
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+
+        // 응답 데이터의 전체 물품 수가 5개인지 확인
+        assertEquals(5L, requireNonNull(result.getBody()).totalCount());
+
+        // 물품 통계 조회 서비스가 실제로 호출되었는지 검증
+        verify(itemService).getItemStatistics();
+    }
+
+    @Test
+    void citizenCannotGetItemStatistics() {
+
+        // 일반 시민(CITIZEN) 권한을 가진 사용자 정보 설정
+        given(jwt.getSubject()).willReturn("1");
+        given(jwt.getClaimAsString("role"))
+                .willReturn(UserRole.CITIZEN.name());
+
+        // 일반 시민이 물품 통계 조회를 요청하면
+        // 접근 권한 예외(ResponseStatusException)가 발생하는지 검증
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> new ItemController(itemService).getItemStatistics(jwt)
+        );
+
+        // 발생한 예외의 HTTP 상태 코드가 403(FORBIDDEN)인지 확인
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+
+        // 권한이 없는 사용자의 요청이므로
+        // 실제 물품 통계 조회 서비스가 호출되지 않았는지 검증
+        verify(itemService, never()).getItemStatistics();
+    }
+
 }
