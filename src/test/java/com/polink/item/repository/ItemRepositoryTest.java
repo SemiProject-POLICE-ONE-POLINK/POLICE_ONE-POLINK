@@ -67,7 +67,10 @@ class ItemRepositoryTest {
                 ItemType.LOST,
                 "WALLET_CARD",
                 "교통카드",
+                null,
                 ItemStatus.LOST,
+                null,
+                null,
                 PageRequest.of(0, 10)
         ).getContent().stream().map(Item::getItemId).toList());
 
@@ -75,9 +78,51 @@ class ItemRepositoryTest {
                 ItemType.FOUND,
                 null,
                 null,
+                null,
                 ItemStatus.STORED,
+                null,
+                null,
                 PageRequest.of(0, 10)
         ).getContent().stream().map(Item::getItemId).toList());
+    }
+
+    @Test
+    @DisplayName("장소와 발생일 범위를 함께 적용해 물품 목록을 조회한다")
+    void 장소와_발생일_범위로_물품_목록을_조회한다() {
+        // 장소와 날짜가 모두 맞는 물품이다. 검색 결과에 포함되어야 한다.
+        itemRepository.save(new Item(
+                "L-0101", 1, ItemType.LOST, "검은 지갑", "WALLET_CARD",
+                "청솔역에서 잃어버린 지갑", "청솔역 1번 출구",
+                LocalDateTime.of(2026, 10, 15, 10, 0), ItemStatus.LOST, null
+        ));
+
+        // 장소는 맞지만 종료일 이후에 발생한 물품이다. 검색 결과에서 제외되어야 한다.
+        itemRepository.save(new Item(
+                "L-0102", 1, ItemType.LOST, "파란 지갑", "WALLET_CARD",
+                "청솔역에서 잃어버린 지갑", "청솔역 안내데스크",
+                LocalDateTime.of(2026, 11, 1, 0, 0), ItemStatus.LOST, null
+        ));
+
+        // 날짜는 맞지만 장소가 다른 물품이다. 검색 결과에서 제외되어야 한다.
+        itemRepository.save(new Item(
+                "L-0103", 1, ItemType.LOST, "갈색 지갑", "WALLET_CARD",
+                "시청역에서 잃어버린 지갑", "시청역 2번 출구",
+                LocalDateTime.of(2026, 10, 15, 10, 0), ItemStatus.LOST, null
+        ));
+        itemRepository.flush();
+
+        List<String> itemIds = itemRepository.findItemsByConditions(
+                ItemType.LOST,
+                null,
+                null,
+                "청솔역",
+                ItemStatus.LOST,
+                LocalDateTime.of(2026, 10, 1, 0, 0),
+                LocalDateTime.of(2026, 11, 1, 0, 0),
+                PageRequest.of(0, 10)
+        ).getContent().stream().map(Item::getItemId).toList();
+
+        assertEquals(List.of("L-0101"), itemIds);
     }
 
     @Test

@@ -22,6 +22,8 @@ import com.polink.user.entity.UserRole;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import com.polink.item.dto.ItemStatisticsResponse;
+import java.time.LocalDate;
+import org.springframework.format.annotation.DateTimeFormat;
 
 /*
  * 분실물·습득물 등록 요청을 받는 Controller다.
@@ -47,8 +49,20 @@ public class ItemController {
             @RequestParam(required = false) ItemType itemType,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) ItemStatus status,
 
+            // 발생 장소를 일부만 입력해도 포함된 물품을 검색한다.
+            @RequestParam(required = false) String location,
+
+            // yyyy-MM-dd 형식의 발생일 범위다. 둘 다 선택값이다.
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate startDate,
+
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate endDate,
+
+            @RequestParam(required = false) ItemStatus status,
             // 첫 페이지는 0번이며, 값을 생략하면 첫 페이지를 조회한다.
             @RequestParam(defaultValue = "0") int page,
 
@@ -60,7 +74,17 @@ public class ItemController {
         requireLoggedInUserId(jwt);
 
         return ResponseEntity.ok(
-                itemService.getItems(itemType, category, keyword, status, page, size)
+                itemService.getItems(
+                        itemType,
+                        category,
+                        keyword,
+                        location,
+                        status,
+                        startDate,
+                        endDate,
+                        page,
+                        size
+                )
         );
     }
 

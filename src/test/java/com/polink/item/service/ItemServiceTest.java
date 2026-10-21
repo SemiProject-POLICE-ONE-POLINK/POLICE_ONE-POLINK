@@ -116,6 +116,9 @@ class ItemServiceTest {
                 isNull(),
                 isNull(),
                 isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
                 any()
         )).thenReturn(new PageImpl<>(
                 List.of(item),
@@ -128,6 +131,9 @@ class ItemServiceTest {
                 null,
                 "  ",
                 "",
+                null,
+                null,
+                null,
                 null,
                 0,
                 10
@@ -144,11 +150,84 @@ class ItemServiceTest {
                 isNull(),
                 isNull(),
                 isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
                 eq(PageRequest.of(0, 10))
         );
     }
 
-    // 4. 로그인한 사용자가 등록한 물품 목록만 조회하는지 검사
+    // 4. 장소·발생일 범위를 함께 입력하면 Service가 Repository에 올바른 검색 조건을 전달하는지 검사
+    @Test
+    @DisplayName("장소와 발생일 범위를 입력하면 해당 검색 조건으로 물품을 조회한다")
+    void getItemsWithLocationAndDateRange() {
+        Item item = savedItem("L-0002", ItemType.LOST, ItemStatus.LOST);
+
+        // 종료일은 다음 날 00:00 미만으로 변환되어, 선택한 종료일 하루 전체를 포함한다.
+        LocalDateTime startDateTime = LocalDateTime.of(2026, 10, 1, 0, 0);
+        LocalDateTime endDateExclusive = LocalDateTime.of(2026, 11, 1, 0, 0);
+
+        when(itemRepository.findItemsByConditions(
+                isNull(),
+                isNull(),
+                isNull(),
+                eq("청솔역"),
+                isNull(),
+                eq(startDateTime),
+                eq(endDateExclusive),
+                any()
+        )).thenReturn(new PageImpl<>(List.of(item), PageRequest.of(0, 10), 1));
+
+        ItemPageResponse response = itemService.getItems(
+                null,
+                null,
+                null,
+                "  청솔역  ",
+                null,
+                LocalDate.of(2026, 10, 1),
+                LocalDate.of(2026, 10, 31),
+                0,
+                10
+        );
+
+        // 앞뒤 공백이 제거된 장소명과 날짜 범위가 Repository에 전달되어야 한다.
+        assertEquals("L-0002", response.items().get(0).itemId());
+        verify(itemRepository).findItemsByConditions(
+                isNull(),
+                isNull(),
+                isNull(),
+                eq("청솔역"),
+                isNull(),
+                eq(startDateTime),
+                eq(endDateExclusive),
+                eq(PageRequest.of(0, 10))
+        );
+    }
+
+    // 5. 시작일이 종료일보다 늦으면 DB 조회 전에 요청 오류로 차단하는지 검사
+    @Test
+    @DisplayName("시작일이 종료일보다 늦으면 물품 검색을 거절한다")
+    void getItemsRejectsReversedDateRange() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> itemService.getItems(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        LocalDate.of(2026, 10, 31),
+                        LocalDate.of(2026, 10, 1),
+                        0,
+                        10
+                )
+        );
+
+        assertEquals("시작일은 종료일보다 늦을 수 없습니다.", exception.getMessage());
+        verifyNoInteractions(itemRepository);
+    }
+
+    // 6. 로그인한 사용자가 등록한 물품 목록만 조회하는지 검사
     @Test
     @DisplayName("내가 등록한 물품 목록을 페이지 단위로 조회한다")
     void getMyItems() {

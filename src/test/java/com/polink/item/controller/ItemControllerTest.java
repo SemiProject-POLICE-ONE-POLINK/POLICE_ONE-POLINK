@@ -49,6 +49,7 @@ import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
+import org.jspecify.annotations.NonNull;
 
 // Mockito 기능을 JUnit 테스트에서 사용할 수 있게 연결한다.
 @ExtendWith(MockitoExtension.class)
@@ -87,16 +88,16 @@ class ItemControllerTest {
                 // @AuthenticationPrincipal Jwt 파라미터가 requestJwt를 받도록 한다.
                 .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
                     @Override
-                    public boolean supportsParameter(MethodParameter parameter) {
+                    public boolean supportsParameter(@NonNull MethodParameter parameter) {
                         return parameter.hasParameterAnnotation(AuthenticationPrincipal.class)
                                 && parameter.getParameterType().equals(Jwt.class);
                     }
 
                     @Override
                     public Object resolveArgument(
-                            MethodParameter parameter,
+                            @NonNull MethodParameter parameter,
                             ModelAndViewContainer mavContainer,
-                            NativeWebRequest webRequest,
+                            @NonNull NativeWebRequest webRequest,
                             WebDataBinderFactory binderFactory
                     ) {
                         return requestJwt;
@@ -123,7 +124,9 @@ class ItemControllerTest {
 
         // Controller가 조건 없이 목록을 요청하면,
         // 가짜 Service가 아래 페이지 응답을 반환하도록 미리 설정한다.
-        given(itemService.getItems(null, null, null, null, 0, 10))
+        given(itemService.getItems(
+                null, null, null, null, null, null, null, 0, 10
+        ))
                 .willReturn(new ItemPageResponse(
                         List.of(item),
                         0,
@@ -148,7 +151,9 @@ class ItemControllerTest {
                 .andExpect(jsonPath("$.totalElements").value(1));
 
         // Controller가 Service에 기본 검색 조건과 page=0, size=10을 전달했는지 확인한다.
-        verify(itemService).getItems(null, null, null, null, 0, 10);
+        verify(itemService).getItems(
+                null, null, null, null, null, null, null, 0, 10
+        );
     }
 
     // 로그인 토큰 없이 목록을 조회하면 Service 호출 전 401이 반환되는지 검사한다.
@@ -160,7 +165,9 @@ class ItemControllerTest {
         // Controller의 공통 로그인 검증 메서드가 401 예외를 발생시켜야 한다.
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
-                () -> controller.getItems(null, null, null, null, null, 0, 10)
+                () -> controller.getItems(
+                        null, null, null, null, null, null, null, null, 0, 10
+                )
         );
 
         // HTTP 상태 코드가 401 Unauthorized인지 확인한다.
