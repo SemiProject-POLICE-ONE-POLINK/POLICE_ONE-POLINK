@@ -58,7 +58,8 @@ Content-Type: application/json
   "rejectReason": "신청자 정보가 일치하지 않습니다."
 }
 
-### RET-007 경찰: 물품 인계 완료 → 204
+### RET-007 경찰: 물품 인계 완료 → 200
+# 성공 시 requestId와 실제 반환 완료 시각(returnedAt)을 JSON으로 반환한다.
 PATCH {{baseUrl}}/api/v1/return-requests/9/complete
 Authorization: Bearer {{policeToken}}
 

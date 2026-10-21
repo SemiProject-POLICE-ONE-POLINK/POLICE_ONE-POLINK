@@ -22,6 +22,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.server.ResponseStatusException;
+import com.polink.item.returnrequest.dto.ReturnRequestCompleteResponse;
+import java.time.LocalDateTime;
 
 @ExtendWith(MockitoExtension.class)
 class ReturnRequestControllerTest {
@@ -131,5 +133,71 @@ class ReturnRequestControllerTest {
 
         // JWT의 경찰 ID와 반환 신청 번호가 Service에 정확히 전달되어야 한다.
         verify(returnRequestService).approveReturnRequest(2, 1);
+    }
+
+    @Test
+    void 경찰은_반환_신청을_완료할_수_있다() {
+        // given: 경찰 역할을 가진 로그인 토큰이다.
+        when(jwt.getSubject()).thenReturn("2");
+        when(jwt.getClaimAsString("role")).thenReturn(UserRole.POLICE.name());
+
+        // Service가 실제 완료 시각을 포함한 결과를 반환한다고 가정한다.
+        LocalDateTime returnedAt = LocalDateTime.of(2026, 10, 21, 18, 0);
+        ReturnRequestCompleteResponse serviceResponse =
+                new ReturnRequestCompleteResponse(1, returnedAt);
+
+        when(returnRequestService.completeReturnRequest(1))
+                .thenReturn(serviceResponse);
+
+        // when: 경찰이 1번 반환 신청의 물품 인계를 완료 처리한다.
+        ResponseEntity<ReturnRequestCompleteResponse> result =
+                returnRequestController.completeReturnRequest(jwt, 1);
+
+        // then: API 명세대로 200 OK를 반환해야 한다.
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+
+        // 응답 본문에는 완료 신청 번호와 완료 시각이 있어야 한다.
+        ReturnRequestCompleteResponse response = requireNonNull(result.getBody());
+        assertEquals(1, response.requestId());
+        assertEquals(returnedAt, response.returnedAt());
+
+        // Controller가 요청 번호를 Service로 정확히 전달해야 한다.
+        verify(returnRequestService).completeReturnRequest(1);
+    }
+
+    @Test
+    void 로그인하지_않으면_반환_완료_처리를_할_수_없다() {
+        // when: JWT 없이 경찰 전용 완료 API를 호출한다.
+        ResponseStatusException exception =
+                org.junit.jupiter.api.Assertions.assertThrows(
+                        ResponseStatusException.class,
+                        () -> returnRequestController.completeReturnRequest(null, 1)
+                );
+
+        // then: 로그인하지 않은 요청은 401 Unauthorized여야 한다.
+        assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
+
+        // 인증 검증에서 막혔으므로 Service는 호출되면 안 된다.
+        verifyNoInteractions(returnRequestService);
+    }
+
+    @Test
+    void 시민은_반환_완료_처리를_할_수_없다() {
+        // given: 시민 역할을 가진 로그인 토큰이다.
+        when(jwt.getSubject()).thenReturn("1");
+        when(jwt.getClaimAsString("role")).thenReturn(UserRole.CITIZEN.name());
+
+        // when: 시민이 경찰 전용 완료 API를 호출한다.
+        ResponseStatusException exception =
+                org.junit.jupiter.api.Assertions.assertThrows(
+                        ResponseStatusException.class,
+                        () -> returnRequestController.completeReturnRequest(jwt, 1)
+                );
+
+        // then: 역할 권한이 없으므로 403 Forbidden이어야 한다.
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+
+        // 권한 검증에서 막혔으므로 Service는 호출되면 안 된다.
+        verifyNoInteractions(returnRequestService);
     }
 }

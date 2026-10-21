@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import com.polink.item.returnrequest.dto.ReturnRequestCompleteResponse;
 
 /*
  * JWT로 로그인한 시민·경찰이 반환 신청 업무를 처리하는 Controller다.
@@ -176,17 +177,19 @@ public class ReturnRequestController {
      * 경찰이 승인된 반환 신청의 실제 물품 인계를 완료 처리한다.
      */
     @PatchMapping("/{requestId}/complete")
-    public ResponseEntity<Void> completeReturnRequest(
+    public ResponseEntity<ReturnRequestCompleteResponse> completeReturnRequest(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Integer requestId
     ) {
         // 반환 완료 처리는 경찰 계정만 할 수 있다.
         requirePolice(jwt);
 
-        // Service가 승인 상태인지 확인한 뒤 연결 물품을 RETURNED 상태로 변경한다.
-        returnRequestService.completeReturnRequest(requestId);
+        // Service가 상태 검증과 완료 처리를 수행한 뒤 완료 정보를 반환한다.
+        ReturnRequestCompleteResponse response =
+                returnRequestService.completeReturnRequest(requestId);
 
-        return ResponseEntity.noContent().build();
+        // API 명세에 맞게 200 OK와 완료 신청 번호·완료 시각을 반환한다.
+        return ResponseEntity.ok(response);
     }
 
     /**
