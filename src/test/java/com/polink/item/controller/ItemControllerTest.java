@@ -4,6 +4,8 @@ package com.polink.item.controller;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+
 // MockMvc: 실제 서버를 띄우지 않고 HTTP GET 요청을 흉내 낼 때 사용한다.
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -41,6 +43,12 @@ import com.polink.item.dto.ItemCategoryCountResponse;
 import com.polink.item.dto.ItemStatisticsResponse;
 import java.util.Map;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.core.MethodParameter;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.support.WebDataBinderFactory;
+import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.method.support.ModelAndViewContainer;
 
 // Mockito 기능을 JUnit 테스트에서 사용할 수 있게 연결한다.
 @ExtendWith(MockitoExtension.class)
@@ -57,13 +65,43 @@ class ItemControllerTest {
     // HTTP 요청을 가짜로 보내고 응답을 검사하는 테스트 도구다.
     private MockMvc mockMvc;
 
-    // 각 테스트 메서드가 실행되기 전에 매번 한 번씩 실행된다.
+    // MockMvc의 HTTP 요청에 넣어 줄, 로그인 완료 상태의 테스트용 JWT다.
+    private Jwt requestJwt;
+
     @BeforeEach
     void setUp() {
+        // 목록·상세 조회 MockMvc 요청에 전달할 로그인 완료 상태의 JWT다.
+        // 실제 서명 검증은 통합 테스트에서 담당하고,
+        // 여기서는 Controller가 JWT를 정상적으로 받는지만 확인한다.
+        requestJwt = Jwt.withTokenValue("test-access-token")
+                .header("alg", "none")
+                .subject("1")
+                .claim("role", "CITIZEN")
+                .build();
+
         mockMvc = MockMvcBuilders
                 .standaloneSetup(
                         new ItemController(itemService)
                 )
+                // MockMvc의 목록·상세 요청에 테스트용 JWT를 주입한다.
+                // @AuthenticationPrincipal Jwt 파라미터가 requestJwt를 받도록 한다.
+                .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
+                    @Override
+                    public boolean supportsParameter(MethodParameter parameter) {
+                        return parameter.hasParameterAnnotation(AuthenticationPrincipal.class)
+                                && parameter.getParameterType().equals(Jwt.class);
+                    }
+
+                    @Override
+                    public Object resolveArgument(
+                            MethodParameter parameter,
+                            ModelAndViewContainer mavContainer,
+                            NativeWebRequest webRequest,
+                            WebDataBinderFactory binderFactory
+                    ) {
+                        return requestJwt;
+                    }
+                })
                 .setControllerAdvice(new ItemExceptionHandler())
                 .build();
     }
@@ -113,6 +151,26 @@ class ItemControllerTest {
         verify(itemService).getItems(null, null, null, null, 0, 10);
     }
 
+    // 로그인 토큰 없이 목록을 조회하면 Service 호출 전 401이 반환되는지 검사한다.
+    @Test
+    void getItemsWithoutLoginReturnsUnauthorized() {
+        // JWT를 null로 전달해 로그인하지 않은 요청 상황을 만든다.
+        ItemController controller = new ItemController(itemService);
+
+        // Controller의 공통 로그인 검증 메서드가 401 예외를 발생시켜야 한다.
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.getItems(null, null, null, null, null, 0, 10)
+        );
+
+        // HTTP 상태 코드가 401 Unauthorized인지 확인한다.
+        assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
+
+        // 인증에서 차단됐으므로 실제 조회 Service는 호출되면 안 된다.
+        verifyNoInteractions(itemService);
+    }
+
+
     // GET /api/v1/items/{itemId} 요청이 정상적으로 200 OK를 반환하는지 검사한다.
     @Test
     void getItemDetailReturnsOk() throws Exception {
@@ -146,6 +204,25 @@ class ItemControllerTest {
 
         // Controller가 정확한 물품 번호를 Service로 전달했는지 확인한다.
         verify(itemService).getItemDetail("L-0001");
+    }
+
+    // 로그인 토큰 없이 상세 조회하면 Service 호출 전 401이 반환되는지 검사한다.
+    @Test
+    void getItemDetailWithoutLoginReturnsUnauthorized() {
+        // JWT를 null로 전달해 로그인하지 않은 요청 상황을 만든다.
+        ItemController controller = new ItemController(itemService);
+
+        // 물품 번호 형식 검증보다 로그인 검증이 먼저 수행되어야 한다.
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.getItemDetail(null, "L-0001")
+        );
+
+        // HTTP 상태 코드가 401 Unauthorized인지 확인한다.
+        assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
+
+        // 인증에서 차단됐으므로 실제 상세 조회 Service는 호출되면 안 된다.
+        verifyNoInteractions(itemService);
     }
 
     // 존재하지 않는 물품 번호 요청 시 404 Not Found가 반환되는지 검사한다.
