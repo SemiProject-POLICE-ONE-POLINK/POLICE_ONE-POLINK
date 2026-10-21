@@ -444,6 +444,39 @@ class ItemControllerTest {
     }
 
     @Test
+    void adminGetsItemStatistics() {
+        // 관리자(ADMIN) 역할을 가진 로그인 사용자라고 가정한다.
+        given(jwt.getSubject()).willReturn("7");
+        given(jwt.getClaimAsString("role"))
+                .willReturn(UserRole.ADMIN.name());
+
+        /*
+         * 관리자 권한 테스트에서는 통계 계산 자체가 아니라
+         * “관리자도 통계 API에 접근할 수 있는가”만 확인한다.
+         * 따라서 빈 통계 결과를 가짜 응답으로 준비한다.
+         */
+        ItemStatisticsResponse response = new ItemStatisticsResponse(
+                0,
+                Map.of(),
+                Map.of(),
+                List.of()
+        );
+
+        // Controller가 Service를 호출하면 위 가짜 통계를 반환하도록 설정한다.
+        given(itemService.getItemStatistics()).willReturn(response);
+
+        // 관리자 계정으로 통계 조회를 실행한다.
+        ResponseEntity<ItemStatisticsResponse> result = new ItemController(itemService)
+                .getItemStatistics(jwt);
+
+        // 관리자는 200 OK를 받아야 한다.
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+
+        // Service의 통계 조회 메서드가 실제로 한 번 호출되어야 한다.
+        verify(itemService).getItemStatistics();
+    }
+
+    @Test
     void citizenCannotGetItemStatistics() {
 
         // 일반 시민(CITIZEN) 권한을 가진 사용자 정보 설정
