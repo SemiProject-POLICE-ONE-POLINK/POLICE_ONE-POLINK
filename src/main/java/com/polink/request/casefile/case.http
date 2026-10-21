@@ -71,29 +71,3 @@ Authorization: Bearer {{citizenToken}}
 ### 5. 사건 상세 조회 — 예상: 200
 GET {{baseUrl}}/api/v1/cases/{{caseId}}
 Authorization: Bearer {{citizenToken}}
-
-### 6. 토큰 없이 AI 유사 사건 검색 — 예상: 401
-POST {{baseUrl}}/api/v1/cases/ai-search
-Content-Type: application/json
-
-{
-  "situation": "중고 거래 대금을 송금했지만 판매자가 연락을 받지 않습니다."
-}
-
-### 7. 빈 상황으로 AI 유사 사건 검색 — 예상: 400
-POST {{baseUrl}}/api/v1/cases/ai-search
-Authorization: Bearer {{citizenToken}}
-Content-Type: application/json
-
-{
-  "situation": " "
-}
-
-### 8. 정상 AI 유사 사건 검색 — 예상: 200
-POST {{baseUrl}}/api/v1/cases/ai-search
-Authorization: Bearer {{citizenToken}}
-Content-Type: application/json
-
-{
-  "situation": "중고 거래 대금을 송금했지만 판매자가 연락을 받지 않습니다."
-}

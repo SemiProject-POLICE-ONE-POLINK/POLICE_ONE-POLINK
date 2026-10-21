@@ -1,0 +1,40 @@
+@baseUrl = http://localhost:8080
+@citizenUserName = miran
+@citizenPassword = miran12!
+
+### 0. 시민 로그인 → 토큰 자동 저장 — 예상: 200
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "userName": "{{citizenUserName}}",
+  "password": "{{citizenPassword}}"
+}
+
+> {% client.global.set("citizenToken", response.body.accessToken); %}
+
+### 1. 토큰 없이 AI 유사 사건 검색 — 예상: 401
+POST {{baseUrl}}/api/v1/cases/ai-search
+Content-Type: application/json
+
+{
+  "situation": "중고 거래 대금을 송금했지만 판매자가 연락을 받지 않습니다."
+}
+
+### 2. 빈 상황으로 AI 유사 사건 검색 — 예상: 400
+POST {{baseUrl}}/api/v1/cases/ai-search
+Authorization: Bearer {{citizenToken}}
+Content-Type: application/json
+
+{
+  "situation": " "
+}
+
+### 3. 정상 AI 유사 사건 검색 — 예상: 200
+POST {{baseUrl}}/api/v1/cases/ai-search
+Authorization: Bearer {{citizenToken}}
+Content-Type: application/json
+
+{
+  "situation": "중고 거래 대금을 송금했지만 판매자가 연락을 받지 않습니다."
+}
