@@ -199,11 +199,11 @@ class ReturnRequestControllerTest {
         when(jwt.getClaimAsString("role")).thenReturn(UserRole.POLICE.name());
 
         // Service가 실제 완료 시각을 포함한 결과를 반환한다고 가정한다.
-        LocalDateTime returnedAt = LocalDateTime.of(2026, 10, 21, 18, 0);
+        LocalDateTime completedAt = LocalDateTime.of(2026, 10, 21, 18, 0);
         ReturnRequestCompleteResponse serviceResponse =
-                new ReturnRequestCompleteResponse(1, returnedAt);
+                new ReturnRequestCompleteResponse(1, completedAt);
 
-        when(returnRequestService.completeReturnRequest(1))
+        when(returnRequestService.completeReturnRequest(2, 1))
                 .thenReturn(serviceResponse);
 
         // when: 경찰이 1번 반환 신청의 물품 인계를 완료 처리한다.
@@ -216,10 +216,10 @@ class ReturnRequestControllerTest {
         // 응답 본문에는 완료 신청 번호와 완료 시각이 있어야 한다.
         ReturnRequestCompleteResponse response = requireNonNull(result.getBody());
         assertEquals(1, response.requestId());
-        assertEquals(returnedAt, response.returnedAt());
+        assertEquals(completedAt, response.completedAt());
 
-        // Controller가 요청 번호를 Service로 정확히 전달해야 한다.
-        verify(returnRequestService).completeReturnRequest(1);
+        // Controller가 로그인한 경찰 번호와 신청 번호를 Service에 정확히 전달해야 한다.
+        verify(returnRequestService).completeReturnRequest(2, 1);
     }
 
     @Test

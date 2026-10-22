@@ -61,7 +61,22 @@ public class ReturnRequest {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    /**
+    /*
+     * 실제 물품 인계를 완료한 경찰관 번호다.
+     * 승인 처리자와 실제 인계 완료 처리자가 다를 수 있으므로 별도로 저장한다.
+     */
+    @Column(name = "completed_by")
+    private Integer completedBy;
+
+    /*
+     * 실제 물품 인계가 완료된 서버 시각이다.
+     * 승인·반려 처리 시각(processedAt)과 구분해 저장한다.
+     */
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
+
+    /*
      * 시민이 반환 신청을 생성할 때 사용한다.
      */
     public ReturnRequest(
@@ -101,8 +116,12 @@ public class ReturnRequest {
 
     /*
      * 실제 물품 인계가 끝난 반환 신청을 완료 처리한다.
+     * 완료 담당 경찰관과 완료 시각을 승인·반려 처리 정보와 분리해 보관한다.
      */
-    public void complete() {
+    public void complete(Integer policeId) {
         this.status = ReturnRequestStatus.COMPLETED;
+        this.completedBy = policeId;
+        this.completedAt = LocalDateTime.now();
     }
+
 }

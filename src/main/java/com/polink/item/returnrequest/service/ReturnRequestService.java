@@ -214,7 +214,12 @@ public class ReturnRequestService {
      * 완료 시각을 API 응답으로 전달한다.
      */
     @Transactional
-    public ReturnRequestCompleteResponse completeReturnRequest(Integer requestId) {
+    public ReturnRequestCompleteResponse completeReturnRequest(Integer policeId, Integer requestId) {
+        // 실제 반환 완료를 처리하는 경찰관 정보가 필요하다.
+        if (policeId == null || policeId < 1) {
+            throw new IllegalArgumentException("처리 경찰관 정보가 필요합니다.");
+        }
+
         if (requestId == null || requestId < 1) {
             throw new IllegalArgumentException("반환 신청 번호는 1 이상이어야 합니다.");
         }
@@ -247,16 +252,18 @@ public class ReturnRequestService {
             throw new IllegalArgumentException("인계 완료 가능한 상태의 습득물이 아닙니다.");
         }
 
-        // 하나의 트랜잭션 안에서 신청과 두 물품 상태를 함께 완료 처리한다.
-        returnRequest.complete();
+        // 승인·반려 처리 이력은 유지하고,
+        // 실제 인계 완료 담당자와 완료 시각을 별도로 저장한다.
+        returnRequest.complete(policeId);
+
+        // 연결된 분실물과 습득물도 실제 반환 완료 상태로 변경한다.
         lostItem.completeReturn();
         foundItem.completeReturn();
 
-        // 두 물품은 같은 완료 처리에서 갱신된다.
-        // 분실물에 기록된 완료 시각을 대표 완료 시각으로 응답한다.
+        // 신청 엔티티에 기록된 완료 시각을 응답으로 반환한다.
         return new ReturnRequestCompleteResponse(
-                returnRequest.getRequestId(),
-                lostItem.getReturnedAt()
+                    returnRequest.getRequestId(),
+                    returnRequest.getCompletedAt()
         );
     }
 

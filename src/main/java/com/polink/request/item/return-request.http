@@ -86,3 +86,15 @@ Content-Type: application/json
   "foundItemId": "F-0213",
   "requestReason": "경찰 계정으로 신청하는 요청입니다."
 }
+
+### 완료 처리 테스트 - 12번 승인
+PATCH {{baseUrl}}/api/v1/return-requests/12/approve
+Authorization: Bearer {{policeToken}}
+
+### 완료 처리 테스트 - 12번 반환 완료
+PATCH {{baseUrl}}/api/v1/return-requests/12/complete
+Authorization: Bearer {{policeToken}}
+
+### 완료 처리 테스트 - 12번 상세 확인
+GET {{baseUrl}}/api/v1/return-requests/12
+Authorization: Bearer {{policeToken}}

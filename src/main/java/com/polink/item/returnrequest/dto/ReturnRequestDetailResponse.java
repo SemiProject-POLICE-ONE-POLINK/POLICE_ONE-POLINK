@@ -87,7 +87,15 @@ public record ReturnRequestDetailResponse(
 
         // 경찰이 승인 또는 반려를 처리한 서버 시각이다.
         // PENDING 상태에서는 null이다.
-        LocalDateTime processedAt
+        LocalDateTime processedAt,
+
+        // 실제 물품 인계를 완료한 경찰관의 회원 번호다.
+        // 아직 반환 완료 전이면 null이다.
+        Integer completedBy,
+
+        // 실제 물품 인계가 완료된 서버 시각이다.
+        // 아직 반환 완료 전이면 null이다.
+        LocalDateTime completedAt
 ) {
 
     /*
@@ -130,7 +138,11 @@ public record ReturnRequestDetailResponse(
                 returnRequest.getRejectReason(),
                 returnRequest.getProcessedBy(),
                 returnRequest.getCreatedAt(),
-                returnRequest.getProcessedAt()
+                returnRequest.getProcessedAt(),
+
+                // ===== 실제 반환 완료 정보 =====
+                returnRequest.getCompletedBy(),
+                returnRequest.getCompletedAt()
         );
     }
 }

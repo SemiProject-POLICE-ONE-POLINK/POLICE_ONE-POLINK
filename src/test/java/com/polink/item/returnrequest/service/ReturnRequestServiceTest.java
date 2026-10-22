@@ -873,15 +873,20 @@ class ReturnRequestServiceTest {
         when(itemRepository.findById("F-0001"))
                 .thenReturn(Optional.of(foundItem));
 
-        // when: 반환 완료 처리 후, API에 전달할 완료 정보도 받는다.
+        // when: 20번 경찰관이 반환 완료 처리하고, API에 전달할 완료 정보도 받는다.
         ReturnRequestCompleteResponse response =
-                returnRequestService.completeReturnRequest(1);
+                returnRequestService.completeReturnRequest(20, 1);
 
         // then: 반환 신청은 완료 상태가 되어야 한다.
         assertEquals(
                 ReturnRequestStatus.COMPLETED,
                 returnRequest.getStatus()
         );
+
+        // 승인 처리자(10번)와 실제 완료 처리자(20번)를 구분해 보관해야 한다.
+        assertEquals(10, returnRequest.getProcessedBy());
+        assertEquals(20, returnRequest.getCompletedBy());
+        assertNotNull(returnRequest.getCompletedAt());
 
         // 분실물도 반환 완료 상태가 되고, 완료 시각이 기록되어야 한다.
         assertEquals(ItemStatus.RETURNED, lostItem.getStatus());
@@ -891,11 +896,12 @@ class ReturnRequestServiceTest {
         assertEquals(ItemStatus.RETURNED, foundItem.getStatus());
         assertNotNull(foundItem.getReturnedAt());
 
-        // then: 응답에도 실제 반환 완료 시각이 포함되어야 한다.
-        assertNotNull(response.returnedAt());
-
-        // Service가 응답한 시각은 분실물에 기록된 반환 완료 시각과 같아야 한다.
-        assertEquals(lostItem.getReturnedAt(), response.returnedAt());
+        // 응답에는 신청 엔티티에 기록된 실제 완료 시각이 포함되어야 한다.
+        assertNotNull(response.completedAt());
+        assertEquals(
+                returnRequest.getCompletedAt(),
+                response.completedAt()
+        );
     }
 
     /*
@@ -917,7 +923,7 @@ class ReturnRequestServiceTest {
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> returnRequestService.completeReturnRequest(1)
+                () -> returnRequestService.completeReturnRequest(20, 1)
         );
 
         assertEquals(
