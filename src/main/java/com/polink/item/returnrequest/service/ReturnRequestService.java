@@ -22,6 +22,8 @@ import com.polink.item.returnrequest.entity.ReturnRequestStatus;
 import com.polink.item.returnrequest.dto.ReturnRequestDetailResponse;
 import com.polink.item.returnrequest.dto.ReturnRequestCompleteResponse;
 import com.polink.item.returnrequest.dto.ReturnRequestProcessResponse;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 /*
  * 반환 신청의 등록과 조회 규칙을 담당한다.
@@ -290,7 +292,7 @@ public class ReturnRequestService {
 
         List<ReturnRequestListResponse> items = returnRequestPage.getContent()
                 .stream()
-                .map(ReturnRequestListResponse::from)
+                .map(this::toListResponse)
                 .toList();
 
         // API 명세대로 items 목록만 응답한다.
@@ -331,7 +333,7 @@ public class ReturnRequestService {
 
         List<ReturnRequestListResponse> items = returnRequestPage.getContent()
                 .stream()
-                .map(ReturnRequestListResponse::from)
+                .map(this::toListResponse)
                 .toList();
 
         return new PoliceReturnRequestListResponse(items);
@@ -354,7 +356,110 @@ public class ReturnRequestService {
                 .orElseThrow(() ->
                         new IllegalArgumentException("반환 신청을 찾을 수 없습니다."));
 
-        return ReturnRequestDetailResponse.from(returnRequest);
+        return toDetailResponse(returnRequest);
+    }
+
+    /*
+     * 반환 신청 목록 한 건에 연결된 분실물·습득물 정보를 넣어
+     * 목록 응답 DTO로 변환한다.
+     */
+    private ReturnRequestListResponse toListResponse(
+            ReturnRequest returnRequest
+    ) {
+        // 반환 신청에 연결된 분실물 정보를 조회한다.
+        Item lostItem = findLinkedItem(
+                returnRequest.getLostItemId(),
+                "연결된 분실물을 찾을 수 없습니다."
+        );
+
+        // 반환 신청에 연결된 습득물 정보를 조회한다.
+        Item foundItem = findLinkedItem(
+                returnRequest.getFoundItemId(),
+                "연결된 습득물을 찾을 수 없습니다."
+        );
+
+        // 신청 정보와 두 물품 정보를 목록 응답으로 합쳐 반환한다.
+        return ReturnRequestListResponse.from(
+                returnRequest,
+                lostItem,
+                foundItem
+        );
+    }
+
+    /*
+     * 반환 신청 상세 한 건에 연결된 분실물·습득물 정보를 넣어
+     * 상세 응답 DTO로 변환한다.
+     */
+    private ReturnRequestDetailResponse toDetailResponse(
+            ReturnRequest returnRequest
+    ) {
+        // 반환 신청에 연결된 분실물 상세 정보를 조회한다.
+        Item lostItem = findLinkedItem(
+                returnRequest.getLostItemId(),
+                "연결된 분실물을 찾을 수 없습니다."
+        );
+
+        // 반환 신청에 연결된 습득물 상세 정보를 조회한다.
+        Item foundItem = findLinkedItem(
+                returnRequest.getFoundItemId(),
+                "연결된 습득물을 찾을 수 없습니다."
+        );
+
+        // 신청 정보와 두 물품의 상세 정보를 하나의 DTO로 합쳐 반환한다.
+        return ReturnRequestDetailResponse.from(
+                returnRequest,
+                lostItem,
+                foundItem
+        );
+    }
+
+    /*
+     * 반환 신청에 연결된 물품을 공통으로 조회한다.
+     * 목록·상세 조회에서 같은 물품 조회 코드를 반복하지 않도록 분리했다.
+     */
+    private Item findLinkedItem(
+            String itemId,
+            String notFoundMessage
+    ) {
+        return itemRepository.findById(itemId)
+                .orElseThrow(() -> new IllegalArgumentException(notFoundMessage));
+    }
+
+    /*
+     * 로그인한 시민이 본인이 신청한 반환 신청 한 건만 상세 조회한다.
+     * 경찰용 상세 조회와 달리 requesterId를 함께 받아,
+     * 다른 시민의 반환 신청 번호를 URL에 직접 넣어도 조회하지 못하게 막는다.
+     */
+    public ReturnRequestDetailResponse getMyReturnRequestDetail(
+            Integer requesterId,
+            Integer requestId
+    ) {
+        // 로그인한 시민의 회원 번호가 올바른지 먼저 확인한다.
+        if (requesterId == null || requesterId < 1) {
+            throw new IllegalArgumentException("로그인 사용자 정보가 필요합니다.");
+        }
+
+        // 반환 신청 번호는 DB의 양수 번호만 허용한다.
+        if (requestId == null || requestId < 1) {
+            throw new IllegalArgumentException("반환 신청 번호는 1 이상이어야 합니다.");
+        }
+
+        // 요청한 반환 신청을 DB에서 조회한다.
+        ReturnRequest returnRequest = returnRequestRepository
+                .findById(requestId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("반환 신청을 찾을 수 없습니다."));
+
+        // 신청자 번호와 로그인한 시민 번호가 다르면 접근을 금지한다.
+        if (!returnRequest.getRequesterId().equals(requesterId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "본인이 신청한 반환 신청만 조회할 수 있습니다."
+            );
+        }
+
+        // 소유권 검증을 통과한 본인 신청만 상세 DTO로 변환해 반환한다.
+        return toDetailResponse(returnRequest);
     }
 
     /*

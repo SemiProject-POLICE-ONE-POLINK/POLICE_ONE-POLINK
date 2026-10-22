@@ -35,6 +35,8 @@ import static org.mockito.ArgumentMatchers.isNull;
 import com.polink.item.returnrequest.dto.PoliceReturnRequestListResponse;
 import com.polink.item.returnrequest.dto.ReturnRequestDetailResponse;
 import com.polink.item.returnrequest.dto.ReturnRequestCompleteResponse;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 /*
  * 실제 DB 없이 반환 신청 Service의 업무 규칙을 테스트한다.
@@ -361,6 +363,26 @@ class ReturnRequestServiceTest {
                 1
         ));
 
+        // 목록 응답에는 분실물·습득물 이름과 상태도 포함되므로,
+        // 반환 신청에 연결된 두 물품 조회 결과를 mock으로 준비한다.
+        Item lostItem = item(
+                "L-0001",
+                1,
+                ItemType.LOST,
+                ItemStatus.LOST
+        );
+        Item foundItem = item(
+                "F-0001",
+                2,
+                ItemType.FOUND,
+                ItemStatus.STORED
+        );
+
+        when(itemRepository.findById("L-0001"))
+                .thenReturn(Optional.of(lostItem));
+        when(itemRepository.findById("F-0001"))
+                .thenReturn(Optional.of(foundItem));
+
         MyReturnRequestListResponse response =
                 returnRequestService.getMyReturnRequests(1, 0, 10);
 
@@ -429,6 +451,7 @@ class ReturnRequestServiceTest {
         verifyNoInteractions(returnRequestRepository);
     }
 
+
     /**
      * 경찰관이 상태와 검색어로 반환 신청 목록을 조회하는지 확인한다.
      */
@@ -451,6 +474,25 @@ class ReturnRequestServiceTest {
                 PageRequest.of(0, 10),
                 1
         ));
+
+        // 경찰 목록 응답에도 연결된 분실물·습득물 정보가 필요하다.
+        Item lostItem = item(
+                "L-0001",
+                1,
+                ItemType.LOST,
+                ItemStatus.LOST
+        );
+        Item foundItem = item(
+                "F-0001",
+                2,
+                ItemType.FOUND,
+                ItemStatus.STORED
+        );
+
+        when(itemRepository.findById("L-0001"))
+                .thenReturn(Optional.of(lostItem));
+        when(itemRepository.findById("F-0001"))
+                .thenReturn(Optional.of(foundItem));
 
         PoliceReturnRequestListResponse response =
                 returnRequestService.getReturnRequests(
@@ -508,7 +550,7 @@ class ReturnRequestServiceTest {
                 );
     }
 
-    /**
+    /*
      * 경찰관이 반환 신청 번호로 상세 정보를 조회하는지 확인한다.
      */
     @Test
@@ -524,6 +566,26 @@ class ReturnRequestServiceTest {
         when(returnRequestRepository.findById(1))
                 .thenReturn(Optional.of(returnRequest));
 
+        // 상세 응답은 연결 물품의 설명·장소·일시·이미지 경로까지 포함하므로
+        // 두 물품의 조회 결과를 함께 준비한다.
+        Item lostItem = item(
+                "L-0001",
+                1,
+                ItemType.LOST,
+                ItemStatus.LOST
+        );
+        Item foundItem = item(
+                "F-0001",
+                2,
+                ItemType.FOUND,
+                ItemStatus.STORED
+        );
+
+        when(itemRepository.findById("L-0001"))
+                .thenReturn(Optional.of(lostItem));
+        when(itemRepository.findById("F-0001"))
+                .thenReturn(Optional.of(foundItem));
+
         ReturnRequestDetailResponse response =
                 returnRequestService.getReturnRequestDetail(1);
 
@@ -538,7 +600,7 @@ class ReturnRequestServiceTest {
         verify(returnRequestRepository).findById(1);
     }
 
-    /**
+    /*
      * 존재하지 않는 반환 신청 번호를 조회하면 실패하는지 확인한다.
      */
     @Test
@@ -558,7 +620,7 @@ class ReturnRequestServiceTest {
         );
     }
 
-    /**
+    /*
      * 0 이하의 반환 신청 번호는 조회할 수 없는지 확인한다.
      */
     @Test
@@ -571,6 +633,80 @@ class ReturnRequestServiceTest {
 
         // 번호 검증에서 실패했으므로 Repository를 조회하면 안 된다.
         verifyNoInteractions(returnRequestRepository);
+    }
+
+    /*
+     * 로그인한 시민은 본인이 신청한 반환 신청 상세만 조회할 수 있다.
+     */
+    @Test
+    @DisplayName("본인이 신청한 반환 신청 상세를 조회한다")
+    void getMyReturnRequestDetail() {
+        // requesterId가 1인 시민이 만든 반환 신청을 준비한다.
+        ReturnRequest returnRequest = new ReturnRequest(
+                1,
+                "L-0001",
+                "F-0001",
+                "내가 신청한 반환 요청입니다."
+        );
+
+        // 상세 응답에 포함될 연결 물품 두 건을 준비한다.
+        Item lostItem = item(
+                "L-0001",
+                1,
+                ItemType.LOST,
+                ItemStatus.LOST
+        );
+        Item foundItem = item(
+                "F-0001",
+                2,
+                ItemType.FOUND,
+                ItemStatus.STORED
+        );
+
+        when(returnRequestRepository.findById(1))
+                .thenReturn(Optional.of(returnRequest));
+        when(itemRepository.findById("L-0001"))
+                .thenReturn(Optional.of(lostItem));
+        when(itemRepository.findById("F-0001"))
+                .thenReturn(Optional.of(foundItem));
+
+        // 신청자 본인인 시민 1번으로 상세를 조회한다.
+        ReturnRequestDetailResponse response =
+                returnRequestService.getMyReturnRequestDetail(1, 1);
+
+        assertEquals(1, response.requesterId());
+        assertEquals("L-0001", response.lostItemId());
+        assertEquals("F-0001", response.foundItemId());
+    }
+
+    /*
+     * 다른 시민의 반환 신청 상세는 개인정보 보호를 위해 조회할 수 없어야 한다.
+     */
+    @Test
+    @DisplayName("다른 시민의 반환 신청 상세 조회는 거부한다")
+    void rejectMyReturnRequestDetailForAnotherUser() {
+        // 시민 1번이 만든 반환 신청을 준비한다.
+        ReturnRequest returnRequest = new ReturnRequest(
+                1,
+                "L-0001",
+                "F-0001",
+                "다른 시민의 반환 요청입니다."
+        );
+
+        when(returnRequestRepository.findById(1))
+                .thenReturn(Optional.of(returnRequest));
+
+        // 시민 2번이 시민 1번의 신청을 조회하면 403 예외가 발생해야 한다.
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> returnRequestService.getMyReturnRequestDetail(2, 1)
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        assertEquals(
+                "본인이 신청한 반환 신청만 조회할 수 있습니다.",
+                exception.getReason()
+        );
     }
 
     /*
