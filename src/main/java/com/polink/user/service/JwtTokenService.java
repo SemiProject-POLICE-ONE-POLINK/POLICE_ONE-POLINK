@@ -48,8 +48,11 @@ public class JwtTokenService {
                         ChronoUnit.MINUTES
                 ))
 
-                // 사용자 역할(role): ADMIN, POLICE 등의 권한 정보 저장
+                // 사용자 역할(role), 아이디(userName), 이름(name), 연락처(phone)
                 .claim("role", user.getRole().name())
+                .claim("userName", user.getUserName())
+                .claim("name", user.getName())
+                .claim("phone", user.getPhone())
 
                 // 설정한 정보를 바탕으로 Claims 객체 생성
                 .build();
