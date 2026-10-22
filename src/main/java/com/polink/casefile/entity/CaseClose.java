@@ -37,7 +37,6 @@ public class CaseClose {
             CaseFile caseFile,
             User closedBy,
             String closeReason) {
-        this.caseId = caseFile.getCaseId();
         this.caseFile = caseFile;
         this.closedBy = closedBy;
         this.closeReason = closeReason;
