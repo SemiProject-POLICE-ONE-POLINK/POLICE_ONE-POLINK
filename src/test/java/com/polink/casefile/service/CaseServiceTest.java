@@ -875,13 +875,21 @@ public class CaseServiceTest {
         when(caseCloseRepository.existsById("SMPA-2026-0042"))
                 .thenReturn(false);
 
-        // 실제 JPA 저장 시 @PrePersist가 설정하는 종결 일시를 모의한다.
         when(caseCloseRepository.save(any(CaseClose.class)))
                 .thenAnswer(invocation -> {
                     CaseClose savedCaseClose = invocation.getArgument(0);
+
                     ReflectionTestUtils.setField(
-                            savedCaseClose, "closedAt", closedAt
+                            savedCaseClose,
+                            "caseId",
+                            caseFile.getCaseId()
                     );
+                    ReflectionTestUtils.setField(
+                            savedCaseClose,
+                            "closedAt",
+                            closedAt
+                    );
+
                     return savedCaseClose;
                 });
 
