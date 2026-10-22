@@ -1,5 +1,7 @@
--- 기존 01_DB_SCRIPT.sql로 테이블을 생성한 경우 해당 sql을 실행한다.
--- 기존 tbl_hypothesis의 데이터를 유지하며 새 컬럼을 추가한다.
+-- 이전 버전의 01_DB_SCRIPT.sql로 생성한 DB의 스키마를 갱신한다.
+-- 기존 데이터를 유지하면서 수사 가설과 반환 신청에 필요한 컬럼을 추가한다.
+-- 이미 컬럼이 추가된 DB에서는 재실행하지 않는다.
+-- 최신 01_DB_SCRIPT.sql로 새로 만든 DB에는 실행하지 않는다.
 
 USE polink;
 
@@ -28,3 +30,11 @@ SELECT COUNT(*) AS missing_adoption_data
 FROM tbl_hypothesis
 WHERE adopted_by IS NULL
    OR adopted_at IS NULL;
+
+ALTER TABLE tbl_return_request
+    ADD COLUMN completed_at DATETIME NULL COMMENT '실제 반환 완료 일시';
+
+ALTER TABLE tbl_return_request
+    ADD COLUMN completed_by INT NULL COMMENT '실제 반환 완료 처리 경찰 회원 번호',
+    ADD CONSTRAINT fk_return_request_completed_by
+        FOREIGN KEY (completed_by) REFERENCES tbl_user (user_id);
