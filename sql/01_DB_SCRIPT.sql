@@ -186,9 +186,11 @@ CREATE TABLE IF NOT EXISTS tbl_return_request (
     lost_item_id VARCHAR(25) NOT NULL COMMENT '분실물 번호',
     found_item_id VARCHAR(25) NOT NULL COMMENT '습득물 번호',
     processed_by INT NULL COMMENT '반환 처리 경찰 회원 번호',
+    completed_by INT NULL COMMENT '실제 반환 완료 처리 경찰 회원 번호',
     status VARCHAR(25) NOT NULL COMMENT '반환 신청 상태',
     request_reason TEXT NOT NULL COMMENT '반환 신청 사유',
     reject_reason VARCHAR(500) NOT NULL DEFAULT '' COMMENT '반환 반려 사유',
+    completed_at DATETIME NULL COMMENT '실제 반환 완료 일시',
     processed_at DATETIME NULL COMMENT '반환 처리 일시',
     created_at DATETIME NOT NULL COMMENT '반환 신청 일시',
 
@@ -196,7 +198,8 @@ CREATE TABLE IF NOT EXISTS tbl_return_request (
     CONSTRAINT fk_return_request_requester FOREIGN KEY (requester_id) REFERENCES tbl_user (user_id),
     CONSTRAINT fk_return_request_lost_item FOREIGN KEY (lost_item_id) REFERENCES tbl_item (item_id),
     CONSTRAINT fk_return_request_found_item FOREIGN KEY (found_item_id) REFERENCES tbl_item (item_id),
-    CONSTRAINT fk_return_request_processed_by FOREIGN KEY (processed_by) REFERENCES tbl_user (user_id)
+    CONSTRAINT fk_return_request_processed_by FOREIGN KEY (processed_by) REFERENCES tbl_user (user_id),
+    CONSTRAINT fk_return_request_completed_by FOREIGN KEY (completed_by) REFERENCES tbl_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='반환 요청';
 
 -- ==================================================================

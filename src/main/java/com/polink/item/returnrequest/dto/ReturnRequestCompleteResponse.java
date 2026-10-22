@@ -10,7 +10,7 @@ public record ReturnRequestCompleteResponse(
         // 완료된 반환 신청 번호다.
         Integer requestId,
 
-        // 실제 반환 완료가 기록된 서버 시각이다.
-        LocalDateTime returnedAt
+        // 실제 물품 인계가 완료된 서버 시각이다.
+        LocalDateTime completedAt
 ) {
 }

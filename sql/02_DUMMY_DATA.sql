@@ -12,7 +12,7 @@
 --   tbl_item.item_type  : LOST 분실물 / FOUND 습득물
 --   tbl_item.category   : ELECTRONICS 전자기기 / WALLET_CARD 지갑·카드 / ACCESSORY 액세서리 / WATCH 시계 / CLOTHING_GOODS 의류·잡화 / ETC 기타
 --   tbl_item.status     : LOST 분실 중 / STORED 보관 중 / RETURNED 반환 완료
---   tbl_return_request.status : REQUESTED 신청 / APPROVED 승인 / REJECTED 반려
+--   tbl_return_request.status : PENDING 신청 / APPROVED 승인 / REJECTED 반려
 -- 비밀번호(BCrypt) 평문: miran12! bora123! brown12! conan12! detect12!(myeonghan) / 경찰 police1! / 관리자 admin12!
 -- 재실행 규칙: 이미 같은 기본키(PK)의 더미 데이터가 있으면 건너뛴다.
 -- 따라서 이 파일은 여러 번 실행해도 중복 기본키 오류 없이 실행할 수 있다.
@@ -321,12 +321,12 @@ VALUES (1, 2, 'L-0104', 'F-0203', 7, 'APPROVED', '정운그룹 문장 장식이 
         '2026-10-05 13:40:00'),
        (4, 2, 'L-0112', 'F-0209', 6, 'APPROVED', '메모리카드에 트로피컬 랜드에서 찍은 가족 사진이 들어 있습니다.', '', '2026-10-13 11:00:00',
         '2026-10-12 18:30:00'),
-       (5, 1, 'L-0102', 'F-0201', NULL, 'REQUESTED', '토끼 스트랩이 달린 분홍 폴더폰이고 배경화면이 가족사진입니다.', '', NULL,
+       (5, 1, 'L-0102', 'F-0201', NULL, 'PENDING', '토끼 스트랩이 달린 분홍 폴더폰이고 배경화면이 가족사진입니다.', '', NULL,
         '2026-10-14 09:15:00'),
        (6, 5, 'L-0110', 'F-0211', 7, 'REJECTED', '금테 문자판 가죽 시계라 제가 잃어버린 시계 같습니다.', '문자판 각인 정보가 신청 내용과 다름',
         '2026-10-10 10:00:00', '2026-10-09 15:25:00'),
-       (7, 4, 'L-0107', 'F-0210', NULL, 'REQUESTED', '교통카드와 학생증이 든 갈색 반지갑입니다.', '', NULL, '2026-10-15 10:50:00'),
-       (8, 3, 'L-0111', 'F-0212', NULL, 'REQUESTED', '첫 장에 「APTX」 메모가 있는 파란 표지 노트입니다.', '', NULL,
+       (7, 4, 'L-0107', 'F-0210', NULL, 'PENDING', '교통카드와 학생증이 든 갈색 반지갑입니다.', '', NULL, '2026-10-15 10:50:00'),
+       (8, 3, 'L-0111', 'F-0212', NULL, 'PENDING', '첫 장에 「APTX」 메모가 있는 파란 표지 노트입니다.', '', NULL,
         '2026-10-16 14:05:00');
 
 SET FOREIGN_KEY_CHECKS = 1;

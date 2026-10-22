@@ -256,15 +256,18 @@ public class ReturnRequestController {
             // URL의 반환 신청 번호를 받는다.
             @PathVariable Integer requestId
     ) {
-        // 토큰의 로그인 사용자 정보를 먼저 확인한다.
-        requireLoggedInUserId(jwt);
+        // JWT의 sub Claim에서 실제 반환 완료를 처리하는 경찰관 번호를 가져온다.
+        Integer currentPoliceId = requireLoggedInUserId(jwt);
 
         // 반환 완료 처리는 경찰 계정만 가능하다.
         requirePolice(jwt);
 
         // Service에서 승인 상태와 두 물품의 인계 대기 상태를 검증하고 완료 처리한다.
         ReturnRequestCompleteResponse response =
-                returnRequestService.completeReturnRequest(requestId);
+                returnRequestService.completeReturnRequest(
+                        currentPoliceId,
+                        requestId
+                );
 
         // 완료된 신청 번호와 완료 시각을 200 OK로 반환한다.
         return ResponseEntity.ok(response);
