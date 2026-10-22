@@ -21,6 +21,7 @@ import com.polink.item.returnrequest.dto.PoliceReturnRequestListResponse;
 import com.polink.item.returnrequest.entity.ReturnRequestStatus;
 import com.polink.item.returnrequest.dto.ReturnRequestDetailResponse;
 import com.polink.item.returnrequest.dto.ReturnRequestCompleteResponse;
+import com.polink.item.returnrequest.dto.ReturnRequestProcessResponse;
 
 /*
  * 반환 신청의 등록과 조회 규칙을 담당한다.
@@ -113,7 +114,10 @@ public class ReturnRequestService {
      * 실제 경찰 권한 확인은 로그인 기능 연동 후 Controller에서 처리한다.
      */
     @Transactional
-    public void approveReturnRequest(Integer policeId, Integer requestId) {
+    public ReturnRequestProcessResponse approveReturnRequest(
+            Integer policeId,
+            Integer requestId
+    ) {
         if (policeId == null || policeId < 1) {
             throw new IllegalArgumentException("처리 경찰관 정보가 필요합니다.");
         }
@@ -148,44 +152,58 @@ public class ReturnRequestService {
             throw new IllegalArgumentException("승인 가능한 상태의 습득물이 아닙니다.");
         }
 
+        // 반환 신청 엔티티에 승인한 경찰관, 승인 상태, 처리 시각을 기록한다.
         returnRequest.approve(policeId);
+
+        // 승인되면 두 물품은 실제 인계를 기다리는 상태가 된다.
         lostItem.changeStatus(ItemStatus.HANDOVER_PENDING);
         foundItem.changeStatus(ItemStatus.HANDOVER_PENDING);
+
+        // 변경된 승인 결과를 200 OK 응답 본문으로 돌려준다.
+        return ReturnRequestProcessResponse.from(returnRequest);
     }
 
     /*
      * 경찰관이 대기 중인 반환 신청을 반려한다.
-     * 반려하면 물품 상태는 바꾸지 않고, 반려 사유와 처리 정보만 저장한다.
+     * 반려해도 분실물·습득물 상태는 바꾸지 않는다.
+     * 반환 신청의 상태, 처리 경찰관, 반려 사유, 처리 시각만 변경한다.
      */
     @Transactional
-    public void rejectReturnRequest(
+    public ReturnRequestProcessResponse rejectReturnRequest(
             Integer policeId,
             Integer requestId,
             String rejectReason
     ) {
+        // 처리한 경찰관 정보가 없거나 잘못됐으면 진행하지 않는다.
         if (policeId == null || policeId < 1) {
             throw new IllegalArgumentException("처리 경찰관 정보가 필요합니다.");
         }
 
+        // 반환 신청 번호는 양수여야 한다.
         if (requestId == null || requestId < 1) {
             throw new IllegalArgumentException("반환 신청 번호는 1 이상이어야 합니다.");
         }
 
+        // 빈 반려 사유는 저장하지 않는다.
         if (rejectReason == null || rejectReason.isBlank()) {
             throw new IllegalArgumentException("반려 사유는 필수입니다.");
         }
 
+        // 먼저 DB에서 반환 신청을 조회해야 returnRequest를 사용할 수 있다.
         ReturnRequest returnRequest = returnRequestRepository.findById(requestId)
                 .orElseThrow(() ->
                         new IllegalArgumentException("반환 신청을 찾을 수 없습니다."));
 
-        // 대기 상태인 신청만 반려할 수 있다.
+        // 아직 처리되지 않은 PENDING 상태만 반려할 수 있다.
         if (returnRequest.getStatus() != ReturnRequestStatus.PENDING) {
             throw new IllegalArgumentException("대기 상태의 반환 신청만 반려할 수 있습니다.");
         }
 
-        // 앞뒤 공백은 제거한 반려 사유를 저장한다.
+        // 앞뒤 공백을 없앤 반려 사유와 처리 정보를 엔티티에 저장한다.
         returnRequest.reject(policeId, rejectReason.trim());
+
+        // 변경된 신청 정보를 200 OK 응답 본문으로 반환한다.
+        return ReturnRequestProcessResponse.from(returnRequest);
     }
 
     /*

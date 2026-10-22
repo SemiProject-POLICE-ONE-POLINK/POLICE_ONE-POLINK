@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import com.polink.item.returnrequest.dto.ReturnRequestCompleteResponse;
+import com.polink.item.returnrequest.dto.ReturnRequestProcessResponse;
 
 /*
  * JWT로 로그인한 시민·경찰이 반환 신청 업무를 처리하는 Controller다.
@@ -69,10 +70,11 @@ public class ReturnRequestController {
     }
 
     /*
-     * GET /api/v1/return-requests/me?page=0&size=10
+     * GET /api/v1/return-requests/my?page=0&size=10
      * 로그인한 시민이 본인이 신청한 반환 신청 목록만 조회한다.
+     * 명세의 경로가 /my이므로 기존 /me 경로를 /my로 통일한다.
      */
-    @GetMapping("/me")
+    @GetMapping("/my")
     public ResponseEntity<MyReturnRequestListResponse> getMyReturnRequests(
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam(defaultValue = "0") int page,
@@ -128,48 +130,58 @@ public class ReturnRequestController {
 
     /*
      * PATCH /api/v1/return-requests/{requestId}/approve
-     * 경찰이 대기 중인 반환 신청을 승인하고 물품 상태를 인계 대기로 변경한다.
+     * 경찰이 대기 중인 반환 신청을 승인한다.
+     * 성공하면 200 OK와 함께 requestId, status, processedAt을 반환한다.
      */
     @PatchMapping("/{requestId}/approve")
-    public ResponseEntity<Void> approveReturnRequest(
+    public ResponseEntity<ReturnRequestProcessResponse> approveReturnRequest(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Integer requestId
     ) {
-        // 승인 담당자 ID를 JWT에서 전달해 Service가 승인 정보를 기록한다.
+        // JWT에서 실제 처리한 경찰관 번호를 가져온다.
         Integer currentPoliceId = requireLoggedInUserId(jwt);
 
-        // 반환 신청 승인 권한은 경찰에게만 있다.
+        // 승인 API는 경찰 역할만 호출할 수 있다.
         requirePolice(jwt);
 
-        returnRequestService.approveReturnRequest(currentPoliceId, requestId);
+        // Service가 상태 변경을 수행하고 처리 결과 DTO를 반환한다.
+        ReturnRequestProcessResponse response =
+                returnRequestService.approveReturnRequest(
+                        currentPoliceId,
+                        requestId
+                );
 
-        // 성공했지만 별도 응답 본문은 필요 없으므로 204 No Content를 반환한다.
-        return ResponseEntity.noContent().build();
+        // 명세에 맞춰 204가 아니라 200 OK와 JSON 본문을 반환한다.
+        return ResponseEntity.ok(response);
     }
 
     /*
      * PATCH /api/v1/return-requests/{requestId}/reject
-     * 경찰이 대기 중인 반환 신청을 반려하고 반려 사유를 기록한다.
+     * 경찰이 대기 중인 반환 신청을 반려하고 반려 사유를 저장한다.
+     * 성공하면 200 OK와 함께 requestId, status, processedAt을 반환한다.
      */
     @PatchMapping("/{requestId}/reject")
-    public ResponseEntity<Void> rejectReturnRequest(
+    public ResponseEntity<ReturnRequestProcessResponse> rejectReturnRequest(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Integer requestId,
             @Valid @RequestBody ReturnRequestRejectRequest request
     ) {
-        // 반려 담당자 ID를 JWT에서 가져온다.
+        // JWT에서 실제 처리한 경찰관 번호를 가져온다.
         Integer currentPoliceId = requireLoggedInUserId(jwt);
 
-        // 반환 신청 반려 권한은 경찰에게만 있다.
+        // 반려 API도 경찰 역할만 호출할 수 있다.
         requirePolice(jwt);
 
-        returnRequestService.rejectReturnRequest(
-                currentPoliceId,
-                requestId,
-                request.rejectReason()
-        );
+        // Service가 반려 사유 저장 및 상태 변경을 수행한다.
+        ReturnRequestProcessResponse response =
+                returnRequestService.rejectReturnRequest(
+                        currentPoliceId,
+                        requestId,
+                        request.rejectReason()
+                );
 
-        return ResponseEntity.noContent().build();
+        // 명세에 맞춰 204가 아니라 200 OK와 JSON 본문을 반환한다.
+        return ResponseEntity.ok(response);
     }
 
     /*
