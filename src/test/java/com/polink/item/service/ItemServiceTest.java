@@ -15,19 +15,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
-import java.time.LocalDate;
 import com.polink.item.dto.ItemDetailResponse;
 import com.polink.item.dto.ItemUpdateRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
-import com.polink.item.dto.ItemCategoryCountResponse;
 import com.polink.item.dto.ItemStatisticsResponse;
 
 /** 실제 DB에 연결하지 않고 ItemService의 번호·조회 처리 규칙을 테스트한다. */
@@ -555,50 +554,142 @@ class ItemServiceTest {
     }
 
     @Test
-    @DisplayName("물품 통계는 유형, 상태, 카테고리별 개수를 함께 반환한다")
-    void getItemStatistics() {
-        // 전체 물품 수를 Repository가 5개로 반환하도록 설정한다.
-        when(itemRepository.count()).thenReturn(5L);
+    @DisplayName("물품 통계는 기간별 유형·상태·카테고리·일별·월별 집계를 함께 반환한다")
+    void getItemStatisticsByPeriod() {
+        // 테스트 실행일을 기준으로 기간을 정해 날짜 계산이 항상 유효하게 한다.
+        LocalDate startDate = LocalDate.now().minusDays(7);
+        LocalDate endDate = LocalDate.now();
 
-        // 분실물 2개, 습득물 3개라는 유형별 집계 결과를 준비한다.
-        when(itemRepository.countByItemType(ItemType.LOST)).thenReturn(2L);
-        when(itemRepository.countByItemType(ItemType.FOUND)).thenReturn(3L);
+        Item lostItem = createItem(
+                "L-0001",
+                1,
+                ItemType.LOST,
+                ItemStatus.LOST,
+                "검은 카드지갑",
+                "WALLET_CARD",
+                "청솔역"
+        );
 
-        // 네 가지 물품 상태별 집계 결과를 준비한다.
-        when(itemRepository.countByStatus(ItemStatus.LOST)).thenReturn(2L);
-        when(itemRepository.countByStatus(ItemStatus.STORED)).thenReturn(2L);
-        when(itemRepository.countByStatus(ItemStatus.HANDOVER_PENDING)).thenReturn(0L);
-        when(itemRepository.countByStatus(ItemStatus.RETURNED)).thenReturn(1L);
+        Item storedFoundItem = createItem(
+                "F-0001",
+                2,
+                ItemType.FOUND,
+                ItemStatus.STORED,
+                "검은 지갑",
+                "WALLET_CARD",
+                "청솔역 안내데스크"
+        );
 
-        // 카테고리별 집계 쿼리가 반환할 결과를 준비한다.
-        when(itemRepository.countItemsByCategory()).thenReturn(List.of(
-                new ItemCategoryCountResponse("ELECTRONICS", 2L),
-                new ItemCategoryCountResponse("WALLET_CARD", 1L)
+        Item returnedFoundItem = createItem(
+                "F-0002",
+                3,
+                ItemType.FOUND,
+                ItemStatus.RETURNED,
+                "무선 이어폰",
+                "ELECTRONICS",
+                "청솔역 대합실"
+        );
+
+        // Repository가 기간에 포함되는 물품 세 건을 반환하도록 설정한다.
+        when(itemRepository.findStatisticsItems(
+                startDate.atStartOfDay(),
+                endDate.plusDays(1).atStartOfDay()
+        )).thenReturn(List.of(
+                lostItem,
+                storedFoundItem,
+                returnedFoundItem
         ));
 
-        // Service의 통계 조합 메서드를 실행한다.
-        ItemStatisticsResponse response = itemService.getItemStatistics();
+        ItemStatisticsResponse response = itemService.getItemStatistics(
+                startDate,
+                endDate
+        );
 
-        // 전체 물품 수가 Repository 결과와 같은지 확인한다.
-        assertEquals(5L, response.totalCount());
+        // 조회 기간과 전체 건수가 응답에 그대로 포함되어야 한다.
+        assertEquals(startDate, response.startDate());
+        assertEquals(endDate, response.endDate());
+        assertEquals(3L, response.totalCount());
 
-        // 유형별 집계 결과가 응답 Map에 올바르게 담겼는지 확인한다.
-        assertEquals(2L, response.itemTypeCounts().get(ItemType.LOST));
-        assertEquals(3L, response.itemTypeCounts().get(ItemType.FOUND));
+        // 분실물 1건, 습득물 2건으로 집계되어야 한다.
+        assertEquals(1L, response.lostCount());
+        assertEquals(2L, response.foundCount());
 
-        // 상태별 집계 결과가 응답 Map에 올바르게 담겼는지 확인한다.
-        assertEquals(2L, response.statusCounts().get(ItemStatus.LOST));
-        assertEquals(2L, response.statusCounts().get(ItemStatus.STORED));
+        // 반환 완료 1건, 인계 대기 0건을 별도 요약 값으로 반환한다.
+        assertEquals(0L, response.handoverPendingCount());
+        assertEquals(1L, response.returnedCount());
+
+        // 유형·상태별 Map에도 값이 모두 포함되어야 한다.
+        assertEquals(1L, response.itemTypeCounts().get(ItemType.LOST));
+        assertEquals(2L, response.itemTypeCounts().get(ItemType.FOUND));
+        assertEquals(1L, response.statusCounts().get(ItemStatus.LOST));
+        assertEquals(1L, response.statusCounts().get(ItemStatus.STORED));
         assertEquals(0L, response.statusCounts().get(ItemStatus.HANDOVER_PENDING));
         assertEquals(1L, response.statusCounts().get(ItemStatus.RETURNED));
 
-        // 카테고리 집계 결과가 응답 목록에 포함됐는지 확인한다.
+        // 카테고리는 건수 내림차순으로 정렬되어 WALLET_CARD가 먼저 나온다.
         assertEquals(2, response.categoryCounts().size());
-        assertEquals("ELECTRONICS", response.categoryCounts().get(0).category());
+        assertEquals("WALLET_CARD", response.categoryCounts().get(0).category());
         assertEquals(2L, response.categoryCounts().get(0).count());
 
-        // 통계에 필요한 Repository 메서드가 호출됐는지 확인한다.
-        verify(itemRepository).count();
-        verify(itemRepository).countItemsByCategory();
+        // 세 물품은 테스트 실행 시점에 생성되므로 같은 일자·월 통계 한 건으로 묶인다.
+        assertEquals(1, response.dailyCounts().size());
+        assertEquals(3L, response.dailyCounts().get(0).count());
+        assertEquals(1, response.monthlyCounts().size());
+        assertEquals(3L, response.monthlyCounts().get(0).count());
+
+        // 시작일·종료일이 Repository 조회 조건으로 정확히 전달됐는지 확인한다.
+        verify(itemRepository).findStatisticsItems(
+                startDate.atStartOfDay(),
+                endDate.plusDays(1).atStartOfDay()
+        );
     }
+
+    /*
+     * 통계 테스트에서 등록자·유형·상태·카테고리·장소를 직접 지정해
+     * 다양한 집계 데이터를 만들기 위한 보조 메서드다.
+     */
+    private Item createItem(
+            String itemId,
+            Integer registrantId,
+            ItemType itemType,
+            ItemStatus itemStatus,
+            String itemName,
+            String category,
+            String location
+    ) {
+        return new Item(
+                itemId,
+                registrantId,
+                itemType,
+                itemName,
+                category,
+                "통계 테스트용 물품 설명입니다.",
+                location,
+                LocalDateTime.of(2026, 10, 21, 10, 0),
+                itemStatus,
+                null
+        );
+    }
+
+    // 시작일이 종료일보다 늦으면 Repository 조회 전 400 대상 예외가 발생해야 한다.
+    @Test
+    @DisplayName("통계 시작일이 종료일보다 늦으면 예외가 발생한다")
+    void rejectsStatisticsWhenStartDateIsAfterEndDate() {
+        LocalDate startDate = LocalDate.of(2026, 10, 31);
+        LocalDate endDate = LocalDate.of(2026, 10, 1);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> itemService.getItemStatistics(startDate, endDate)
+        );
+
+        assertEquals(
+                "통계 시작일은 종료일보다 늦을 수 없습니다.",
+                exception.getMessage()
+        );
+
+        // 날짜 검증에서 중단되므로 DB 조회는 발생하면 안 된다.
+        verifyNoInteractions(itemRepository);
+    }
+
 }

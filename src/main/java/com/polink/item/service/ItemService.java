@@ -26,6 +26,12 @@ import com.polink.item.dto.ItemUpdateRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import com.polink.item.dto.ItemStatisticsResponse;
+import com.polink.item.dto.ItemCategoryCountResponse;
+import com.polink.item.dto.ItemDailyCountResponse;
+import com.polink.item.dto.ItemMonthlyCountResponse;
+import java.time.YearMonth;
+import java.util.Comparator;
+import java.util.TreeMap;
 import java.util.EnumMap;
 import java.util.Map;
 import java.time.LocalDate;
@@ -512,31 +518,119 @@ public class ItemService {
     }
 
     /*
-     * 전체 물품을 유형·상태·카테고리 기준으로 집계한다.
-     * Controller에서 경찰 권한을 확인한 뒤 이 메서드를 호출한다.
+     * 등록일 기준으로 기간을 적용한 물품 통계를 조회한다.
+     * 시작일과 종료일이 모두 없으면 전체 기간을 집계한다.
      */
-    public ItemStatisticsResponse getItemStatistics() {
+    public ItemStatisticsResponse getItemStatistics(
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        // 시작일이 종료일보다 늦으면 잘못된 기간이므로 400으로 처리한다.
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException(
+                    "통계 시작일은 종료일보다 늦을 수 없습니다."
+            );
+        }
+
+        // 종료일 다음 날 00:00 미만 조건으로 종료일 하루 전체를 포함한다.
+        LocalDateTime startAt = startDate == null
+                ? null
+                : startDate.atStartOfDay();
+
+        LocalDateTime endAtExclusive = endDate == null
+                ? null
+                : endDate.plusDays(1).atStartOfDay();
+
+        // 동일 기간의 물품을 한 번만 조회한 뒤 모든 통계를 계산한다.
+        List<Item> items = itemRepository.findStatisticsItems(
+                startAt,
+                endAtExclusive
+        );
+
+        // enum의 모든 값이 응답에 항상 포함되도록 먼저 0으로 초기화한다.
         Map<ItemType, Long> itemTypeCounts = new EnumMap<>(ItemType.class);
         for (ItemType itemType : ItemType.values()) {
-            itemTypeCounts.put(
-                    itemType,
-                    itemRepository.countByItemType(itemType)
-            );
+            itemTypeCounts.put(itemType, 0L);
         }
 
         Map<ItemStatus, Long> statusCounts = new EnumMap<>(ItemStatus.class);
         for (ItemStatus itemStatus : ItemStatus.values()) {
-            statusCounts.put(
-                    itemStatus,
-                    itemRepository.countByStatus(itemStatus)
+            statusCounts.put(itemStatus, 0L);
+        }
+
+        // 날짜와 월은 시간 순서대로, 카테고리는 이름 기준으로 관리한다.
+        Map<String, Long> categoryCountsByName = new TreeMap<>();
+        Map<LocalDate, Long> dailyCountsByDate = new TreeMap<>();
+        Map<YearMonth, Long> monthlyCountsByMonth = new TreeMap<>();
+
+        for (Item item : items) {
+            itemTypeCounts.merge(item.getItemType(), 1L, Long::sum);
+            statusCounts.merge(item.getStatus(), 1L, Long::sum);
+            categoryCountsByName.merge(item.getCategory(), 1L, Long::sum);
+
+            // 등록 시각(createdAt)을 기준으로 일별·월별 등록 건수를 집계한다.
+            LocalDate createdDate = item.getCreatedAt().toLocalDate();
+            dailyCountsByDate.merge(createdDate, 1L, Long::sum);
+            monthlyCountsByMonth.merge(
+                    YearMonth.from(createdDate),
+                    1L,
+                    Long::sum
             );
         }
 
+        // 카테고리는 건수 내림차순, 같은 건수면 카테고리 이름 오름차순으로 정렬한다.
+        List<ItemCategoryCountResponse> categoryCounts =
+                categoryCountsByName.entrySet()
+                        .stream()
+                        .map(entry -> new ItemCategoryCountResponse(
+                                entry.getKey(),
+                                entry.getValue()
+                        ))
+                        .sorted(
+                                Comparator
+                                        .comparingLong(
+                                                ItemCategoryCountResponse::count
+                                        )
+                                        .reversed()
+                                        .thenComparing(
+                                                ItemCategoryCountResponse::category
+                                        )
+                        )
+                        .toList();
+
+        // TreeMap의 날짜 순서를 유지해 일별·월별 차트에 바로 사용할 수 있게 한다.
+        List<ItemDailyCountResponse> dailyCounts =
+                dailyCountsByDate.entrySet()
+                        .stream()
+                        .map(entry -> new ItemDailyCountResponse(
+                                entry.getKey(),
+                                entry.getValue()
+                        ))
+                        .toList();
+
+        List<ItemMonthlyCountResponse> monthlyCounts =
+                monthlyCountsByMonth.entrySet()
+                        .stream()
+                        .map(entry -> new ItemMonthlyCountResponse(
+                                entry.getKey().getYear(),
+                                entry.getKey().getMonthValue(),
+                                entry.getValue()
+                        ))
+                        .toList();
+
         return new ItemStatisticsResponse(
-                itemRepository.count(),
+                startDate,
+                endDate,
+                items.size(),
+                itemTypeCounts.get(ItemType.LOST),
+                itemTypeCounts.get(ItemType.FOUND),
+                statusCounts.get(ItemStatus.HANDOVER_PENDING),
+                statusCounts.get(ItemStatus.RETURNED),
                 itemTypeCounts,
                 statusCounts,
-                itemRepository.countItemsByCategory()
+                categoryCounts,
+                dailyCounts,
+                monthlyCounts
         );
     }
 }
