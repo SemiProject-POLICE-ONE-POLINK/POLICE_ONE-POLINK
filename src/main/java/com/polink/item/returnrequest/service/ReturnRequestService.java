@@ -269,10 +269,12 @@ public class ReturnRequestService {
 
     /*
      * 로그인한 시민이 신청한 반환 신청 목록을 최신순으로 조회한다.
-     * page는 0부터 시작하며, size는 한 페이지의 목록 개수다.
+     * status를 전달하면 해당 상태의 신청만 조회하고,
+     * status가 없으면 본인의 전체 신청 목록을 조회한다.
      */
     public MyReturnRequestListResponse getMyReturnRequests(
             Integer requesterId,
+            ReturnRequestStatus status,
             int page,
             int size
     ) {
@@ -293,17 +295,38 @@ public class ReturnRequestService {
 
         Pageable pageable = PageRequest.of(page, size);
 
-        // 본인이 신청한 반환 신청만 최신 신청순으로 가져온다.
-        Page<ReturnRequest> returnRequestPage = returnRequestRepository
-                .findByRequesterIdOrderByCreatedAtDesc(requesterId, pageable);
+        /*
+         * status가 없으면 전체 목록을,
+         * status가 있으면 해당 상태의 본인 신청만 최신순으로 조회한다.
+         */
+        Page<ReturnRequest> returnRequestPage = status == null
+                ? returnRequestRepository.findByRequesterIdOrderByCreatedAtDesc(
+                requesterId,
+                pageable
+        )
+                : returnRequestRepository
+                .findByRequesterIdAndStatusOrderByCreatedAtDesc(
+                        requesterId,
+                        status,
+                        pageable
+                );
 
+        // 목록 한 건마다 연결된 분실물·습득물 정보를 함께 담는다.
         List<ReturnRequestListResponse> items = returnRequestPage.getContent()
                 .stream()
                 .map(this::toListResponse)
                 .toList();
 
-        // API 명세대로 items 목록만 응답한다.
-        return new MyReturnRequestListResponse(items);
+        // 프론트엔드 페이지 UI에 필요한 메타데이터까지 함께 반환한다.
+        return new MyReturnRequestListResponse(
+                items,
+                returnRequestPage.getNumber(),
+                returnRequestPage.getSize(),
+                returnRequestPage.getTotalElements(),
+                returnRequestPage.getTotalPages(),
+                returnRequestPage.isFirst(),
+                returnRequestPage.isLast()
+        );
     }
 
     /*

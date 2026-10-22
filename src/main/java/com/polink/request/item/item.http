@@ -1,363 +1,254 @@
-### 분실물 · 습득물 등록 API 테스트
-### 실행 전 확인: 서버를 먼저 실행하고, tbl_user에 registrantId(예: 1) 회원이 있어야 한다.
+@baseUrl = http://localhost:8080
 
-### 1. 분실물 정상 등록 → 201 / 새 번호 L-XXXX
-POST http://localhost:8080/api/v1/items
-Content-Type: multipart/form-data; boundary=itemBoundary
+# 이미지 첨부 요청을 실행할 때만 실제 존재하는 이미지 파일 경로로 수정한다.
+@imagePath = C:/Users/user/Downloads/item.png
 
---itemBoundary
+###
+# 0-1. 시민 로그인
+# 실행 후 citizenToken이 자동 저장된다.
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "userName": "miran",
+  "password": "miran12!"
+}
+
+> {% client.global.set("citizenToken", response.body.accessToken); %}
+
+###
+# 0-2. 경찰 로그인
+# 실행 후 policeToken이 자동 저장된다.
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "userName": "shin",
+  "password": "police1!"
+}
+
+> {% client.global.set("policeToken", response.body.accessToken); %}
+
+###
+# ITEM-001. 시민이 분실물 등록
+# 성공하면 createdLostItemId에 새 분실물 번호가 저장된다.
+POST {{baseUrl}}/api/v1/items
+Authorization: Bearer {{citizenToken}}
+Content-Type: multipart/form-data; boundary=lostItemBoundary
+
+--lostItemBoundary
 Content-Disposition: form-data; name="itemType"
 
 LOST
-
---itemBoundary
+--lostItemBoundary
 Content-Disposition: form-data; name="itemName"
 
-TEST_검은 카드지갑
---itemBoundary
+HTTP 테스트 검은 카드지갑
+--lostItemBoundary
 Content-Disposition: form-data; name="category"
 
-지갑
---itemBoundary
+WALLET_CARD
+--lostItemBoundary
 Content-Disposition: form-data; name="description"
 
-테스트용 분실물입니다.
---itemBoundary
+교통카드와 학생증이 들어 있는 검은 카드지갑입니다.
+--lostItemBoundary
 Content-Disposition: form-data; name="location"
 
 청솔역 1번 출구
---itemBoundary
+--lostItemBoundary
 Content-Disposition: form-data; name="occurredAt"
 
-2026-10-17
---itemBoundary--
+2026-10-20
+--lostItemBoundary--
 
-### 2. 습득물 정상 등록 → 201 / 새 번호 F-XXXX
-POST http://localhost:8080/api/v1/items
-Content-Type: multipart/form-data; boundary=itemBoundary
+> {% client.global.set("createdLostItemId", response.body.itemId); %}
 
---itemBoundary
+###
+# ITEM-002. 시민이 습득물 등록
+# 성공하면 createdFoundItemId에 새 습득물 번호가 저장된다.
+POST {{baseUrl}}/api/v1/items
+Authorization: Bearer {{citizenToken}}
+Content-Type: multipart/form-data; boundary=foundItemBoundary
+
+--foundItemBoundary
 Content-Disposition: form-data; name="itemType"
 
 FOUND
-
---itemBoundary
+--foundItemBoundary
 Content-Disposition: form-data; name="itemName"
 
-TEST_파란 우산
---itemBoundary
+HTTP 테스트 파란 우산
+--foundItemBoundary
 Content-Disposition: form-data; name="category"
 
-의류잡화
---itemBoundary
+CLOTHING_GOODS
+--foundItemBoundary
 Content-Disposition: form-data; name="description"
 
-테스트용 습득물입니다.
---itemBoundary
+청솔역 대합실에서 발견한 파란 우산입니다.
+--foundItemBoundary
 Content-Disposition: form-data; name="location"
 
 청솔역 대합실
---itemBoundary
+--foundItemBoundary
 Content-Disposition: form-data; name="occurredAt"
 
-2026-10-17
---itemBoundary--
+2026-10-20
+--foundItemBoundary--
 
-### 3. 물품 유형 누락 → 400
-POST http://localhost:8080/api/v1/items
-Content-Type: multipart/form-data; boundary=itemBoundary
+> {% client.global.set("createdFoundItemId", response.body.itemId); %}
 
+###
+# ITEM-003. 전체 물품 목록 조회
+GET {{baseUrl}}/api/v1/items?page=0&size=10
+Authorization: Bearer {{citizenToken}}
 
---itemBoundary
-Content-Disposition: form-data; name="itemName"
+###
+# ITEM-004. 분실물만 조회
+GET {{baseUrl}}/api/v1/items?itemType=LOST&page=0&size=10
+Authorization: Bearer {{citizenToken}}
 
-유형 없는 물품
---itemBoundary
-Content-Disposition: form-data; name="category"
+###
+# ITEM-005. 보관 중인 습득물만 조회
+GET {{baseUrl}}/api/v1/items?itemType=FOUND&status=STORED&page=0&size=10
+Authorization: Bearer {{citizenToken}}
 
-ETC
---itemBoundary
-Content-Disposition: form-data; name="description"
+###
+# ITEM-006. 물품명 또는 설명에 '지갑'이 포함된 물품 조회
+GET {{baseUrl}}/api/v1/items?keyword=지갑&page=0&size=10
+Authorization: Bearer {{citizenToken}}
 
-물품 유형 누락 테스트입니다.
---itemBoundary
-Content-Disposition: form-data; name="location"
+###
+# ITEM-007. 카테고리와 장소 조건으로 조회
+GET {{baseUrl}}/api/v1/items?itemType=LOST&category=WALLET_CARD&location=청솔역&page=0&size=10
+Authorization: Bearer {{citizenToken}}
 
-테스트 장소
---itemBoundary
-Content-Disposition: form-data; name="occurredAt"
+###
+# ITEM-008. 발생일 범위로 조회
+GET {{baseUrl}}/api/v1/items?startDate=2026-10-01&endDate=2026-10-22&page=0&size=10
+Authorization: Bearer {{citizenToken}}
 
-2026-10-17
---itemBoundary--
+###
+# ITEM-009. 방금 등록한 분실물 상세 조회
+GET {{baseUrl}}/api/v1/items/{{createdLostItemId}}
+Authorization: Bearer {{citizenToken}}
 
-### 4. 물품명 누락 → 400
-POST http://localhost:8080/api/v1/items
-Content-Type: multipart/form-data; boundary=itemBoundary
+###
+# ITEM-010. 방금 등록한 습득물 상세 조회
+GET {{baseUrl}}/api/v1/items/{{createdFoundItemId}}
+Authorization: Bearer {{citizenToken}}
 
---itemBoundary
-Content-Disposition: form-data; name="itemType"
+###
+# ITEM-011. 시민이 본인이 등록한 물품 목록 조회
+GET {{baseUrl}}/api/v1/items/my?page=0&size=10
+Authorization: Bearer {{citizenToken}}
 
-LOST
+###
+# ITEM-012. 시민이 방금 등록한 분실물 수정
+PATCH {{baseUrl}}/api/v1/items/{{createdLostItemId}}
+Authorization: Bearer {{citizenToken}}
+Content-Type: application/json
 
---itemBoundary
-Content-Disposition: form-data; name="category"
+{
+  "itemName": "수정된 HTTP 테스트 검은 카드지갑",
+  "category": "WALLET_CARD",
+  "description": "교통카드와 학생증이 들어 있는 수정된 검은 카드지갑입니다.",
+  "location": "청솔역 2번 출구",
+  "occurredAt": "2026-10-20"
+}
 
-기타
---itemBoundary
-Content-Disposition: form-data; name="description"
+###
+# ITEM-013. 경찰이 방금 등록한 습득물 수정
+PATCH {{baseUrl}}/api/v1/items/{{createdFoundItemId}}
+Authorization: Bearer {{policeToken}}
+Content-Type: application/json
 
-물품명 누락 테스트입니다.
---itemBoundary
-Content-Disposition: form-data; name="location"
+{
+  "itemName": "수정된 HTTP 테스트 파란 우산",
+  "category": "CLOTHING_GOODS",
+  "description": "청솔역 안내데스크에 보관 중인 수정된 파란 우산입니다.",
+  "location": "청솔역 안내데스크",
+  "occurredAt": "2026-10-20"
+}
 
-테스트 장소
---itemBoundary
-Content-Disposition: form-data; name="occurredAt"
+###
+# ITEM-014. 시민이 본인의 분실물에 이미지 한 장 첨부
+# @imagePath 경로에 실제 이미지 파일이 있어야 한다.
+POST {{baseUrl}}/api/v1/items/{{createdLostItemId}}/image
+Authorization: Bearer {{citizenToken}}
+Content-Type: multipart/form-data; boundary=imageBoundary
 
-2026-10-17
---itemBoundary--
-
-### 5. 미래 발생 일자 → 400
-POST http://localhost:8080/api/v1/items
-Content-Type: multipart/form-data; boundary=itemBoundary
-
---itemBoundary
-Content-Disposition: form-data; name="itemType"
-
-FOUND
-
---itemBoundary
-Content-Disposition: form-data; name="itemName"
-
-미래 물품
---itemBoundary
-Content-Disposition: form-data; name="category"
-
-기타
---itemBoundary
-Content-Disposition: form-data; name="description"
-
-미래 날짜 검증 테스트입니다.
---itemBoundary
-Content-Disposition: form-data; name="location"
-
-테스트 장소
---itemBoundary
-Content-Disposition: form-data; name="occurredAt"
-
-2099-01-01
---itemBoundary--
-
-### 6. 이미지 포함 습득물 등록 → 201
-POST http://localhost:8080/api/v1/items
-Content-Type: multipart/form-data; boundary=itemBoundary
-
---itemBoundary
-Content-Disposition: form-data; name="itemType"
-
-FOUND
-
---itemBoundary
-Content-Disposition: form-data; name="itemName"
-
-TEST_노란 이어폰 케이스
---itemBoundary
-Content-Disposition: form-data; name="category"
-
-전자기기
---itemBoundary
-Content-Disposition: form-data; name="description"
-
-테스트용 이미지 첨부 물품입니다.
---itemBoundary
-Content-Disposition: form-data; name="location"
-
-청솔역 벤치
---itemBoundary
-Content-Disposition: form-data; name="occurredAt"
-
-2026-10-17
---itemBoundary
+--imageBoundary
 Content-Disposition: form-data; name="image"; filename="item.png"
 Content-Type: image/png
 
-< C:/Users/사용자명/Downloads/item.png
---itemBoundary--
+< {{imagePath}}
+--imageBoundary--
 
-### 7. 지원하지 않는 이미지 확장자 → 400
-POST http://localhost:8080/api/v1/items
-Content-Type: multipart/form-data; boundary=itemBoundary
+###
+# ITEM-015. AI 습득물 후보 매칭
+# 방금 등록한 내 분실물을 기준으로 보관 중인 습득물을 조회한다.
+POST {{baseUrl}}/api/v1/ai/item-matches
+Authorization: Bearer {{citizenToken}}
+Content-Type: application/json
 
---itemBoundary
+{
+  "lostItemId": "{{createdLostItemId}}"
+}
+
+###
+# ITEM-016. 경찰이 전체 물품 통계 조회
+GET {{baseUrl}}/api/v1/items/statistics
+Authorization: Bearer {{policeToken}}
+
+###
+# ITEM-017. 토큰 없이 목록 조회: 401 확인
+GET {{baseUrl}}/api/v1/items?page=0&size=10
+
+###
+# ITEM-018. 경찰이 물품 등록 시도: 403 확인
+POST {{baseUrl}}/api/v1/items
+Authorization: Bearer {{policeToken}}
+Content-Type: multipart/form-data; boundary=forbiddenBoundary
+
+--forbiddenBoundary
 Content-Disposition: form-data; name="itemType"
 
 LOST
-
---itemBoundary
+--forbiddenBoundary
 Content-Disposition: form-data; name="itemName"
 
-이미지 형식 오류 물품
---itemBoundary
+경찰 등록 권한 테스트
+--forbiddenBoundary
 Content-Disposition: form-data; name="category"
 
-기타
---itemBoundary
+ETC
+--forbiddenBoundary
 Content-Disposition: form-data; name="description"
 
-지원하지 않는 이미지 형식 테스트입니다.
---itemBoundary
+경찰 계정은 물품을 등록할 수 없습니다.
+--forbiddenBoundary
 Content-Disposition: form-data; name="location"
 
 테스트 장소
---itemBoundary
+--forbiddenBoundary
 Content-Disposition: form-data; name="occurredAt"
 
-2026-10-17
---itemBoundary
-Content-Disposition: form-data; name="image"; filename="item.pdf"
-Content-Type: application/pdf
+2026-10-20
+--forbiddenBoundary--
 
-test
---itemBoundary--
-
-### 물품 목록 · 상세 조회 API 테스트
-
-### 8. 전체 물품 목록 조회 → 200
-GET http://localhost:8080/api/v1/items
-
-### 9. 분실물만 조회 → 200
-GET http://localhost:8080/api/v1/items?itemType=LOST
-
-### 10. 습득물 중 전자기기 카테고리 조회 → 200
-GET http://localhost:8080/api/v1/items?itemType=FOUND&category=ELECTRONICS
-
-### 11. 물품명 또는 설명에 "지갑"이 포함된 물품 조회 → 200
-GET http://localhost:8080/api/v1/items?keyword=지갑
-
-### 12. 보관 중인 습득물 조회 → 200
-GET http://localhost:8080/api/v1/items?itemType=FOUND&status=STORED
-
-### 13. 물품 상세 조회 → 200
-### 더미 데이터에 있는 번호를 사용한다.
-GET http://localhost:8080/api/v1/items/L-0101
-
-### 14. 존재하지 않는 물품 상세 조회 → 404
-GET http://localhost:8080/api/v1/items/L-9999
-
-### 15. 내 등록 물품 조회 → 200
-### 시민 JWT 토큰을 가진 사용자 본인이 등록한 물품만 조회한다.
-### Authorization 값에는 로그인 API로 발급받은 시민 access token을 넣는다.
-GET http://localhost:8080/api/v1/items/my?page=0&size=10
+###
+# ITEM-019. 시민이 통계 조회 시도: 403 확인
+GET {{baseUrl}}/api/v1/items/statistics
 Authorization: Bearer {{citizenToken}}
 
-### 16. AI 물품 매칭 조회 → 200
-### 시민이 본인이 등록한 분실물 번호를 보내면,
-### 보관 중인 습득물 후보와 각 후보의 매칭 근거를 반환한다.
-POST http://localhost:8080/api/v1/ai/item-matches
-Content-Type: application/json
+###
+# ITEM-020. 경찰이 내 등록 물품 조회 시도: 403 확인
+GET {{baseUrl}}/api/v1/items/my?page=0&size=10
+Authorization: Bearer {{policeToken}}
+
+###
+# ITEM-021. 존재하지 않는 물품 상세 조회: 404 확인
+GET {{baseUrl}}/api/v1/items/L-9999
 Authorization: Bearer {{citizenToken}}
-
-{
-  "lostItemId": "L-0105"
-}
-
-### 17. 내가 등록한 분실물 수정 → 200
-PATCH http://localhost:8080/api/v1/items/L-0116
-Content-Type: application/json
-
-{
-  "itemName": "수정된 검은 카드지갑",
-  "category": "WALLET_CARD",
-  "description": "교통카드와 학생증이 들어 있는 검은 카드지갑입니다.",
-  "location": "청솔역 2번 출구",
-  "occurredAt": "2026-10-17"
-}
-
-### 18. 습득물 수정 시도 → 400
-PATCH http://localhost:8080/api/v1/items/F-0216
-Content-Type: application/json
-
-{
-  "itemName": "수정 시도 우산",
-  "category": "CLOTHING_GOODS",
-  "description": "시민은 습득물을 수정할 수 없습니다.",
-  "location": "청솔역",
-  "occurredAt": "2026-10-17"
-}
-
-### 19. 다른 시민의 분실물 수정 시도 → 403
-PATCH http://localhost:8080/api/v1/items/L-0101
-Content-Type: application/json
-
-{
-  "itemName": "수정 시도 물품",
-  "category": "ETC",
-  "description": "다른 사용자의 물품은 수정할 수 없습니다.",
-  "location": "테스트 장소",
-  "occurredAt": "2026-10-17"
-}
-
-### 습득물 수정 API 테스트
-### 실행 전 확인: application.yaml의 app.dev-user-id를 경찰 계정 6으로 변경한다.
-
-### 20. 경찰이 보관 중인 습득물 수정 → 200
-PATCH http://localhost:8080/api/v1/items/F-0216
-Content-Type: application/json
-
-{
-  "itemName": "수정된 파란 우산",
-  "category": "CLOTHING_GOODS",
-  "description": "청솔역 안내데스크에 보관 중인 파란 우산입니다.",
-  "location": "청솔역 안내데스크",
-  "occurredAt": "2026-10-18"
-}
-
-### 21. 경찰이 분실물 수정 시도 → 400
-PATCH http://localhost:8080/api/v1/items/L-0116
-Content-Type: application/json
-
-{
-  "itemName": "경찰 수정 시도 분실물",
-  "category": "WALLET_CARD",
-  "description": "습득물 수정 API에서는 분실물을 수정할 수 없습니다.",
-  "location": "청솔역",
-  "occurredAt": "2026-10-18"
-}
-
-### 분실물 이미지 첨부 API 테스트
-### 실행 전 확인: application.yaml의 app.dev-user-id는 시민 계정 1이어야 한다.
-### item-test.png는 2MB 이하의 실제 PNG 이미지 파일이어야 한다.
-
-### 22. 내가 등록한 분실물에 이미지 첨부 → 200
-POST http://localhost:8080/api/v1/items/L-0116/image
-Content-Type: multipart/form-data; boundary=imageBoundary
-
---imageBoundary
-Content-Disposition: form-data; name="image"; filename="textimage.webp"
-Content-Type: image/webp
-
-< ../../item/textimage.webp
---imageBoundary--
-
-### 23. 이미 이미지가 있는 분실물에 두 번째 이미지 첨부 → 400
-POST http://localhost:8080/api/v1/items/L-0116/image
-Content-Type: multipart/form-data; boundary=imageBoundary
-
---imageBoundary
-Content-Disposition: form-data; name="image"; filename="textimage.webp"
-Content-Type: image/webp
-
-< ../../item/textimage.webp
---imageBoundary--
-
-### 24. 다른 시민의 분실물에 이미지 첨부 시도 → 403
-### 실행 전 확인: application.yaml의 app.dev-user-id를 시민 계정 2로 변경한다.
-POST http://localhost:8080/api/v1/items/L-0116/image
-Content-Type: multipart/form-data; boundary=imageBoundary
-
---imageBoundary
-Content-Disposition: form-data; name="image"; filename="textimage.webp"
-Content-Type: image/webp
-
-< ../../item/textimage.webp
---imageBoundary--
