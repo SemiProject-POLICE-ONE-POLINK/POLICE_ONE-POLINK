@@ -11,6 +11,7 @@ import com.polink.item.repository.ItemRepository;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -20,7 +21,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 /*
  * 분실물과 습득물의 후보 매칭을 처리하는 Service다.
- *
  * 실제 후보 물품 조회와 권한 검증은 이 Service가 담당한다.
  * 후보의 유사도 분석과 매칭 사유 생성은 ItemMatchAiClient 구현체에 맡긴다.
  */
@@ -39,8 +39,13 @@ public class ItemMatchService {
     private static final int MAX_MATCH_COUNT = 10;
 
     /*
+     * 유사도가 낮은 후보를 응답에서 제외하는 최소 점수다.
+     * 카테고리 일치 점수인 50점 이상인 후보만 사용자에게 보여준다.
+     */
+    private static final int MIN_MATCH_SCORE = 50;
+
+    /*
      * 로그인한 시민의 분실물을 기준으로 습득물 후보를 조회한다.
-     *
      * @param currentUserId JWT subject에서 꺼낸 로그인 시민의 회원 번호
      * @param lostItemId 매칭 기준이 되는 분실물 번호
      * @return 매칭 근거가 포함된 습득물 후보 목록
@@ -104,6 +109,16 @@ public class ItemMatchService {
                 .map(Item::getItemId)
                 .collect(Collectors.toSet());
 
+        /*
+         * AI 후보 번호로 실제 습득물 상세 정보를 빠르게 찾기 위한 Map이다.
+         * 앞선 allowedFoundItemIds 검증으로 존재하지 않는 번호는 이미 제외된다.
+         */
+        Map<String, Item> foundItemsById = foundItems.stream()
+                .collect(Collectors.toMap(
+                        Item::getItemId,
+                        foundItem -> foundItem
+                ));
+
         // 같은 습득물 번호가 여러 번 반환되는 것을 막기 위한 집합이다.
         Set<String> returnedFoundItemIds = new HashSet<>();
 
@@ -119,6 +134,10 @@ public class ItemMatchService {
                                 && candidate.reason() != null
                                 && !candidate.reason().isBlank()
 
+                                // 최소 기준 미달 또는 범위를 벗어난 AI 점수는 제외한다.
+                                && candidate.score() >= MIN_MATCH_SCORE
+                                && candidate.score() <= 100
+
                                 // 서버가 조회한 실제 습득물 후보만 반환하도록 검증한다.
                                 && allowedFoundItemIds.contains(
                                 candidate.foundItemId()
@@ -129,11 +148,28 @@ public class ItemMatchService {
                                 candidate.foundItemId()
                         )
                 )
-                // 기존 API 응답 형식은 유지해 프론트엔드 영향이 없게 한다.
-                .map(candidate -> new ItemMatchResponse(
-                        candidate.foundItemId(),
-                        candidate.reason()
-                ))
+                .map(candidate -> {
+                    /*
+                     * 앞에서 실제 DB 후보만 통과시켰으므로,
+                     * 후보 번호로 습득물 상세 정보를 안전하게 조회할 수 있다.
+                     */
+                    Item foundItem = foundItemsById.get(candidate.foundItemId());
+
+                    return new ItemMatchResponse(
+                            foundItem.getItemId(),
+                            foundItem.getItemName(),
+                            foundItem.getCategory(),
+                            foundItem.getDescription(),
+                            foundItem.getLocation(),
+                            foundItem.getOccurredAt().toLocalDate(),
+                            foundItem.getStatus(),
+                            foundItem.getImagePath(),
+
+                            // AI가 만든 매칭 근거와 검증된 점수를 함께 반환한다.
+                            candidate.reason(),
+                            candidate.score()
+                    );
+                })
                 // 화면에 너무 많은 후보가 표시되지 않도록 최대 10건만 반환한다.
                 .limit(MAX_MATCH_COUNT)
                 .toList();

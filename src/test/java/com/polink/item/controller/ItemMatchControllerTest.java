@@ -13,6 +13,8 @@ import com.polink.item.dto.ItemMatchListResponse;
 import com.polink.item.dto.ItemMatchRequest;
 import com.polink.item.dto.ItemMatchResponse;
 import com.polink.item.service.ItemMatchService;
+import com.polink.item.entity.ItemStatus;
+import java.time.LocalDate;
 import com.polink.user.entity.UserRole;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,7 @@ import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
+import org.jspecify.annotations.NonNull;
 
 /**
  * AI 물품 매칭 Controller의 JWT 인증·시민 권한·Service 연결을 검사한다.
@@ -72,7 +75,15 @@ class ItemMatchControllerTest {
                 List.of(
                         new ItemMatchResponse(
                                 "F-0001",
-                                "카테고리가 일치합니다. 장소 정보가 유사합니다."
+                                "테스트 파란 우산",
+                                "CLOTHING_GOODS",
+                                "청솔역에서 발견한 파란 우산입니다.",
+                                "청솔역 대합실",
+                                LocalDate.of(2026, 10, 20),
+                                ItemStatus.STORED,
+                                "/uploads/items/F-0001.png",
+                                "카테고리가 일치합니다. 장소 정보가 유사합니다.",
+                                70
                         )
                 )
         );
@@ -150,16 +161,16 @@ class ItemMatchControllerTest {
                 // @AuthenticationPrincipal Jwt 파라미터를 테스트에서 직접 처리한다.
                 .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
                     @Override
-                    public boolean supportsParameter(MethodParameter parameter) {
+                    public boolean supportsParameter(@NonNull MethodParameter parameter) {
                         return parameter.hasParameterAnnotation(AuthenticationPrincipal.class)
                                 && parameter.getParameterType().equals(Jwt.class);
                     }
 
                     @Override
                     public Object resolveArgument(
-                            MethodParameter parameter,
+                            @NonNull MethodParameter parameter,
                             ModelAndViewContainer mavContainer,
-                            NativeWebRequest webRequest,
+                            @NonNull NativeWebRequest webRequest,
                             WebDataBinderFactory binderFactory
                     ) {
                         // Authorization 헤더가 없으면 로그인하지 않은 요청이므로 null을 전달한다.

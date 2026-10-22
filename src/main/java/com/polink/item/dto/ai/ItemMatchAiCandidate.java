@@ -12,6 +12,13 @@ public record ItemMatchAiCandidate(
 
         // 분실물과 습득물이 유사하다고 판단한 설명이다.
         // 소유권 확정 문구가 아닌 참고용 안내 문구만 허용한다.
-        String reason
+        String reason,
+
+        /*
+         * 분실물과 습득물의 유사도를 0~100점 범위로 나타낸다.
+         * Service는 이 점수로 최소 기준 미달 후보를 제외하고,
+         * 프론트엔드는 높은 점수 순으로 후보를 보여줄 수 있다.
+         */
+        int score
 ) {
 }

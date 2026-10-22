@@ -91,15 +91,20 @@ public class OpenAiItemMatchAiClient implements ItemMatchAiClient {
                             제공된 분실물 정보와 습득물 후보 목록만 사용하세요.
                             입력에 없는 물품 번호를 새로 만들지 마세요.
                             실제 소유자라고 단정하거나 반환 완료를 지시하지 마세요.
-                            물품명, 카테고리, 설명, 장소, 발생 시각이 유사한 후보만 선택하세요.
 
-                            반드시 아래 json 형식으로만 답하세요.
+                            후보별 유사도 점수는 0점부터 100점까지의 정수로 계산하세요.
+                            카테고리 일치는 50점, 물품명 유사는 30점,
+                            장소 유사는 20점 기준으로 판단하세요.
+                            유사도 50점 이상인 후보만 반환하세요.
+
+                            반드시 아래 JSON 형식으로만 답하세요.
 
                             {
                               "matches": [
                                 {
                                   "foundItemId": "F-0001",
-                                  "reason": "물품 특징과 장소 정보가 유사합니다."
+                                  "reason": "카테고리와 장소 정보가 유사합니다.",
+                                  "score": 70
                                 }
                               ]
                             }
@@ -131,6 +136,11 @@ public class OpenAiItemMatchAiClient implements ItemMatchAiClient {
                     .body(request)
                     .retrieve()
                     .body(Map.class);
+
+            // HTTP 응답 본문이 비어 있으면 이후 처리하지 않고 규칙 기반 매칭으로 대체한다.
+            if (response == null) {
+                throw new IllegalArgumentException("OpenAI 응답 본문이 없습니다.");
+            }
 
             logUsage(response);
 
