@@ -38,6 +38,9 @@ dependencies {
     // REST API Controller를 만들고 Postman 요청을 받기 위해 사용한다.
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 
+    // API 문서 자동 생성 및 Swagger UI
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
+
     // getter, setter, 생성자 같은 반복 코드를 자동 생성한다.
     compileOnly 'org.projectlombok:lombok'
 
