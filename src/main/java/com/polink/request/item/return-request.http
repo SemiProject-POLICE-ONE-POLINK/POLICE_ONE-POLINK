@@ -1,6 +1,10 @@
 @baseUrl = http://localhost:8080
 
-### 0-1. 시민 로그인 → accessToken을 citizenToken에 자동 저장
+### =========================================================
+### 0. 로그인
+### =========================================================
+
+### 0-1. 시민 로그인 → citizenToken 자동 저장
 POST {{baseUrl}}/api/v1/auth/login
 Content-Type: application/json
 
@@ -11,7 +15,7 @@ Content-Type: application/json
 
 > {% client.global.set("citizenToken", response.body.accessToken); %}
 
-### 0-2. 경찰 로그인 → accessToken을 policeToken에 자동 저장
+### 0-2. 경찰 로그인 → policeToken 자동 저장
 POST {{baseUrl}}/api/v1/auth/login
 Content-Type: application/json
 
@@ -22,7 +26,13 @@ Content-Type: application/json
 
 > {% client.global.set("policeToken", response.body.accessToken); %}
 
-### RET-001 시민: 습득물 반환 신청 → 201
+### =========================================================
+### 1. 시민 반환 신청 및 내 신청 조회
+### 실행 순서: 0-1 → RET-001 → RET-002 ~ RET-005
+### =========================================================
+
+### RET-001. 시민: 습득물 반환 신청 → 201
+### 성공하면 생성된 requestId를 createdReturnRequestId에 자동 저장한다.
 POST {{baseUrl}}/api/v1/return-requests
 Authorization: Bearer {{citizenToken}}
 Content-Type: application/json
@@ -33,40 +43,72 @@ Content-Type: application/json
   "requestReason": "네잎클로버 모양 머리핀을 분실했습니다. 습득물의 특징과 일치합니다."
 }
 
-### RET-002 시민: 내 반환 신청 조회 → 200
-# API 명세에 맞춰 /me가 아니라 /my를 호출한다.
+> {% client.global.set("createdReturnRequestId", response.body.requestId); %}
+
+### RET-002. 시민: 내 전체 반환 신청 목록 조회 → 200
+### 응답: items, page, size, totalElements, totalPages, first, last
 GET {{baseUrl}}/api/v1/return-requests/my?page=0&size=10
 Authorization: Bearer {{citizenToken}}
 
-### RET-003 경찰: 반환 신청 목록 조회 → 200
+### RET-003. 시민: PENDING 상태의 내 반환 신청 목록 조회 → 200
+### status: PENDING, APPROVED, REJECTED, COMPLETED
+GET {{baseUrl}}/api/v1/return-requests/my?status=PENDING&page=0&size=10
+Authorization: Bearer {{citizenToken}}
+
+### RET-004. 시민: 작은 페이지 크기로 내 목록 조회 → 200
+### 프론트 페이지 UI용 totalPages, first, last 값을 확인한다.
+GET {{baseUrl}}/api/v1/return-requests/my?page=0&size=2
+Authorization: Bearer {{citizenToken}}
+
+### RET-005. 시민: 방금 생성한 내 반환 신청 상세 조회 → 200
+GET {{baseUrl}}/api/v1/return-requests/my/{{createdReturnRequestId}}
+Authorization: Bearer {{citizenToken}}
+
+### =========================================================
+### 2. 경찰 반환 신청 처리
+### 실행 순서: 0-2 → RET-006 → RET-007 → RET-008 → RET-009
+### =========================================================
+
+### RET-006. 경찰: 대기 중인 반환 신청 목록 조회 → 200
 GET {{baseUrl}}/api/v1/return-requests?status=PENDING&page=0&size=10
 Authorization: Bearer {{policeToken}}
 
-### RET-005 경찰: 반환 신청 승인 → 200
-GET {{baseUrl}}/api/v1/return-requests/5
+### RET-007. 경찰: 방금 생성한 반환 신청 승인 → 200
+PATCH {{baseUrl}}/api/v1/return-requests/{{createdReturnRequestId}}/approve
 Authorization: Bearer {{policeToken}}
 
-### RET-006 경찰: 반환 신청 반려 → 200
-# 성공 시 requestId, status(APPROVED), processedAt을 JSON으로 반환한다.
-PATCH {{baseUrl}}/api/v1/return-requests/9/approve
+### RET-008. 경찰: 승인된 반환 신청의 물품 인계 완료 → 200
+### 응답: requestId, completedAt
+PATCH {{baseUrl}}/api/v1/return-requests/{{createdReturnRequestId}}/complete
 Authorization: Bearer {{policeToken}}
 
-### RET-006 경찰: 반환 신청 반려 → 204
-# 성공 시 requestId, status(REJECTED), processedAt을 JSON으로 반환한다.
-PATCH {{baseUrl}}/api/v1/return-requests/5/reject
+### RET-009. 경찰: 완료된 반환 신청 상세 조회 → 200
+### status=COMPLETED, processedBy, completedBy, completedAt을 확인한다.
+GET {{baseUrl}}/api/v1/return-requests/{{createdReturnRequestId}}
+Authorization: Bearer {{policeToken}}
+
+### =========================================================
+### 3. 반려 처리
+### RET-010 실행 전, 별도로 새 PENDING 반환 신청을 하나 만든 뒤
+### 아래 rejectRequestId 값을 해당 신청 번호로 바꾼다.
+### =========================================================
+
+@rejectRequestId = 0
+
+### RET-010. 경찰: 대기 중인 반환 신청 반려 → 200
+PATCH {{baseUrl}}/api/v1/return-requests/{{rejectRequestId}}/reject
 Authorization: Bearer {{policeToken}}
 Content-Type: application/json
 
 {
-  "rejectReason": "신청자 정보가 일치하지 않습니다."
+  "rejectReason": "신청한 물품 정보가 실제 습득물 정보와 일치하지 않습니다."
 }
 
-### RET-007 경찰: 물품 인계 완료 → 200
-# 성공 시 requestId와 실제 반환 완료 시각(returnedAt)을 JSON으로 반환한다.
-PATCH {{baseUrl}}/api/v1/return-requests/9/complete
-Authorization: Bearer {{policeToken}}
+### =========================================================
+### 4. 인증·권한 오류 확인
+### =========================================================
 
-### RET-008 미로그인 반환 신청 → 401
+### RET-011. 미로그인 반환 신청 → 401
 POST {{baseUrl}}/api/v1/return-requests
 Content-Type: application/json
 
@@ -76,7 +118,7 @@ Content-Type: application/json
   "requestReason": "로그인 없이 신청하는 요청입니다."
 }
 
-### RET-009 경찰이 시민 반환 신청 시도 → 403
+### RET-012. 경찰이 시민 반환 신청 시도 → 403
 POST {{baseUrl}}/api/v1/return-requests
 Authorization: Bearer {{policeToken}}
 Content-Type: application/json
@@ -87,14 +129,6 @@ Content-Type: application/json
   "requestReason": "경찰 계정으로 신청하는 요청입니다."
 }
 
-### 완료 처리 테스트 - 12번 승인
-PATCH {{baseUrl}}/api/v1/return-requests/12/approve
-Authorization: Bearer {{policeToken}}
-
-### 완료 처리 테스트 - 12번 반환 완료
-PATCH {{baseUrl}}/api/v1/return-requests/12/complete
-Authorization: Bearer {{policeToken}}
-
-### 완료 처리 테스트 - 12번 상세 확인
-GET {{baseUrl}}/api/v1/return-requests/12
-Authorization: Bearer {{policeToken}}
+### RET-013. 시민이 경찰용 전체 반환 신청 목록 조회 시도 → 403
+GET {{baseUrl}}/api/v1/return-requests?status=PENDING&page=0&size=10
+Authorization: Bearer {{citizenToken}}

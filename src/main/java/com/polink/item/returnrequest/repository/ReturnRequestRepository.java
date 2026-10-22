@@ -33,6 +33,16 @@ public interface ReturnRequestRepository
     );
 
     /*
+     * 특정 시민이 신청한 반환 내역을 상태별로 최신 신청순 조회한다.
+     * 예: PENDING, APPROVED, REJECTED, COMPLETED 상태만 골라서 조회할 때 사용한다.
+     */
+    Page<ReturnRequest> findByRequesterIdAndStatusOrderByCreatedAtDesc(
+            Integer requesterId,
+            ReturnRequestStatus status,
+            Pageable pageable
+    );
+
+    /*
      * 경찰관이 반환 신청을 상태와 검색어로 조회한다.
      * status와 keyword가 null이면 전체 반환 신청을 최신순으로 조회한다.
      * keyword는 분실물 번호, 습득물 번호, 신청 사유에서 검색한다.

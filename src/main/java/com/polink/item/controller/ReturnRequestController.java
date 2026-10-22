@@ -70,13 +70,18 @@ public class ReturnRequestController {
     }
 
     /*
-     * GET /api/v1/return-requests/my?page=0&size=10
-     * 로그인한 시민이 본인이 신청한 반환 신청 목록만 조회한다.
-     * 명세의 경로가 /my이므로 기존 /me 경로를 /my로 통일한다.
+     * GET /api/v1/return-requests/my?status=PENDING&page=0&size=10
+     * 로그인한 시민이 본인의 반환 신청 목록만 조회한다.
+     * status를 전달하면 해당 상태의 신청만 조회한다.
      */
     @GetMapping("/my")
     public ResponseEntity<MyReturnRequestListResponse> getMyReturnRequests(
             @AuthenticationPrincipal Jwt jwt,
+
+            // 선택한 상태의 본인 반환 신청만 필터링한다.
+            // 예: PENDING, APPROVED, REJECTED, COMPLETED
+            @RequestParam(required = false) ReturnRequestStatus status,
+
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
@@ -87,7 +92,12 @@ public class ReturnRequestController {
         requireCitizen(jwt);
 
         return ResponseEntity.ok(
-                returnRequestService.getMyReturnRequests(currentUserId, page, size)
+                returnRequestService.getMyReturnRequests(
+                        currentUserId,
+                        status,
+                        page,
+                        size
+                )
         );
     }
 
@@ -132,7 +142,8 @@ public class ReturnRequestController {
             // Authorization 헤더에서 인증된 경찰 JWT를 받는다.
             @AuthenticationPrincipal Jwt jwt,
 
-            // PENDING, APPROVED, REJECTED, COMPLETED 상태로 필터링할 수 있다.
+            // 선택한 상태의 본인 반환 신청만 필터링한다.
+            // 예: PENDING, APPROVED, REJECTED, COMPLETED
             @RequestParam(required = false) ReturnRequestStatus status,
 
             // 분실물 번호, 습득물 번호, 신청 사유로 검색할 수 있다.

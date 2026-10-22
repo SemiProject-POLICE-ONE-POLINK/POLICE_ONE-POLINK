@@ -26,6 +26,8 @@ import org.springframework.web.server.ResponseStatusException;
 import com.polink.item.returnrequest.dto.ReturnRequestCompleteResponse;
 import java.time.LocalDateTime;
 import com.polink.item.returnrequest.dto.ReturnRequestProcessResponse;
+import com.polink.item.returnrequest.dto.MyReturnRequestListResponse;
+import java.util.List;
 
 @ExtendWith(MockitoExtension.class)
 class ReturnRequestControllerTest {
@@ -256,5 +258,53 @@ class ReturnRequestControllerTest {
 
         // 권한 검증에서 막혔으므로 Service는 호출되면 안 된다.
         verifyNoInteractions(returnRequestService);
+    }
+
+    @Test
+    void 시민은_상태별로_내_반환_신청_목록을_조회할_수_있다() {
+        // given: 시민 1번의 로그인 토큰이다.
+        when(jwt.getSubject()).thenReturn("1");
+        when(jwt.getClaimAsString("role")).thenReturn(UserRole.CITIZEN.name());
+
+        // Service가 프론트 페이지 UI용 메타데이터를 포함한 빈 목록을 반환한다고 가정한다.
+        MyReturnRequestListResponse serviceResponse =
+                new MyReturnRequestListResponse(
+                        List.of(),
+                        0,
+                        10,
+                        0,
+                        0,
+                        true,
+                        true
+                );
+
+        // 시민 1번이 PENDING 상태로 필터링해 조회한 결과를 mock으로 준비한다.
+        when(returnRequestService.getMyReturnRequests(
+                1,
+                ReturnRequestStatus.PENDING,
+                0,
+                10
+        )).thenReturn(serviceResponse);
+
+        // when: 시민이 PENDING 상태의 본인 반환 신청 목록을 조회한다.
+        ResponseEntity<MyReturnRequestListResponse> result =
+                returnRequestController.getMyReturnRequests(
+                        jwt,
+                        ReturnRequestStatus.PENDING,
+                        0,
+                        10
+                );
+
+        // then: 조회 성공 시 200 OK와 페이지 메타데이터를 반환해야 한다.
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertEquals(0, requireNonNull(result.getBody()).page());
+
+        // Controller가 로그인 사용자 ID와 상태 필터를 Service에 정확히 전달해야 한다.
+        verify(returnRequestService).getMyReturnRequests(
+                1,
+                ReturnRequestStatus.PENDING,
+                0,
+                10
+        );
     }
 }

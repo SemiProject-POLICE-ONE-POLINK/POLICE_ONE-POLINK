@@ -384,13 +384,21 @@ class ReturnRequestServiceTest {
                 .thenReturn(Optional.of(foundItem));
 
         MyReturnRequestListResponse response =
-                returnRequestService.getMyReturnRequests(1, 0, 10);
+                returnRequestService.getMyReturnRequests(1, null, 0, 10);
 
         assertEquals(1, response.items().size());
         assertEquals(
                 ReturnRequestStatus.PENDING,
                 response.items().get(0).status()
         );
+
+        // 목록뿐 아니라 프론트 페이지 UI용 메타데이터도 반환해야 한다.
+        assertEquals(0, response.page());
+        assertEquals(10, response.size());
+        assertEquals(1, response.totalElements());
+        assertEquals(1, response.totalPages());
+        assertTrue(response.first());
+        assertTrue(response.last());
 
         // 로그인한 시민 번호와 페이지 조건이 Repository에 전달됐는지 확인한다.
         verify(returnRequestRepository)
@@ -416,9 +424,78 @@ class ReturnRequestServiceTest {
         ));
 
         MyReturnRequestListResponse response =
-                returnRequestService.getMyReturnRequests(1, 0, 10);
+                returnRequestService.getMyReturnRequests(1, null, 0, 10);
 
         assertTrue(response.items().isEmpty());
+    }
+
+    /*
+     * 로그인한 시민이 상태값으로 본인 반환 신청 목록을 필터링할 수 있는지 확인한다.
+     */
+    @Test
+    @DisplayName("내 반환 신청 목록을 상태별로 조회한다")
+    void getMyReturnRequestsByStatus() {
+        // 시민 1번이 신청한 대기 상태 반환 신청을 준비한다.
+        ReturnRequest returnRequest = new ReturnRequest(
+                1,
+                "L-0001",
+                "F-0001",
+                "상태 필터 테스트용 반환 신청입니다."
+        );
+
+        // 목록 응답에 함께 표시할 연결 물품을 준비한다.
+        Item lostItem = item(
+                "L-0001",
+                1,
+                ItemType.LOST,
+                ItemStatus.LOST
+        );
+        Item foundItem = item(
+                "F-0001",
+                2,
+                ItemType.FOUND,
+                ItemStatus.STORED
+        );
+
+        // PENDING 상태로 필터링했을 때 반환할 페이지 결과를 mock으로 준비한다.
+        when(returnRequestRepository.findByRequesterIdAndStatusOrderByCreatedAtDesc(
+                eq(1),
+                eq(ReturnRequestStatus.PENDING),
+                any()
+        )).thenReturn(new PageImpl<>(
+                List.of(returnRequest),
+                PageRequest.of(0, 10),
+                1
+        ));
+
+        when(itemRepository.findById("L-0001"))
+                .thenReturn(Optional.of(lostItem));
+        when(itemRepository.findById("F-0001"))
+                .thenReturn(Optional.of(foundItem));
+
+        // 시민 1번의 PENDING 상태 신청만 조회한다.
+        MyReturnRequestListResponse response =
+                returnRequestService.getMyReturnRequests(
+                        1,
+                        ReturnRequestStatus.PENDING,
+                        0,
+                        10
+                );
+
+        assertEquals(1, response.items().size());
+        assertEquals(
+                ReturnRequestStatus.PENDING,
+                response.items().get(0).status()
+        );
+        assertEquals(1, response.totalElements());
+
+        // 상태 필터가 있는 경우 새 상태별 조회 Repository 메서드를 사용해야 한다.
+        verify(returnRequestRepository)
+                .findByRequesterIdAndStatusOrderByCreatedAtDesc(
+                        eq(1),
+                        eq(ReturnRequestStatus.PENDING),
+                        eq(PageRequest.of(0, 10))
+                );
     }
 
     /*
@@ -429,22 +506,22 @@ class ReturnRequestServiceTest {
     void rejectInvalidMyReturnRequestConditions() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> returnRequestService.getMyReturnRequests(null, 0, 10)
+                () -> returnRequestService.getMyReturnRequests(null, null, 0, 10)
         );
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> returnRequestService.getMyReturnRequests(1, -1, 10)
+                () -> returnRequestService.getMyReturnRequests(1, null, -1, 10)
         );
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> returnRequestService.getMyReturnRequests(1, 0, 0)
+                () -> returnRequestService.getMyReturnRequests(1, null, 0, 0)
         );
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> returnRequestService.getMyReturnRequests(1, 0, 101)
+                () -> returnRequestService.getMyReturnRequests(1, null, 0, 101)
         );
 
         // 잘못된 조건이면 반환 신청 Repository를 조회하지 않아야 한다.
@@ -452,7 +529,7 @@ class ReturnRequestServiceTest {
     }
 
 
-    /**
+    /*
      * 경찰관이 상태와 검색어로 반환 신청 목록을 조회하는지 확인한다.
      */
     @Test
@@ -506,7 +583,10 @@ class ReturnRequestServiceTest {
         assertEquals(
                 ReturnRequestStatus.PENDING,
                 response.items().get(0).status()
+
         );
+
+
 
         verify(returnRequestRepository)
                 .findReturnRequestsByConditions(
@@ -516,7 +596,7 @@ class ReturnRequestServiceTest {
                 );
     }
 
-    /**
+    /*
      * 공백 검색어는 검색 조건이 없는 것과 같으므로 null로 전달하는지 확인한다.
      */
     @Test
