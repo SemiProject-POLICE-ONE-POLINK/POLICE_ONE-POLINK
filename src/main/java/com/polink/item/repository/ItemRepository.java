@@ -96,9 +96,6 @@ public interface ItemRepository extends JpaRepository<Item, String> {
             ItemStatus status
     );
 
-    long countByItemType(ItemType itemType);
-
-    long countByStatus(ItemStatus status);
     @Query("""
         select new com.polink.item.dto.ItemCategoryCountResponse(
             item.category,
@@ -109,4 +106,21 @@ public interface ItemRepository extends JpaRepository<Item, String> {
         order by count(item) desc, item.category asc
         """)
     List<ItemCategoryCountResponse> countItemsByCategory();
+
+    /*
+     * 통계 조회 기간에 포함되는 물품을 모두 조회한다.
+     * startAt 또는 endAtExclusive가 null이면 해당 날짜 조건은 적용하지 않는다.
+     * endAtExclusive는 종료일 다음 날 00:00이므로 종료일 하루 전체를 포함할 수 있다.
+     */
+    @Query("""
+        select item
+        from Item item
+        where (:startAt is null or item.createdAt >= :startAt)
+          and (:endAtExclusive is null or item.createdAt < :endAtExclusive)
+        order by item.createdAt asc, item.itemId asc
+        """)
+    List<Item> findStatisticsItems(
+            @Param("startAt") LocalDateTime startAt,
+            @Param("endAtExclusive") LocalDateTime endAtExclusive
+    );
 }

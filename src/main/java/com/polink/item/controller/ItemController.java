@@ -302,12 +302,24 @@ public class ItemController {
 
     /*
      * GET /api/v1/items/statistics
-     * 경찰과 관리자 계정이 전체 분실물·습득물 현황 통계를 조회한다.
+     * 예: /api/v1/items/statistics?startDate=2026-10-01&endDate=2026-10-31
+     *
+     * 경찰과 관리자 계정이 등록일 기준의 분실물·습득물 현황 통계를 조회한다.
+     * 날짜 조건을 생략하면 전체 기간 통계를 반환한다.
      */
-
     @GetMapping("/statistics")
     public ResponseEntity<ItemStatisticsResponse> getItemStatistics(
-            @AuthenticationPrincipal Jwt jwt
+            @AuthenticationPrincipal Jwt jwt,
+
+            // yyyy-MM-dd 형식의 통계 시작일이다. 생략하면 전체 기간을 조회한다.
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate startDate,
+
+            // yyyy-MM-dd 형식의 통계 종료일이다. 생략하면 전체 기간을 조회한다.
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate endDate
     ) {
         // JWT가 유효한지 확인하고, 로그인 사용자의 역할을 가져온다.
         UserRole currentUserRole = requireLoggedInUserRole(jwt);
@@ -324,6 +336,8 @@ public class ItemController {
             );
         }
 
-        return ResponseEntity.ok(itemService.getItemStatistics());
+        return ResponseEntity.ok(
+                itemService.getItemStatistics(startDate, endDate)
+        );
     }
 }

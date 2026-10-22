@@ -198,8 +198,19 @@ Content-Type: application/json
 }
 
 ###
-# ITEM-016. 경찰이 전체 물품 통계 조회
+# STAT-001. 경찰이 전체 기간 물품 통계 조회
+# totalCount, 유형·상태·카테고리·일별·월별 통계를 확인한다.
 GET {{baseUrl}}/api/v1/items/statistics
+Authorization: Bearer {{policeToken}}
+
+###
+# STAT-002. 경찰이 특정 등록일 기간의 물품 통계 조회
+GET {{baseUrl}}/api/v1/items/statistics?startDate=2026-10-01&endDate=2026-10-31
+Authorization: Bearer {{policeToken}}
+
+###
+# STAT-003. 시작일이 종료일보다 늦은 요청: 400 확인
+GET {{baseUrl}}/api/v1/items/statistics?startDate=2026-10-31&endDate=2026-10-01
 Authorization: Bearer {{policeToken}}
 
 ###

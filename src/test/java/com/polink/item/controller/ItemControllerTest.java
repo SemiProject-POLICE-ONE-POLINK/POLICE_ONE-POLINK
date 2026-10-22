@@ -401,102 +401,116 @@ class ItemControllerTest {
 
     @Test
     void policeGetsItemStatistics() {
-
         // 경찰관(POLICE) 권한을 가진 사용자 정보 설정
         given(jwt.getSubject()).willReturn("6");
         given(jwt.getClaimAsString("role"))
                 .willReturn(UserRole.POLICE.name());
 
-        // 물품 통계 조회 시 반환할 테스트 데이터 생성
+        LocalDate startDate = LocalDate.of(2026, 10, 1);
+        LocalDate endDate = LocalDate.of(2026, 10, 31);
+
+        // 기간 통계 조회 시 반환할 테스트 데이터를 준비한다.
         ItemStatisticsResponse response = new ItemStatisticsResponse(
-                5, // 전체 물품 수
+                startDate,
+                endDate,
+                5L,
+                2L,
+                3L,
+                0L,
+                1L,
                 Map.of(
-                        // 물품 등록 유형별 개수
-                        ItemType.LOST, 2L,   // 분실물 2개
-                        ItemType.FOUND, 3L   // 습득물 3개
+                        ItemType.LOST, 2L,
+                        ItemType.FOUND, 3L
                 ),
                 Map.of(
-                        // 물품 상태별 개수
-                        ItemStatus.LOST, 2L,             // 분실 상태 2개
-                        ItemStatus.STORED, 2L,           // 보관 중 2개
-                        ItemStatus.HANDOVER_PENDING, 0L, // 인계 대기 0개
-                        ItemStatus.RETURNED, 1L          // 반환 완료 1개
+                        ItemStatus.LOST, 2L,
+                        ItemStatus.STORED, 2L,
+                        ItemStatus.HANDOVER_PENDING, 0L,
+                        ItemStatus.RETURNED, 1L
                 ),
-                // 물품 카테고리별 개수
-                List.of(new ItemCategoryCountResponse("ELECTRONICS", 2L))
+                List.of(new ItemCategoryCountResponse("ELECTRONICS", 2L)),
+                List.of(),
+                List.of()
         );
 
-        // 물품 통계 조회 서비스 호출 시 테스트 데이터가 반환되도록 설정
-        given(itemService.getItemStatistics()).willReturn(response);
+        // 요청한 기간의 통계를 Service가 반환하도록 설정한다.
+        given(itemService.getItemStatistics(startDate, endDate))
+                .willReturn(response);
 
-        // 경찰관 권한으로 물품 통계 조회 요청 실행
-        ResponseEntity<ItemStatisticsResponse> result = new ItemController(itemService)
-                .getItemStatistics(jwt);
+        ResponseEntity<ItemStatisticsResponse> result =
+                new ItemController(itemService).getItemStatistics(
+                        jwt,
+                        startDate,
+                        endDate
+                );
 
-        // HTTP 응답 상태 코드가 200(OK)인지 확인
+        // 경찰관 요청은 200 OK이고, 기간 통계가 반환되어야 한다.
         assertEquals(HttpStatus.OK, result.getStatusCode());
-
-        // 응답 데이터의 전체 물품 수가 5개인지 확인
         assertEquals(5L, requireNonNull(result.getBody()).totalCount());
+        assertEquals(startDate, result.getBody().startDate());
+        assertEquals(endDate, result.getBody().endDate());
 
-        // 물품 통계 조회 서비스가 실제로 호출되었는지 검증
-        verify(itemService).getItemStatistics();
+        // Controller가 같은 기간을 Service로 정확히 전달해야 한다.
+        verify(itemService).getItemStatistics(startDate, endDate);
     }
 
     @Test
     void adminGetsItemStatistics() {
-        // 관리자(ADMIN) 역할을 가진 로그인 사용자라고 가정한다.
+        // 관리자(ADMIN)도 통계 API를 조회할 수 있다.
         given(jwt.getSubject()).willReturn("7");
         given(jwt.getClaimAsString("role"))
                 .willReturn(UserRole.ADMIN.name());
 
-        /*
-         * 관리자 권한 테스트에서는 통계 계산 자체가 아니라
-         * “관리자도 통계 API에 접근할 수 있는가”만 확인한다.
-         * 따라서 빈 통계 결과를 가짜 응답으로 준비한다.
-         */
+        // 날짜 조건 없이 조회한 빈 통계 응답이다.
         ItemStatisticsResponse response = new ItemStatisticsResponse(
-                0,
+                null,
+                null,
+                0L,
+                0L,
+                0L,
+                0L,
+                0L,
                 Map.of(),
                 Map.of(),
+                List.of(),
+                List.of(),
                 List.of()
         );
 
-        // Controller가 Service를 호출하면 위 가짜 통계를 반환하도록 설정한다.
-        given(itemService.getItemStatistics()).willReturn(response);
+        given(itemService.getItemStatistics(null, null))
+                .willReturn(response);
 
-        // 관리자 계정으로 통계 조회를 실행한다.
-        ResponseEntity<ItemStatisticsResponse> result = new ItemController(itemService)
-                .getItemStatistics(jwt);
+        ResponseEntity<ItemStatisticsResponse> result =
+                new ItemController(itemService).getItemStatistics(
+                        jwt,
+                        null,
+                        null
+                );
 
-        // 관리자는 200 OK를 받아야 한다.
         assertEquals(HttpStatus.OK, result.getStatusCode());
-
-        // Service의 통계 조회 메서드가 실제로 한 번 호출되어야 한다.
-        verify(itemService).getItemStatistics();
+        verify(itemService).getItemStatistics(null, null);
     }
 
     @Test
     void citizenCannotGetItemStatistics() {
-
-        // 일반 시민(CITIZEN) 권한을 가진 사용자 정보 설정
+        // 일반 시민은 통계 조회 권한이 없다.
         given(jwt.getSubject()).willReturn("1");
         given(jwt.getClaimAsString("role"))
                 .willReturn(UserRole.CITIZEN.name());
 
-        // 일반 시민이 물품 통계 조회를 요청하면
-        // 접근 권한 예외(ResponseStatusException)가 발생하는지 검증
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
-                () -> new ItemController(itemService).getItemStatistics(jwt)
+                () -> new ItemController(itemService).getItemStatistics(
+                        jwt,
+                        null,
+                        null
+                )
         );
 
-        // 발생한 예외의 HTTP 상태 코드가 403(FORBIDDEN)인지 확인
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
 
-        // 권한이 없는 사용자의 요청이므로
-        // 실제 물품 통계 조회 서비스가 호출되지 않았는지 검증
-        verify(itemService, never()).getItemStatistics();
+        // 권한 검사에서 중단되므로 Service는 호출되면 안 된다.
+        verify(itemService, never()).getItemStatistics(null, null);
     }
 
 }
