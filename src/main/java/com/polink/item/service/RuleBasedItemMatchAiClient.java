@@ -87,8 +87,14 @@ public class RuleBasedItemMatchAiClient implements ItemMatchAiClient {
         return new ScoredCandidate(
                 new ItemMatchAiCandidate(
                         foundItem.itemId(),
-                        String.join(" ", reasons)
+                        String.join(" ", reasons),
+
+                        // 카테고리·물품명·장소 비교로 계산한 점수를
+                        // 최종 API 응답까지 전달한다.
+                        score
                 ),
+
+                // 기존 정렬 로직도 같은 점수를 계속 사용한다.
                 score
         );
     }

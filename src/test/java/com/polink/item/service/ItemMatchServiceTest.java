@@ -1,11 +1,12 @@
 package com.polink.item.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.polink.item.dto.ItemMatchListResponse;
 import com.polink.item.entity.Item;
@@ -23,7 +24,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 /*
- * AI 물품 매칭의 후보 선정·권한 검증 규칙을 검사한다.
+ * AI 물품 매칭의 후보 선정·점수·권한 검증 규칙을 검사한다.
  */
 @ExtendWith(MockitoExtension.class)
 class ItemMatchServiceTest {
@@ -32,8 +33,7 @@ class ItemMatchServiceTest {
     @Mock
     private ItemRepository itemRepository;
 
-    // 기존 규칙 기반 매칭 결과를 그대로 검증하기 위한 실제 구현체다.
-    // 외부 OpenAI API는 테스트에서 호출하지 않는다.
+    // 외부 OpenAI API를 호출하지 않고 규칙 기반 점수를 검증하기 위한 구현체다.
     private final ItemMatchAiClient ruleBasedItemMatchAiClient =
             new RuleBasedItemMatchAiClient();
 
@@ -82,6 +82,17 @@ class ItemMatchServiceTest {
                 result.matches().get(0).reason().contains("카테고리가 일치합니다.")
         );
 
+        // 카테고리(50점)와 장소(20점)가 일치하므로 70점이어야 한다.
+        assertEquals(70, result.matches().get(0).score());
+
+        // 후보 습득물의 기본 정보와 현재 상태도 함께 반환되어야 한다.
+        assertEquals("검은 지갑", result.matches().get(0).foundItemName());
+        assertEquals("WALLET_CARD", result.matches().get(0).foundItemCategory());
+        assertEquals(ItemStatus.STORED, result.matches().get(0).foundItemStatus());
+
+        // 테스트 데이터에는 이미지가 없으므로 이미지 경로는 null이다.
+        assertNull(result.matches().get(0).foundImagePath());
+
         // 보관 중 습득물 후보 조회가 정확한 조건으로 호출됐는지 확인한다.
         verify(itemRepository)
                 .findByItemTypeAndStatusOrderByCreatedAtDescItemIdDesc(
@@ -120,8 +131,7 @@ class ItemMatchServiceTest {
         // 권한 검증을 위해 분실물 정보 조회는 한 번 수행되어야 한다.
         verify(itemRepository).findById("L-0002");
 
-        // 다른 사람 물품임을 확인한 뒤 중단되므로,
-        // 보관 중 습득물 후보 조회는 호출되면 안 된다.
+        // 다른 사람 물품임을 확인한 뒤 중단되므로 후보 조회는 호출되면 안 된다.
         verify(itemRepository, never())
                 .findByItemTypeAndStatusOrderByCreatedAtDescItemIdDesc(
                         ItemType.FOUND,
@@ -132,11 +142,9 @@ class ItemMatchServiceTest {
     // 존재하지 않는 분실물 번호로 매칭하면 404 예외가 발생하는지 검사한다.
     @Test
     void rejectsUnknownLostItem() {
-        // Repository가 요청한 분실물 번호를 찾지 못하도록 설정한다.
         given(itemRepository.findById("L-9999"))
                 .willReturn(java.util.Optional.empty());
 
-        // 존재하지 않는 분실물은 ItemNotFoundException으로 처리되어야 한다.
         assertThrows(
                 ItemNotFoundException.class,
                 () -> new ItemMatchService(
@@ -153,7 +161,7 @@ class ItemMatchServiceTest {
                 );
     }
 
-    // 보관 중인 습득물은 있지만 유사한 후보가 없으면 빈 목록을 반환하는지 검사한다.
+    // 유사점이 전혀 없는 습득물은 후보에서 제외되는지 검사한다.
     @Test
     void returnsEmptyMatchesWhenNoSimilarFoundItemExists() {
         Item lostItem = createItem(
@@ -176,7 +184,6 @@ class ItemMatchServiceTest {
                 "강남역"
         );
 
-        // 분실물은 존재하지만, 조회된 습득물은 모든 매칭 기준이 다르도록 설정한다.
         given(itemRepository.findById("L-0003"))
                 .willReturn(java.util.Optional.of(lostItem));
         given(itemRepository.findByItemTypeAndStatusOrderByCreatedAtDescItemIdDesc(
@@ -189,7 +196,6 @@ class ItemMatchServiceTest {
                 ruleBasedItemMatchAiClient
         ).findMatches(1, "L-0003");
 
-        // 유사점이 없는 습득물은 후보에서 제외되므로 빈 목록이어야 한다.
         assertEquals(0, result.matches().size());
     }
 
@@ -243,6 +249,50 @@ class ItemMatchServiceTest {
         // 70점 후보 F-0005가 50점 후보 F-0004보다 먼저 와야 한다.
         assertEquals("F-0005", result.matches().get(0).foundItemId());
         assertEquals("F-0004", result.matches().get(1).foundItemId());
+
+        // 정렬뿐 아니라 실제 점수도 응답에 포함되어야 한다.
+        assertEquals(70, result.matches().get(0).score());
+        assertEquals(50, result.matches().get(1).score());
+    }
+
+    // 장소만 유사한 20점 후보는 최소 기준 50점에 미달하므로 제외되는지 검사한다.
+    @Test
+    void excludesCandidateBelowMinimumMatchScore() {
+        Item lostItem = createItem(
+                "L-0005",
+                1,
+                ItemType.LOST,
+                ItemStatus.LOST,
+                "검은 카드지갑",
+                "WALLET_CARD",
+                "청솔역"
+        );
+
+        // 장소만 일치하고 카테고리·물품명은 다르므로 20점 후보다.
+        Item lowScoreFoundItem = createItem(
+                "F-0006",
+                2,
+                ItemType.FOUND,
+                ItemStatus.STORED,
+                "파란 우산",
+                "CLOTHING_GOODS",
+                "청솔역 광장"
+        );
+
+        given(itemRepository.findById("L-0005"))
+                .willReturn(java.util.Optional.of(lostItem));
+        given(itemRepository.findByItemTypeAndStatusOrderByCreatedAtDescItemIdDesc(
+                ItemType.FOUND,
+                ItemStatus.STORED
+        )).willReturn(List.of(lowScoreFoundItem));
+
+        ItemMatchListResponse result = new ItemMatchService(
+                itemRepository,
+                ruleBasedItemMatchAiClient
+        ).findMatches(1, "L-0005");
+
+        // 최소 50점에 미달한 후보는 응답 목록에 포함되면 안 된다.
+        assertEquals(0, result.matches().size());
     }
 
     // 테스트용 분실물·습득물 엔티티를 만드는 보조 메서드다.
