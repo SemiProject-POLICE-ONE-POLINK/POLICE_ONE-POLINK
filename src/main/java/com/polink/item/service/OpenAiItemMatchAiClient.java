@@ -20,7 +20,6 @@ import tools.jackson.databind.ObjectMapper;
 
 /*
  * ai-live 프로필에서만 실제 OpenAI Responses API를 호출하는 구현체다.
- *
  * API 오류, 네트워크 오류, 잘못된 AI 응답이 발생하면
  * 기존 규칙 기반 매칭으로 자동 대체한다.
  */
@@ -94,7 +93,7 @@ public class OpenAiItemMatchAiClient implements ItemMatchAiClient {
                             실제 소유자라고 단정하거나 반환 완료를 지시하지 마세요.
                             물품명, 카테고리, 설명, 장소, 발생 시각이 유사한 후보만 선택하세요.
 
-                            반드시 아래 JSON 형식으로만 답하세요.
+                            반드시 아래 json 형식으로만 답하세요.
 
                             {
                               "matches": [
@@ -109,7 +108,12 @@ public class OpenAiItemMatchAiClient implements ItemMatchAiClient {
                             """,
 
                     // 서버가 검증한 최소 물품 정보다.
-                    "input", itemData,
+                    "input", """
+                    아래 입력 데이터를 분석해 분실물과 습득물 후보를 매칭하세요.
+                    결과는 반드시 json 객체 형식으로만 반환하세요.
+
+                        입력 데이터:
+                    """ + itemData,
 
                     // 문자열이 아닌 JSON 객체 응답을 요청한다.
                     "text", Map.of(
@@ -127,6 +131,8 @@ public class OpenAiItemMatchAiClient implements ItemMatchAiClient {
                     .body(request)
                     .retrieve()
                     .body(Map.class);
+
+            logUsage(response);
 
             // 응답 전체에서 AI가 작성한 JSON 문자열만 추출한다.
             String outputText = extractOutputText(response);
@@ -163,6 +169,36 @@ public class OpenAiItemMatchAiClient implements ItemMatchAiClient {
 
             return fallbackClient.generateMatches(input);
         }
+    }
+
+    private void logUsage(Map<?, ?> response) {
+        Object usageValue = response.get("usage");
+
+        if (!(usageValue instanceof Map<?, ?> usage)) {
+            log.warn("OpenAI 물품 매칭 사용량 정보를 받지 못했습니다.");
+            return;
+        }
+
+        long inputTokens = tokenCount(usage.get("input_tokens"));
+        long outputTokens = tokenCount(usage.get("output_tokens"));
+        long totalTokens = tokenCount(usage.get("total_tokens"));
+
+        double inputCostUsd = inputTokens * 0.10 / 1_000_000;
+        double outputCostUsd = outputTokens * 0.50 / 1_000_000;
+        double estimatedCostUsd = inputCostUsd + outputCostUsd;
+
+        log.info(
+                "OpenAI 물품 매칭 사용량: input_tokens={}, output_tokens={}, "
+                        + "total_tokens={}, estimated_cost_usd=${}",
+                inputTokens,
+                outputTokens,
+                totalTokens,
+                String.format(java.util.Locale.US, "%.8f", estimatedCostUsd)
+        );
+    }
+
+    private long tokenCount(Object value) {
+        return value instanceof Number number ? number.longValue() : 0L;
     }
 
     /*
@@ -211,4 +247,6 @@ public class OpenAiItemMatchAiClient implements ItemMatchAiClient {
             List<ItemMatchAiCandidate> matches
     ) {
     }
+
+
 }

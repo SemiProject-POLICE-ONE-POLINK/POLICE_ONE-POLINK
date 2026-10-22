@@ -11,6 +11,7 @@ import static java.util.Objects.requireNonNull;
 import com.polink.item.returnrequest.dto.ReturnRequestCreateRequest;
 import com.polink.item.returnrequest.dto.ReturnRequestCreateResponse;
 import com.polink.item.returnrequest.entity.ReturnRequestStatus;
+import com.polink.item.returnrequest.dto.ReturnRequestRejectRequest;
 import com.polink.item.returnrequest.service.ReturnRequestService;
 import com.polink.user.entity.UserRole;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +25,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.server.ResponseStatusException;
 import com.polink.item.returnrequest.dto.ReturnRequestCompleteResponse;
 import java.time.LocalDateTime;
+import com.polink.item.returnrequest.dto.ReturnRequestProcessResponse;
 
 @ExtendWith(MockitoExtension.class)
 class ReturnRequestControllerTest {
@@ -120,19 +122,74 @@ class ReturnRequestControllerTest {
 
     @Test
     void 경찰은_반환_신청을_승인할_수_있다() {
-        // given: 경찰 ID 2번의 정상 JWT다.
+        // given: 승인 권한을 가진 경찰관 JWT다.
         when(jwt.getSubject()).thenReturn("2");
         when(jwt.getClaimAsString("role")).thenReturn(UserRole.POLICE.name());
 
+        // Service가 승인 처리 후 반환할 응답을 준비한다.
+        LocalDateTime processedAt = LocalDateTime.of(2026, 10, 22, 10, 0);
+        ReturnRequestProcessResponse serviceResponse =
+                new ReturnRequestProcessResponse(
+                        1,
+                        ReturnRequestStatus.APPROVED,
+                        processedAt
+                );
+
+        when(returnRequestService.approveReturnRequest(2, 1))
+                .thenReturn(serviceResponse);
+
         // when: 경찰이 1번 반환 신청을 승인한다.
-        ResponseEntity<Void> result =
+        ResponseEntity<ReturnRequestProcessResponse> result =
                 returnRequestController.approveReturnRequest(jwt, 1);
 
-        // then: 승인 성공 시 본문 없이 204 No Content를 반환한다.
-        assertEquals(HttpStatus.NO_CONTENT, result.getStatusCode());
+        // then: 명세에 따라 204가 아닌 200 OK를 반환해야 한다.
+        assertEquals(HttpStatus.OK, result.getStatusCode());
 
-        // JWT의 경찰 ID와 반환 신청 번호가 Service에 정확히 전달되어야 한다.
+        // 처리 결과 본문이 있어야 한다.
+        ReturnRequestProcessResponse response = requireNonNull(result.getBody());
+        assertEquals(1, response.requestId());
+        assertEquals(ReturnRequestStatus.APPROVED, response.status());
+        assertEquals(processedAt, response.processedAt());
+
+        // JWT의 경찰 ID와 신청 번호가 Service에 전달되어야 한다.
         verify(returnRequestService).approveReturnRequest(2, 1);
+    }
+
+    @Test
+    void 경찰은_반환_신청을_반려할_수_있다() {
+        // given: 반려 권한을 가진 경찰관 JWT다.
+        when(jwt.getSubject()).thenReturn("2");
+        when(jwt.getClaimAsString("role")).thenReturn(UserRole.POLICE.name());
+
+        // 반려 처리가 끝난 뒤의 Service 응답이다.
+        LocalDateTime processedAt = LocalDateTime.of(2026, 10, 22, 10, 5);
+        ReturnRequestProcessResponse serviceResponse =
+                new ReturnRequestProcessResponse(
+                        1,
+                        ReturnRequestStatus.REJECTED,
+                        processedAt
+                );
+
+        when(returnRequestService.rejectReturnRequest(
+                2,
+                1,
+                "신청자 정보가 일치하지 않습니다."
+        )).thenReturn(serviceResponse);
+
+        // when: 경찰이 반려 사유와 함께 신청을 반려한다.
+        ReturnRequestRejectRequest request =
+                new ReturnRequestRejectRequest("신청자 정보가 일치하지 않습니다.");
+
+        ResponseEntity<ReturnRequestProcessResponse> result =
+                returnRequestController.rejectReturnRequest(jwt, 1, request);
+
+        // then: 200 OK와 반려 처리 결과를 반환해야 한다.
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+
+        ReturnRequestProcessResponse response = requireNonNull(result.getBody());
+        assertEquals(1, response.requestId());
+        assertEquals(ReturnRequestStatus.REJECTED, response.status());
+        assertEquals(processedAt, response.processedAt());
     }
 
     @Test
