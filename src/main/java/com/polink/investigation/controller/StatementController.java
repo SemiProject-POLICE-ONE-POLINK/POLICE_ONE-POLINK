@@ -11,7 +11,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/cases/{caseId}/witnesses/{witnessId}/statements")
+@RequestMapping("/api/v1/cases/{caseId}/witnesses/{witnessId}/statements")
 public class StatementController {
 
     private final StatementService statementService;

@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/cases/{caseId}/witnesses")
+@RequestMapping("/api/v1/cases/{caseId}/witnesses")
 public class WitnessController {
 
     private final WitnessService witnessService;

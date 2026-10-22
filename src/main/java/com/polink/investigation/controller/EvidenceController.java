@@ -16,7 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/cases/{caseId}/evidences")
+@RequestMapping("/api/v1/cases/{caseId}/evidences")
 public class EvidenceController {
 
     private final EvidenceService evidenceService;
