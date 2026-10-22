@@ -1,0 +1,29 @@
+### 시민 마이페이지 테스트
+
+### 1. 시민 본인 마이페이지 조회 → 200
+GET http://localhost:8080/api/v1/users/me/mypage
+Authorization: Bearer {{citizenToken}}
+
+
+### 2. 다른 시민의 마이페이지 조회 → 200
+GET http://localhost:8080/api/v1/users/me/mypage
+Authorization: Bearer {{secondCitizenToken}}
+
+### 응답 확인
+### - URL은 1번과 같지만 토큰의 사용자에 따라 결과가 달라져야 함
+### - 1번 시민의 사건·물품이 섞여 나오지 않아야 함
+
+### 3. 로그인 없이 조회 → 401
+GET http://localhost:8080/api/v1/users/me/mypage
+
+### 4. 경찰관 토큰으로 조회 → 403
+GET http://localhost:8080/api/v1/users/me/mypage
+Authorization: Bearer {{policeToken}}
+
+### 5. 관리자 토큰으로 조회 → 403
+GET http://localhost:8080/api/v1/users/me/mypage
+Authorization: Bearer {{adminToken}}
+
+### 6. 잘못된 토큰으로 조회 → 401
+GET http://localhost:8080/api/v1/users/me/mypage
+Authorization: Bearer invalid.jwt.token

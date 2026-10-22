@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface CaseRepository extends JpaRepository<CaseFile, String> {
@@ -37,4 +38,13 @@ public interface CaseRepository extends JpaRepository<CaseFile, String> {
     @Query("select c from CaseFile c where c.caseId = :caseId")
     Optional<CaseFile> findByCaseIdForUpdate(
             @Param("caseId") String caseId);
+
+    // 시민 마이페이지 전용 - 내가 접수한 사건 전체를 최신 등록순으로 조회
+    @Query("""
+        select c
+        from CaseFile c
+        where c.reporter.userId = :userId
+        order by c.createdAt desc, c.caseId desc
+        """)
+    List<CaseFile> findMyCasesForMyPage(@Param("userId") Integer userId);
 }

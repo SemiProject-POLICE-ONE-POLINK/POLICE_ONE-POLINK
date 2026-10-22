@@ -1,74 +1,189 @@
-### 정상: 담당 경찰이 가설 채택
-POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+
+
+### ==================== A. 가설 후보 생성 ====================
+
+### A-1. 성공: 담당 경찰의 가설 후보 생성 → 200, 후보 3개 (DB 저장 안 됨)
+# 응답의 후보 번호를 B 단계에서 쓰도록 저장
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses/generate
+Authorization: Bearer {{policeToken}}
+
+> {%
+    client.global.set("candidateId", response.body.hypotheses[0].candidateId);
+    client.global.set("candidateId2", response.body.hypotheses[1].candidateId);
+%}
+
+### A-2. 실패: 로그인 정보 없음 → 401
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses/generate
+
+### A-3. 실패: 잘못된 토큰 → 401 (Spring Security, 응답 본문 없음)
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses/generate
+Authorization: Bearer invalid.jwt.token
+
+### A-4. 실패: 시민의 후보 생성 → 403
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses/generate
+Authorization: Bearer {{citizenToken}}
+
+### A-5. 실패: 관리자의 후보 생성 → 403
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses/generate
+Authorization: Bearer {{adminToken}}
+
+### A-6. 실패: 담당이 아닌 경찰의 후보 생성 → 403
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses/generate
+Authorization: Bearer {{otherPoliceToken}}
+
+### A-7. 실패: 담당자가 없는 대기 사건 → 403
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0415/hypotheses/generate
+Authorization: Bearer {{policeToken}}
+
+### A-8. 예외: 존재하지 않는 사건 → 404
+POST http://localhost:8080/api/v1/cases/SMPA-2026-9999/hypotheses/generate
+Authorization: Bearer {{policeToken}}
+
+### A-9. 예외: 종결 사건에서 후보 생성 → 409
+# 0379 담당은 8번이므로 8번 토큰 사용
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0379/hypotheses/generate
+Authorization: Bearer {{otherPoliceToken}}
+
+
+### ==================== B. 가설 채택 ====================
+### B-1 ~ B-9는 실패 케이스라 후보가 소모되지 않음. B-10에서 정상 채택 후 B-11에서 재사용 확인
+
+### B-1. 실패: 다른 사건에서 만든 후보로 채택 → 403
+# 0405에서 생성한 후보를 같은 담당자의 0423 사건에 채택 시도
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0423/hypotheses
 Content-Type: application/json
 Authorization: Bearer {{policeToken}}
 
 {
-  "content": "흰색 경차를 이용한 계획적인 침입 범행 가능성",
-  "reason": "교차로 CCTV에서 흰색 경차가 확인되고, 목격자가 차량에 관한 진술을 정정했습니다.",
-  "additionalRecommendation": "차량 번호판 판독 결과를 확인합니다.",
-  "confidence": 64,
-  "evidenceIds": ["EV-2026-0405-01"],
-  "statementIds": [8]
+  "candidateId": "{{candidateId2}}"
 }
 
-### 실패: 로그인 정보 없음 → 401
+### B-2. 실패: 로그인 정보 없음 → 401
 POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
 Content-Type: application/json
 
 {
-  "content": "흰색 경차를 이용한 범행 가능성",
-  "reason": "CCTV와 진술을 바탕으로 판단했습니다.",
-  "confidence": 64,
-  "evidenceIds": [],
-  "statementIds": []
+  "candidateId": "{{candidateId}}"
 }
 
-### 실패: 담당자가 아닌 경찰 → 403
+### B-3. 실패: 시민의 채택 → 403
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Content-Type: application/json
+Authorization: Bearer {{citizenToken}}
+
+{
+  "candidateId": "{{candidateId}}"
+}
+
+### B-4. 실패: 관리자의 채택 → 403
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "candidateId": "{{candidateId}}"
+}
+
+### B-5. 실패: 담당이 아닌 경찰의 채택 → 403
 POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
 Content-Type: application/json
 Authorization: Bearer {{otherPoliceToken}}
 
 {
-  "content": "흰색 경차를 이용한 범행 가능성",
-  "reason": "CCTV와 진술을 바탕으로 판단했습니다.",
-  "confidence": 64,
-  "evidenceIds": [],
-  "statementIds": []
+  "candidateId": "{{candidateId}}"
 }
 
-### 실패: 다른 사건의 증거물을 근거로 전달 → 400
+### B-6. 실패: 후보 번호 빈 값 → 400
 POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
 Content-Type: application/json
 Authorization: Bearer {{policeToken}}
 
 {
-  "content": "흰색 경차를 이용한 범행 가능성",
-  "reason": "CCTV와 진술을 바탕으로 판단했습니다.",
-  "confidence": 64,
-  "evidenceIds": ["EV-2026-0401-01"],
-  "statementIds": []
+  "candidateId": ""
 }
 
-### 1. 담당 경찰 조회 — 예상: 200, 저장된 가설 목록
-GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
-Authorization: Bearer <shin의 accessToken>
+### B-7. 실패: 후보 번호 누락 → 400
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Content-Type: application/json
+Authorization: Bearer {{policeToken}}
 
-### 2. 다른 경찰 조회 — 예상: 403
-GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
-Authorization: Bearer <baek의 accessToken>
+{}
 
-### 3. 시민 조회 — 예상: 403
-GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
-Authorization: Bearer <miran의 accessToken>
+### B-8. 예외: 존재하지 않거나 만료된 후보 번호 → 404
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Content-Type: application/json
+Authorization: Bearer {{policeToken}}
 
-### 4. 토큰 없이 조회 — 예상: 401
-GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+{
+  "candidateId": "not-exist-candidate"
+}
 
-### 5. 저장된 가설이 없는 담당 사건 조회 — 예상: 200, []
+### B-9. 예외: 존재하지 않는 사건 → 404
+POST http://localhost:8080/api/v1/cases/SMPA-2026-9999/hypotheses
+Content-Type: application/json
+Authorization: Bearer {{policeToken}}
+
+{
+  "candidateId": "{{candidateId}}"
+}
+
+### B-10. 예외: 종결 사건에 채택 → 409
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0379/hypotheses
+Content-Type: application/json
+Authorization: Bearer {{otherPoliceToken}}
+
+{
+  "candidateId": "{{candidateId}}"
+}
+
+### B-11. 성공: 담당 경찰이 후보 채택 → 201, DB 저장
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Content-Type: application/json
+Authorization: Bearer {{policeToken}}
+
+{
+  "candidateId": "{{candidateId}}"
+}
+
+### B-12. 예외: 이미 채택한 후보를 다시 채택 → 404 (채택 후 후보가 삭제됨)
+POST http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Content-Type: application/json
+Authorization: Bearer {{policeToken}}
+
+{
+  "candidateId": "{{candidateId}}"
+}
+
+
+### ==================== C. 채택한 가설 조회 ====================
+
+### C-1. 성공: 담당 경찰 조회 → 200, 저장된 가설 목록 (B-11에서 채택한 가설 포함)
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Authorization: Bearer {{policeToken}}
+
+### C-2. 성공: 저장된 가설이 없는 담당 사건 → 200, []
 GET http://localhost:8080/api/v1/cases/SMPA-2026-0409/hypotheses
-Authorization: Bearer <oh의 accessToken>
+Authorization: Bearer {{otherPoliceToken}}
 
-### 6. 존재하지 않는 사건 조회 — 예상: 404
+### C-3. 성공: 종결 사건의 가설 조회 → 200 (조회는 사건 상태와 관계없이 가능)
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0379/hypotheses
+Authorization: Bearer {{otherPoliceToken}}
+
+### C-4. 실패: 로그인 정보 없음 → 401
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+
+### C-5. 실패: 담당이 아닌 경찰 조회 → 403
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Authorization: Bearer {{otherPoliceToken}}
+
+### C-6. 실패: 시민 조회 → 403
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Authorization: Bearer {{citizenToken}}
+
+### C-7. 실패: 관리자 조회 → 403
+GET http://localhost:8080/api/v1/cases/SMPA-2026-0405/hypotheses
+Authorization: Bearer {{adminToken}}
+
+### C-8. 예외: 존재하지 않는 사건 → 404
 GET http://localhost:8080/api/v1/cases/SMPA-2026-9999/hypotheses
-Authorization: Bearer <shin의 accessToken>
+Authorization: Bearer {{policeToken}}
