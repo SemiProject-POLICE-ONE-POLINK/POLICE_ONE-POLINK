@@ -127,11 +127,12 @@ public class ItemService {
 
     /*
      * 로그인한 사용자가 등록한 물품 목록을 페이지 단위로 조회한다.
-     * 현재는 Controller가 아직 로그인 userId를 전달하지 않는다.
-     * 로그인 기능이 연결되면 인증정보의 userId를 registrantId 자리에 전달한다.
+     * itemType과 status는 선택 필터다.
      */
     public ItemPageResponse getMyItems(
             Integer registrantId,
+            ItemType itemType,
+            ItemStatus status,
             int page,
             int size
     ) {
@@ -150,13 +151,17 @@ public class ItemService {
             throw new IllegalArgumentException("페이지 크기는 1 이상 100 이하여야 합니다.");
         }
 
-        // 등록자 ID와 페이지 정보를 Repository에 전달한다.
+        // 등록자 ID, 선택 필터, 페이지 정보를 Repository에 전달한다.
+        // registrantId는 요청값이 아니라 JWT subject에서만 전달되므로 소유권은 유지된다.
         Pageable pageable = PageRequest.of(page, size);
 
         // 해당 사용자가 등록한 물품만 최신 등록순으로 조회한다.
+        // 유형·상태가 null이면 Repository의 선택 조건이 비활성화되어 전체를 조회한다.
         Page<Item> itemPage = itemRepository
-                .findByRegistrantIdOrderByCreatedAtDescItemIdDesc(
+                .findMyItemsByConditions(
                         registrantId,
+                        itemType,
+                        status,
                         pageable
                 );
 
@@ -167,6 +172,49 @@ public class ItemService {
                 .toList();
 
         // 목록과 페이지 정보를 함께 반환한다.
+        return new ItemPageResponse(
+                items,
+                itemPage.getNumber(),
+                itemPage.getSize(),
+                itemPage.getTotalElements(),
+                itemPage.getTotalPages(),
+                itemPage.isFirst(),
+                itemPage.isLast()
+        );
+    }
+
+    /**
+     * 기존 Service 호출부와 단위 테스트를 깨지 않기 위한 호환용 진입점이다.
+     * 필터를 전달하지 않은 기존 요청은 이전과 완전히 동일하게 내 물품 전체를 조회한다.
+     */
+    public ItemPageResponse getMyItems(
+            Integer registrantId,
+            int page,
+            int size
+    ) {
+        // 이전 호출은 기존 Repository 메서드를 그대로 사용한다.
+        // 이렇게 하면 새 필터 API를 추가해도 기존 서비스 사용자와 테스트의 동작은 바뀌지 않는다.
+        if (registrantId == null || registrantId < 1) {
+            throw new IllegalArgumentException("로그인 사용자 정보가 필요합니다.");
+        }
+        if (page < 0) {
+            throw new IllegalArgumentException("페이지 번호는 0 이상이어야 합니다.");
+        }
+        if (size < 1 || size > 100) {
+            throw new IllegalArgumentException("페이지 크기는 1 이상 100 이하여야 합니다.");
+        }
+
+        Page<Item> itemPage = itemRepository
+                .findByRegistrantIdOrderByCreatedAtDescItemIdDesc(
+                        registrantId,
+                        PageRequest.of(page, size)
+                );
+
+        List<ItemListResponse> items = itemPage.getContent()
+                .stream()
+                .map(ItemListResponse::from)
+                .toList();
+
         return new ItemPageResponse(
                 items,
                 itemPage.getNumber(),

@@ -145,6 +145,12 @@ GET {{baseUrl}}/api/v1/items/my?page=0&size=10
 Authorization: Bearer {{citizenToken}}
 
 ###
+# ITEM-011-1. 내 분실물 중 아직 분실 상태인 물품만 조회
+# itemType과 status는 모두 선택값이며, 등록자 조건은 JWT에서 자동으로 적용된다.
+GET {{baseUrl}}/api/v1/items/my?itemType=LOST&status=LOST&page=0&size=10
+Authorization: Bearer {{citizenToken}}
+
+###
 # ITEM-012. 시민이 방금 등록한 분실물 수정
 PATCH {{baseUrl}}/api/v1/items/{{createdLostItemId}}
 Authorization: Bearer {{citizenToken}}

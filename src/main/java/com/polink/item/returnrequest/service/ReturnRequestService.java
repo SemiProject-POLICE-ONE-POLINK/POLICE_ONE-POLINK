@@ -3,6 +3,8 @@ package com.polink.item.returnrequest.service;
 import com.polink.item.entity.Item;
 import com.polink.item.entity.ItemStatus;
 import com.polink.item.entity.ItemType;
+import com.polink.item.exception.ReturnRequestConflictException;
+import com.polink.item.exception.ReturnRequestNotFoundException;
 import com.polink.item.repository.ItemRepository;
 import com.polink.item.returnrequest.dto.ReturnRequestCreateRequest;
 import com.polink.item.returnrequest.dto.ReturnRequestCreateResponse;
@@ -58,11 +60,11 @@ public class ReturnRequestService {
         // 요청한 분실물과 습득물이 실제로 존재하는지 확인한다.
         Item lostItem = itemRepository.findById(request.lostItemId())
                 .orElseThrow(() ->
-                        new IllegalArgumentException("분실물을 찾을 수 없습니다."));
+                        new ReturnRequestNotFoundException("분실물을 찾을 수 없습니다."));
 
         Item foundItem = itemRepository.findById(request.foundItemId())
                 .orElseThrow(() ->
-                        new IllegalArgumentException("습득물을 찾을 수 없습니다."));
+                        new ReturnRequestNotFoundException("습득물을 찾을 수 없습니다."));
 
         // 신청자는 자신이 등록한 분실물에 대해서만 반환을 요청할 수 있다.
         if (!lostItem.getRegistrantId().equals(requesterId)) {
@@ -76,7 +78,7 @@ public class ReturnRequestService {
 
         // 반환 전 분실물은 LOST 상태여야 한다.
         if (lostItem.getStatus() != ItemStatus.LOST) {
-            throw new IllegalArgumentException("반환 가능한 상태의 분실물이 아닙니다.");
+            throw new ReturnRequestConflictException("반환 가능한 상태의 분실물이 아닙니다.");
         }
 
         // 두 번째 물품은 습득물이어야 한다.
@@ -86,7 +88,7 @@ public class ReturnRequestService {
 
         // 반환 전 습득물은 보관 중(STORED) 상태여야 한다.
         if (foundItem.getStatus() != ItemStatus.STORED) {
-            throw new IllegalArgumentException("반환 가능한 상태의 습득물이 아닙니다.");
+            throw new ReturnRequestConflictException("반환 가능한 상태의 습득물이 아닙니다.");
         }
 
         // 동일한 분실물·습득물 조합은 한 번만 신청할 수 있다.
@@ -94,7 +96,7 @@ public class ReturnRequestService {
                 request.lostItemId(),
                 request.foundItemId()
         )) {
-            throw new IllegalArgumentException("이미 반환 신청한 물품 조합입니다.");
+            throw new ReturnRequestConflictException("이미 반환 신청한 물품 조합입니다.");
         }
 
         // 새 반환 신청은 생성될 때 자동으로 PENDING 상태가 된다.
@@ -130,28 +132,28 @@ public class ReturnRequestService {
 
         ReturnRequest returnRequest = returnRequestRepository.findById(requestId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException("반환 신청을 찾을 수 없습니다."));
+                        new ReturnRequestNotFoundException("반환 신청을 찾을 수 없습니다."));
 
         if (returnRequest.getStatus() != ReturnRequestStatus.PENDING) {
-            throw new IllegalArgumentException("대기 상태의 반환 신청만 승인할 수 있습니다.");
+            throw new ReturnRequestConflictException("대기 상태의 반환 신청만 승인할 수 있습니다.");
         }
 
         Item lostItem = itemRepository.findById(returnRequest.getLostItemId())
                 .orElseThrow(() ->
-                        new IllegalArgumentException("연결된 분실물을 찾을 수 없습니다."));
+                        new ReturnRequestNotFoundException("연결된 분실물을 찾을 수 없습니다."));
 
         Item foundItem = itemRepository.findById(returnRequest.getFoundItemId())
                 .orElseThrow(() ->
-                        new IllegalArgumentException("연결된 습득물을 찾을 수 없습니다."));
+                        new ReturnRequestNotFoundException("연결된 습득물을 찾을 수 없습니다."));
 
         if (lostItem.getItemType() != ItemType.LOST
                 || lostItem.getStatus() != ItemStatus.LOST) {
-            throw new IllegalArgumentException("승인 가능한 상태의 분실물이 아닙니다.");
+            throw new ReturnRequestConflictException("승인 가능한 상태의 분실물이 아닙니다.");
         }
 
         if (foundItem.getItemType() != ItemType.FOUND
                 || foundItem.getStatus() != ItemStatus.STORED) {
-            throw new IllegalArgumentException("승인 가능한 상태의 습득물이 아닙니다.");
+            throw new ReturnRequestConflictException("승인 가능한 상태의 습득물이 아닙니다.");
         }
 
         // 반환 신청 엔티티에 승인한 경찰관, 승인 상태, 처리 시각을 기록한다.
@@ -194,11 +196,11 @@ public class ReturnRequestService {
         // 먼저 DB에서 반환 신청을 조회해야 returnRequest를 사용할 수 있다.
         ReturnRequest returnRequest = returnRequestRepository.findById(requestId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException("반환 신청을 찾을 수 없습니다."));
+                        new ReturnRequestNotFoundException("반환 신청을 찾을 수 없습니다."));
 
         // 아직 처리되지 않은 PENDING 상태만 반려할 수 있다.
         if (returnRequest.getStatus() != ReturnRequestStatus.PENDING) {
-            throw new IllegalArgumentException("대기 상태의 반환 신청만 반려할 수 있습니다.");
+            throw new ReturnRequestConflictException("대기 상태의 반환 신청만 반려할 수 있습니다.");
         }
 
         // 앞뒤 공백을 없앤 반려 사유와 처리 정보를 엔티티에 저장한다.
@@ -226,30 +228,30 @@ public class ReturnRequestService {
 
         ReturnRequest returnRequest = returnRequestRepository.findById(requestId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException("반환 신청을 찾을 수 없습니다."));
+                        new ReturnRequestNotFoundException("반환 신청을 찾을 수 없습니다."));
 
         // 승인된 신청만 실제 인계 완료 처리할 수 있다.
         if (returnRequest.getStatus() != ReturnRequestStatus.APPROVED) {
-            throw new IllegalArgumentException("승인된 반환 신청만 인계 완료 처리할 수 있습니다.");
+            throw new ReturnRequestConflictException("승인된 반환 신청만 인계 완료 처리할 수 있습니다.");
         }
 
         Item lostItem = itemRepository.findById(returnRequest.getLostItemId())
                 .orElseThrow(() ->
-                        new IllegalArgumentException("연결된 분실물을 찾을 수 없습니다."));
+                        new ReturnRequestNotFoundException("연결된 분실물을 찾을 수 없습니다."));
 
         Item foundItem = itemRepository.findById(returnRequest.getFoundItemId())
                 .orElseThrow(() ->
-                        new IllegalArgumentException("연결된 습득물을 찾을 수 없습니다."));
+                        new ReturnRequestNotFoundException("연결된 습득물을 찾을 수 없습니다."));
 
         // 승인 후 두 물품 모두 인계 대기 상태여야 한다.
         if (lostItem.getItemType() != ItemType.LOST
                 || lostItem.getStatus() != ItemStatus.HANDOVER_PENDING) {
-            throw new IllegalArgumentException("인계 완료 가능한 상태의 분실물이 아닙니다.");
+            throw new ReturnRequestConflictException("인계 완료 가능한 상태의 분실물이 아닙니다.");
         }
 
         if (foundItem.getItemType() != ItemType.FOUND
                 || foundItem.getStatus() != ItemStatus.HANDOVER_PENDING) {
-            throw new IllegalArgumentException("인계 완료 가능한 상태의 습득물이 아닙니다.");
+            throw new ReturnRequestConflictException("인계 완료 가능한 상태의 습득물이 아닙니다.");
         }
 
         // 승인·반려 처리 이력은 유지하고,
@@ -262,8 +264,12 @@ public class ReturnRequestService {
 
         // 신청 엔티티에 기록된 완료 시각을 응답으로 반환한다.
         return new ReturnRequestCompleteResponse(
-                    returnRequest.getRequestId(),
-                    returnRequest.getCompletedAt()
+                returnRequest.getRequestId(),
+
+                // API 응답 필드명은 returnedAt이지만, 값은 신청 엔티티에 기록한
+                // 실제 인계 완료 시각을 사용한다. 이 시각은 두 Item의 returnedAt과
+                // 같은 반환 완료 트랜잭션 안에서 함께 저장된다.
+                returnRequest.getCompletedAt()
         );
     }
 
@@ -366,7 +372,20 @@ public class ReturnRequestService {
                 .map(this::toListResponse)
                 .toList();
 
-        return new PoliceReturnRequestListResponse(items);
+        /*
+         * Repository는 Page로 조회했으므로 목록만 반환하면 클라이언트가
+         * 다음 페이지 유무나 전체 건수를 알 수 없다. 내 반환 신청 조회와
+         * 동일한 페이지 메타데이터를 반환해 경찰 화면도 안전하게 페이징한다.
+         */
+        return new PoliceReturnRequestListResponse(
+                items,
+                returnRequestPage.getNumber(),
+                returnRequestPage.getSize(),
+                returnRequestPage.getTotalElements(),
+                returnRequestPage.getTotalPages(),
+                returnRequestPage.isFirst(),
+                returnRequestPage.isLast()
+        );
     }
 
     /*
@@ -384,7 +403,7 @@ public class ReturnRequestService {
         ReturnRequest returnRequest = returnRequestRepository
                 .findById(requestId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException("반환 신청을 찾을 수 없습니다."));
+                        new ReturnRequestNotFoundException("반환 신청을 찾을 수 없습니다."));
 
         return toDetailResponse(returnRequest);
     }
@@ -452,7 +471,7 @@ public class ReturnRequestService {
             String notFoundMessage
     ) {
         return itemRepository.findById(itemId)
-                .orElseThrow(() -> new IllegalArgumentException(notFoundMessage));
+                .orElseThrow(() -> new ReturnRequestNotFoundException(notFoundMessage));
     }
 
     /*
@@ -478,7 +497,7 @@ public class ReturnRequestService {
         ReturnRequest returnRequest = returnRequestRepository
                 .findById(requestId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException("반환 신청을 찾을 수 없습니다."));
+                        new ReturnRequestNotFoundException("반환 신청을 찾을 수 없습니다."));
 
         // 신청자 번호와 로그인한 시민 번호가 다르면 접근을 금지한다.
         if (!returnRequest.getRequesterId().equals(requesterId)) {

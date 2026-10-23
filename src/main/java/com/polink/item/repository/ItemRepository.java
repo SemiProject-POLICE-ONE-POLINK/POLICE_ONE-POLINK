@@ -20,13 +20,13 @@ public interface ItemRepository extends JpaRepository<Item, String> {
     // 2) String: Item의 PK(itemId) 타입
     // save(), findById(), findAll() 같은 기본 메서드는 Spring Data JPA가 자동으로 만들어 준다.
 
-    /**
+    /*
      * 분실물(LOST) 또는 습득물(FOUND) 중 번호가 가장 큰 물품 한 건을 찾는다.
      * 예: LOST의 마지막 번호가 L-0115이면 다음 분실물 번호는 L-0116이 된다.
      */
     Optional<Item> findTopByItemTypeOrderByItemIdDesc(ItemType itemType);
 
-    /**
+    /*
      * 목록 화면의 선택 검색 조건으로 물품을 페이지 단위로 조회한다.
      * 조건 값이 null이면 해당 조건은 적용하지 않는다.
      * location은 포함 검색이고,
@@ -82,6 +82,36 @@ public interface ItemRepository extends JpaRepository<Item, String> {
      */
     Page<Item> findByRegistrantIdOrderByCreatedAtDescItemIdDesc(
             Integer registrantId,
+            Pageable pageable
+    );
+
+    /*
+     * 로그인한 시민의 "내 물품" 화면용 조회다.
+     * <p>일반 목록 조회와 달리 {@code registrantId} 조건은 항상 적용한다.
+     * 따라서 요청 파라미터를 조작해 다른 시민의 등록 물품을 가져올 수 없다.
+     * {@code itemType}, {@code status}는 선택 필터이므로 값이 없으면 전체를 반환한다.</p>
+     */
+    @Query(
+            value = """
+                select item
+                from Item item
+                where item.registrantId = :registrantId
+                  and (:itemType is null or item.itemType = :itemType)
+                  and (:status is null or item.status = :status)
+                order by item.createdAt desc, item.itemId desc
+                """,
+            countQuery = """
+                select count(item)
+                from Item item
+                where item.registrantId = :registrantId
+                  and (:itemType is null or item.itemType = :itemType)
+                  and (:status is null or item.status = :status)
+                """
+    )
+    Page<Item> findMyItemsByConditions(
+            @Param("registrantId") Integer registrantId,
+            @Param("itemType") ItemType itemType,
+            @Param("status") ItemStatus status,
             Pageable pageable
     );
 

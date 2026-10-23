@@ -11,17 +11,19 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 /*
  * ai-live 프로필에서만 실제 OpenAI Responses API를 호출하는 구현체다.
  * API 오류, 네트워크 오류, 잘못된 AI 응답이 발생하면
- * 기존 규칙 기반 매칭으로 자동 대체한다.
+ * 클라이언트가 재시도할 수 있도록 502 Bad Gateway를 반환한다.
  */
 @Component
 @Profile("item-ai-live")
@@ -33,10 +35,6 @@ public class OpenAiItemMatchAiClient implements ItemMatchAiClient {
 
     // 환경 변수 OPENAI_ITEM_MATCH_MODEL에서 읽은 모델 이름이다.
     private final String model;
-
-    // 외부 API 호출 실패 시 기존 규칙 기반 결과를 제공한다.
-    private final RuleBasedItemMatchAiClient fallbackClient =
-            new RuleBasedItemMatchAiClient();
 
     private static final Logger log =
             LoggerFactory.getLogger(OpenAiItemMatchAiClient.class);
@@ -137,7 +135,7 @@ public class OpenAiItemMatchAiClient implements ItemMatchAiClient {
                     .retrieve()
                     .body(Map.class);
 
-            // HTTP 응답 본문이 비어 있으면 이후 처리하지 않고 규칙 기반 매칭으로 대체한다.
+            // HTTP 응답 본문이 비어 있으면 외부 AI의 정상 결과로 볼 수 없다.
             if (response == null) {
                 throw new IllegalArgumentException("OpenAI 응답 본문이 없습니다.");
             }
@@ -171,13 +169,21 @@ public class OpenAiItemMatchAiClient implements ItemMatchAiClient {
                 | JacksonException
                 | IllegalArgumentException exception
         ) {
-            // 외부 AI가 실패해도 기존 매칭 기능은 멈추지 않게 한다.
+            /*
+             * API 명세상 외부 AI 호출 실패는 502로 구분한다.
+             * 실패를 정상 200 응답으로 숨기면 클라이언트는 AI 결과인지
+             * 대체 결과인지 알 수 없고 재시도도 할 수 없다.
+             */
             log.warn(
-                    "OpenAI 물품 매칭에 실패하여 규칙 기반 매칭으로 대체합니다.",
+                    "OpenAI 물품 매칭 호출에 실패했습니다.",
                     exception
             );
 
-            return fallbackClient.generateMatches(input);
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "AI 물품 매칭 서비스에 일시적인 문제가 발생했습니다.",
+                    exception
+            );
         }
     }
 
