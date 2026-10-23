@@ -55,28 +55,28 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/users/me"
                         )
-                        .permitAll()
+                        .hasAnyAuthority("CITIZEN", "POLICE", "ADMIN")
 
                         // 시민 마이페이지
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/users/me/mypage"
                         )
-                        .permitAll()
+                        .hasAuthority("CITIZEN")
 
                         // 경찰 대시보드
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/users/me/police-dashboard"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // 관리자 대시보드
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/users/me/admin-dashboard"
                         )
-                        .permitAll()
+                        .hasAuthority("ADMIN")
 
                         // ==================== 수사보드 ====================
 
@@ -85,7 +85,7 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/cases/*/investigation-board"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // ==================== 증거물 ====================
 
@@ -94,14 +94,14 @@ public class SecurityConfig {
                                 HttpMethod.POST,
                                 "/api/v1/cases/*/evidences"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // 사건별 증거물 목록 조회
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/cases/*/evidences"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // ==================== 목격자·진술 ====================
 
@@ -110,21 +110,21 @@ public class SecurityConfig {
                                 HttpMethod.POST,
                                 "/api/v1/cases/*/witnesses"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // 사건별 목격자·진술 이력 조회
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/cases/*/witnesses"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // 기존 목격자의 추가·정정·번복 진술 등록
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/cases/*/witnesses/*/statements"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // ==================== 수사기록 ====================
 
@@ -133,14 +133,14 @@ public class SecurityConfig {
                                 HttpMethod.POST,
                                 "/api/v1/cases/*/investigations"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // 수사기록 목록 조회
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/cases/*/investigations"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // ==================== 수사 가설 ====================
 
@@ -149,21 +149,21 @@ public class SecurityConfig {
                                 HttpMethod.POST,
                                 "/api/v1/cases/*/hypotheses/generate"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // 선택한 가설 채택·저장
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/cases/*/hypotheses"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // 저장된 가설 목록 조회
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/cases/*/hypotheses"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // ==================== 수사 종결 ====================
 
@@ -172,7 +172,7 @@ public class SecurityConfig {
                                 HttpMethod.POST,
                                 "/api/v1/cases/*/investigation/close"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // ==================== 사건 ====================
 
@@ -181,28 +181,28 @@ public class SecurityConfig {
                                 HttpMethod.POST,
                                 "/api/v1/cases"
                         )
-                        .permitAll()
+                        .hasAuthority("CITIZEN")
 
                         // AI 유사 사건 검색
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/cases/ai-search"
                         )
-                        .permitAll()
+                        .hasAuthority("CITIZEN")
 
                         // 담당 경찰 배정
                         .requestMatchers(
                                 HttpMethod.PATCH,
                                 "/api/v1/cases/*/officer"
                         )
-                        .permitAll()
+                        .hasAuthority("ADMIN")
 
                         // 사건 종결
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/cases/*/close"
                         )
-                        .permitAll()
+                        .hasAuthority("ADMIN")
 
                         // 내 신고·배정 사건 조회
                         // 일반 사건 상세 경로보다 먼저 지정
@@ -210,21 +210,21 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/cases/my"
                         )
-                        .permitAll()
+                        .hasAnyAuthority("CITIZEN", "POLICE")
 
                         // 사건 목록 조회
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/cases"
                         )
-                        .permitAll()
+                        .hasAnyAuthority("CITIZEN", "POLICE", "ADMIN")
 
                         // 사건 상세 조회
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/cases/*"
                         )
-                        .permitAll()
+                        .hasAnyAuthority("CITIZEN", "POLICE", "ADMIN")
 
                         // ==================== 분실물·습득물 ====================
 
@@ -234,7 +234,7 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/items/statistics"
                         )
-                        .permitAll()
+                        .hasAnyAuthority("POLICE", "ADMIN")
 
                         // 내 등록 물품 조회
                         // 일반 물품 상세 경로보다 먼저 지정
@@ -242,49 +242,49 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/items/my"
                         )
-                        .permitAll()
+                        .hasAuthority("CITIZEN")
 
                         // 물품 등록
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/items"
                         )
-                        .permitAll()
+                        .hasAuthority("CITIZEN")
 
                         // 물품 목록 조회
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/items"
                         )
-                        .permitAll()
+                        .hasAnyAuthority("CITIZEN", "POLICE", "ADMIN")
 
                         // 물품 상세 조회
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/items/*"
                         )
-                        .permitAll()
+                        .hasAnyAuthority("CITIZEN", "POLICE", "ADMIN")
 
                         // 물품 수정
                         .requestMatchers(
                                 HttpMethod.PATCH,
                                 "/api/v1/items/*"
                         )
-                        .permitAll()
+                        .hasAnyAuthority("CITIZEN", "POLICE")
 
                         // 기존 분실물에 이미지 첨부
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/items/*/image"
                         )
-                        .permitAll()
+                        .hasAuthority("CITIZEN")
 
                         // AI 물품 매칭
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/ai/item-matches"
                         )
-                        .permitAll()
+                        .hasAuthority("CITIZEN")
 
                         // ==================== 반환 신청 ====================
 
@@ -293,7 +293,7 @@ public class SecurityConfig {
                                 HttpMethod.POST,
                                 "/api/v1/return-requests"
                         )
-                        .permitAll()
+                        .hasAuthority("CITIZEN")
 
                         // 내 반환 신청 목록 조회
                         // 일반 반환 신청 상세 경로보다 먼저 지정
@@ -301,53 +301,61 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/return-requests/my"
                         )
-                        .permitAll()
+                        .hasAuthority("CITIZEN")
 
                         // 내 반환 신청 상세 조회
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/return-requests/my/*"
                         )
-                        .permitAll()
+                        .hasAuthority("CITIZEN")
 
                         // 전체 반환 신청 목록 조회
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/return-requests"
                         )
-                        .permitAll()
+                        .hasAnyAuthority("POLICE")
 
                         // 반환 신청 상세 조회
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/return-requests/*"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // 반환 신청 승인
                         .requestMatchers(
                                 HttpMethod.PATCH,
                                 "/api/v1/return-requests/*/approve"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // 반환 신청 반려
                         .requestMatchers(
                                 HttpMethod.PATCH,
                                 "/api/v1/return-requests/*/reject"
                         )
-                        .permitAll()
+                        .hasAuthority("POLICE")
 
                         // 반환 완료 처리
                         .requestMatchers(
                                 HttpMethod.PATCH,
                                 "/api/v1/return-requests/*/complete"
                         )
+                        .hasAuthority("POLICE")
+
+                        // Swagger UI 접근 허용
+                        .requestMatchers(
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**"
+                        )
                         .permitAll()
 
                         // 아직 등록하지 않은 요청도 기존 설정대로 허용
                         // 모든 권한 확정 후 기본 정책을 별도로 결정
-                        .anyRequest().permitAll()
+                        .anyRequest().denyAll()
                 )
 
                 // Authorization: Bearer 토큰이 오면 JWT 서명과 만료 여부를 검증
