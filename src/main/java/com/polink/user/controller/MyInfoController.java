@@ -2,6 +2,8 @@ package com.polink.user.controller;
 
 import com.polink.user.dto.response.MyInfoResponse;
 import com.polink.user.service.MyInfoService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+@Tag(name = "회원")
 @RestController
 @RequestMapping("/api/v1/users/me")
 public class MyInfoController {
@@ -22,6 +25,7 @@ public class MyInfoController {
     }
 
     // 로그인한 회원 본인의 정보 조회
+    @Operation(summary = "내 정보 조회")
     @GetMapping
     public ResponseEntity<MyInfoResponse> findMyInfo(
             @AuthenticationPrincipal Jwt jwt

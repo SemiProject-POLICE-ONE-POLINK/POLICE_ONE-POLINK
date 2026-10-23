@@ -3,6 +3,8 @@ package com.polink.item.controller;
 import com.polink.item.dto.ItemPageResponse;
 import com.polink.item.service.ItemService;
 import com.polink.user.entity.UserRole;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
  * 이전의 local 프로필·app.dev-user-id 방식은 사용하지 않는다.
  * Authorization: Bearer {accessToken}의 JWT subject를 현재 사용자 ID로 사용한다.
  */
+@Tag(name = "분실물·습득물")
 @RestController
 @RequestMapping("/api/v1/items")
 @RequiredArgsConstructor
@@ -33,6 +36,7 @@ public class MyItemController {
      * URL의 my는 JWT subject(sub)의 사용자 ID를 기준으로
      * "내가 등록한 물품"만 조회한다는 뜻이다.
      */
+    @Operation(summary = "내 분실물·습득물 조회")
     @GetMapping("/my")
     public ResponseEntity<ItemPageResponse> getMyItems(
             // Authorization 헤더의 Bearer 토큰에서 Spring Security가 추출한 JWT다.

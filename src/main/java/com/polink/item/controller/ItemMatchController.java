@@ -4,6 +4,8 @@ import com.polink.item.dto.ItemMatchListResponse;
 import com.polink.item.dto.ItemMatchRequest;
 import com.polink.item.service.ItemMatchService;
 import com.polink.user.entity.UserRole;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -20,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
  * 로그인한 시민이 본인이 등록한 분실물을 기준으로
  * 습득물 후보 매칭을 요청하는 Controller다.
  */
+@Tag(name = "분실물·습득물")
 @RestController
 @RequestMapping("/api/v1/ai/item-matches")
 @RequiredArgsConstructor
@@ -33,6 +36,7 @@ public class ItemMatchController {
      * 요청한 분실물이 로그인한 시민의 물품인지 확인한 뒤
      * 보관 중인 습득물 후보와 매칭 근거를 반환한다.
      */
+    @Operation(summary = "AI 분실물 매칭")
     @PostMapping
     public ResponseEntity<ItemMatchListResponse> findMatches(
             // Authorization: Bearer 토큰에서 Spring Security가 추출한 JWT다.

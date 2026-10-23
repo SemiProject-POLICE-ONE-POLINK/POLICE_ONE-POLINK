@@ -3,11 +3,14 @@ package com.polink.investigation.controller;
 
 import com.polink.investigation.dto.response.InvestigationBoardResponse;
 import com.polink.investigation.service.InvestigationBoardService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+@Tag(name = "수사")
 @RestController
 @RequestMapping("/api/v1/cases/{caseId}/investigation-board")
 public class InvestigationBoardController {
@@ -18,6 +21,7 @@ public class InvestigationBoardController {
         this.investigationBoardService = investigationBoardService;
     }
 
+    @Operation(summary = "수사보드 조회")
     @GetMapping
     public ResponseEntity<InvestigationBoardResponse>
     getInvestigationBoard(

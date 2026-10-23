@@ -4,6 +4,8 @@ import com.polink.investigation.dto.request.WitnessCreateRequest;
 import com.polink.investigation.dto.response.WitnessCreateResponse;
 import com.polink.investigation.dto.response.WitnessListResponse;
 import com.polink.investigation.service.WitnessService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "수사")
 @RestController
 @RequestMapping("/api/v1/cases/{caseId}/witnesses")
 public class WitnessController {
@@ -24,6 +27,7 @@ public class WitnessController {
     }
 
     // 선택한 사건에 목격자와 최초 진술을 함께 등록
+    @Operation(summary = "목격자와 최초 진술 등록")
     @PostMapping
     public ResponseEntity<WitnessCreateResponse> createWitness(
             @PathVariable("caseId") String caseId,
@@ -46,6 +50,7 @@ public class WitnessController {
     }
 
     // 사건별 목격자 정보와 진술 이력 조회
+    @Operation(summary = "목격자와 진술 이력 조회")
     @GetMapping
     public ResponseEntity<List<WitnessListResponse>> findWitnessList(
             @PathVariable("caseId") String caseId,

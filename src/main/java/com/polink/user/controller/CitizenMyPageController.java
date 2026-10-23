@@ -2,6 +2,8 @@ package com.polink.user.controller;
 
 import com.polink.user.dto.response.CitizenMyPageResponse;
 import com.polink.user.service.CitizenMyPageService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+@Tag(name = "회원")
 @RestController
 @RequestMapping("/api/v1/users/me")
 public class CitizenMyPageController {
@@ -22,6 +25,7 @@ public class CitizenMyPageController {
     }
 
     // 로그인한 시민 본인의 마이페이지 조회
+    @Operation(summary = "시민 전용 마이페이지 조회")
     @GetMapping("/mypage")
     public ResponseEntity<CitizenMyPageResponse> getMyPage(
             @AuthenticationPrincipal Jwt jwt

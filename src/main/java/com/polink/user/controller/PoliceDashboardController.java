@@ -2,6 +2,8 @@ package com.polink.user.controller;
 
 import com.polink.user.dto.response.PoliceDashboardResponse;
 import com.polink.user.service.PoliceDashboardService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+@Tag(name = "회원")
 @RestController
 @RequestMapping("/api/v1/users/me")
 public class PoliceDashboardController {
@@ -22,6 +25,7 @@ public class PoliceDashboardController {
     }
 
     // 로그인한 경찰의 대시보드 조회
+    @Operation(summary = "경찰 전용 대시보드 조회")
     @GetMapping("/police-dashboard")
     public ResponseEntity<PoliceDashboardResponse> getPoliceDashboard(
             @AuthenticationPrincipal Jwt jwt

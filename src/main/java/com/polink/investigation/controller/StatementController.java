@@ -3,6 +3,8 @@ package com.polink.investigation.controller;
 import com.polink.investigation.dto.request.StatementCreateRequest;
 import com.polink.investigation.dto.response.StatementResponse;
 import com.polink.investigation.service.StatementService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -10,6 +12,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+@Tag(name = "수사")
 @RestController
 @RequestMapping("/api/v1/cases/{caseId}/witnesses/{witnessId}/statements")
 public class StatementController {
@@ -20,6 +23,8 @@ public class StatementController {
         this.statementService = statementService;
     }
     // 기존 목격자에게 추가·정정·번복 진술 등록
+
+    @Operation(summary = "목격자 추가·정정·번복 진술 등록")
     @PostMapping
     public ResponseEntity<StatementResponse> createStatement(
             @PathVariable("caseId") String caseId,
