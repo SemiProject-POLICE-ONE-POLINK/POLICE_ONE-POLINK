@@ -5,6 +5,8 @@ import com.polink.investigation.dto.response.HypothesisGenerateResponse;
 import com.polink.investigation.dto.response.HypothesisResponse;
 import com.polink.investigation.service.HypothesisGenerationService;
 import com.polink.investigation.service.HypothesisService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "수사")
 @RestController
 @RequestMapping("/api/v1/cases/{caseId}/hypotheses")
 public class HypothesisController {
@@ -31,6 +34,7 @@ public class HypothesisController {
 
     // 가설 후보 생성 — 생성 결과는 DB에 저장하지 않음(가짜 후보로 테스트)
 // POST /api/v1/cases/{caseId}/hypotheses/generate
+    @Operation(summary = "AI 수사 가설 후보 생성")
     @PostMapping("/generate")
     public ResponseEntity<HypothesisGenerateResponse> generateHypotheses(
             @PathVariable("caseId") String caseId,
@@ -53,6 +57,7 @@ public class HypothesisController {
     }
 
     // 경찰관이 선택한 AI 가설 후보를 채택하여 저장
+    @Operation(summary = "수사 가설 채택")
     @PostMapping
     public ResponseEntity<HypothesisResponse> adoptHypothesis(
             @PathVariable("caseId") String caseId,
@@ -79,6 +84,7 @@ public class HypothesisController {
     }
 
     // 담당 경찰이 사건에 저장된 가설 목록을 조회
+    @Operation(summary = "채택한 수사 가설 조회")
     @GetMapping
     public ResponseEntity<List<HypothesisResponse>> getAdoptedHypotheses(
             @PathVariable("caseId") String caseId,

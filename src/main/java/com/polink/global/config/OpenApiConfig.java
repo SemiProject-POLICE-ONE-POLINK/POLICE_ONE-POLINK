@@ -24,7 +24,17 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("POLINK API")
                         .version("v1")
-                        .description("POLINK API 문서")
+                        .description("""
+                                POLINK는 AI 기반 경찰 업무 통합 관리 시스템입니다.
+                                
+                                이 문서에서는 회원 인증, 사건 관리, 증거물·목격자·수사기록 관리,
+                                AI 수사 가설 생성, 물품 등록·조회와 반환 신청 API를 확인할 수 있습니다.
+                                
+                                인증이 필요한 API는 로그인 후 발급받은 JWT를 Swagger UI의
+                                Authorize 버튼에 입력해 호출하세요. 회원가입과 로그인은 인증 없이 호출할 수 있습니다.
+                                
+                                이 서비스는 가상 데이터를 사용하는 개발용 프로토타입입니다.
+                                """)
                 )
                 .components(new Components()
                         .addSecuritySchemes(

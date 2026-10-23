@@ -3,12 +3,15 @@ package com.polink.investigation.controller;
 import com.polink.investigation.dto.request.InvestigationCloseRequest;
 import com.polink.investigation.dto.response.InvestigationCloseResponse;
 import com.polink.investigation.service.InvestigationCloseService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+@Tag(name = "수사")
 @RestController
 @RequestMapping("/api/v1/cases/{caseId}/investigation")
 public class InvestigationCloseController {
@@ -20,6 +23,7 @@ public class InvestigationCloseController {
     }
 
     // 담당 경찰의 수사 종결 — 사건을 관리자 종결 대기 상태로 변경
+    @Operation(summary = "수사 종결")
     @PostMapping("/close")
     public ResponseEntity<InvestigationCloseResponse> closeInvestigation(
             @PathVariable("caseId") String caseId,

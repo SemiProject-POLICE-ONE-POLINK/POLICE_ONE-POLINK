@@ -3,6 +3,8 @@ package com.polink.investigation.controller;
 import com.polink.investigation.dto.request.InvestigationLogCreateRequest;
 import com.polink.investigation.dto.response.InvestigationLogResponse;
 import com.polink.investigation.service.InvestigationLogService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "수사")
 @RestController
 @RequestMapping("/api/v1/cases/{caseId}/investigations")
 public class InvestigationLogController {
@@ -23,6 +26,7 @@ public class InvestigationLogController {
     }
 
     // 사건별 수사기록 등록
+    @Operation(summary = "수사 기록 등록")
     @PostMapping
     public ResponseEntity<InvestigationLogResponse>
     createInvestigationLog(
@@ -47,6 +51,7 @@ public class InvestigationLogController {
     }
 
     // 사건별 수사기록 목록 조회
+    @Operation(summary = "수사 기록 목록 조회")
     @GetMapping
     public ResponseEntity<List<InvestigationLogResponse>> getFindInvestigationLogs(
             @PathVariable("caseId") String caseId,

@@ -6,15 +6,21 @@ import com.polink.item.dto.ItemDetailResponse;
 import com.polink.item.entity.ItemStatus;
 import com.polink.item.entity.ItemType;
 import com.polink.item.service.ItemService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+
 import java.net.URI;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.polink.item.dto.ItemPageResponse;
+
 import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import com.polink.item.dto.ItemUpdateRequest;
@@ -22,13 +28,16 @@ import com.polink.user.entity.UserRole;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import com.polink.item.dto.ItemStatisticsResponse;
+
 import java.time.LocalDate;
+
 import org.springframework.format.annotation.DateTimeFormat;
 
 /*
  * 분실물·습득물 등록 요청을 받는 Controller다.
  * Controller는 HTTP 요청을 받고, 실제 등록 규칙은 ItemService에 맡긴다.
  */
+@Tag(name = "분실물·습득물")
 @RestController
 @RequestMapping("/api/v1/items")
 @RequiredArgsConstructor
@@ -42,6 +51,8 @@ public class ItemController {
      * 검색 조건은 모두 선택값이다.
      * 조건을 생략하면 전체 물품을 최신 등록순으로 페이지 단위 조회한다.
      */
+
+    @Operation(summary = "분실물·습득물 목록 조회")
     @GetMapping
     public ResponseEntity<ItemPageResponse> getItems(
             // Authorization: Bearer 토큰에서 검증된 로그인 사용자 정보다.
@@ -93,6 +104,7 @@ public class ItemController {
      * multipart/form-data의 일반 입력값을 ItemCreateRequest에 연결한다.
      * image는 선택 이미지 파일 한 개다.
      */
+    @Operation(summary = "분실물·습득물 등록")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ItemCreateResponse> registerItem(
             @AuthenticationPrincipal Jwt jwt,
@@ -129,6 +141,7 @@ public class ItemController {
      * GET /api/v1/items/{itemId}
      * 물품 번호는 분실물 L-0001 또는 습득물 F-0001 형식만 허용한다.
      */
+    @Operation(summary = "분실물·습득물 상세 조회")
     @GetMapping("/{itemId}")
     public ResponseEntity<ItemDetailResponse> getItemDetail(
             // Authorization: Bearer 토큰에서 검증된 로그인 사용자 정보다.
@@ -157,6 +170,7 @@ public class ItemController {
      * 경찰(POLICE): 보관 중(STORED)인 습득물만 수정 가능
      * 관리자(ADMIN): 물품 수정 기능의 대상 역할이 아니므로 접근 불가
      */
+    @Operation(summary = "분실물·습득물 정보 수정")
     @PatchMapping(
             value = "/{itemId}",
             consumes = MediaType.APPLICATION_JSON_VALUE
@@ -180,12 +194,10 @@ public class ItemController {
         // 역할마다 호출할 Service와 수정 가능한 물품 종류를 명확히 구분한다.
         ItemDetailResponse response = switch (currentUserRole) {
             // 시민의 경우 Service가 등록자 일치 여부와 LOST 상태를 추가 검증한다.
-            case CITIZEN ->
-                    itemService.updateLostItem(itemId, currentUserId, request);
+            case CITIZEN -> itemService.updateLostItem(itemId, currentUserId, request);
 
             // 경찰의 경우 Service가 FOUND 유형과 STORED 상태를 추가 검증한다.
-            case POLICE ->
-                    itemService.updateFoundItem(itemId, currentUserId, request);
+            case POLICE -> itemService.updateFoundItem(itemId, currentUserId, request);
 
             // 관리자는 통계 등 별도 관리 기능의 대상이며 물품 정보 수정은 할 수 없다.
             case ADMIN -> throw new ResponseStatusException(
@@ -204,6 +216,7 @@ public class ItemController {
      * 파일은 multipart/form-data의 image 필드로 전달한다.
      * 실제 등록자·물품 유형·상태·중복 이미지 검증은 Service가 담당한다.
      */
+    @Operation(summary = "분실물 이미지 첨부")
     @PostMapping(
             value = "/{itemId}/image",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
@@ -290,7 +303,9 @@ public class ItemController {
         }
     }
 
-    /** 시민 계정만 사용할 수 있는 기능의 권한을 검사한다. */
+    /**
+     * 시민 계정만 사용할 수 있는 기능의 권한을 검사한다.
+     */
     private void requireCitizen(Jwt jwt) {
         if (requireLoggedInUserRole(jwt) != UserRole.CITIZEN) {
             throw new ResponseStatusException(
@@ -307,6 +322,7 @@ public class ItemController {
      * 경찰과 관리자 계정이 등록일 기준의 분실물·습득물 현황 통계를 조회한다.
      * 날짜 조건을 생략하면 전체 기간 통계를 반환한다.
      */
+    @Operation(summary = "분실물·습득물 통계 조회")
     @GetMapping("/statistics")
     public ResponseEntity<ItemStatisticsResponse> getItemStatistics(
             @AuthenticationPrincipal Jwt jwt,

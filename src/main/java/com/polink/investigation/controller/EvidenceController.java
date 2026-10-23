@@ -4,6 +4,8 @@ import com.polink.investigation.dto.request.EvidenceCreateRequest;
 import com.polink.investigation.dto.response.EvidenceCreateResponse;
 import com.polink.investigation.dto.response.EvidenceListResponse;
 import com.polink.investigation.service.EvidenceService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -15,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
+@Tag(name = "수사")
 @RestController
 @RequestMapping("/api/v1/cases/{caseId}/evidences")
 public class EvidenceController {
@@ -26,6 +29,7 @@ public class EvidenceController {
     }
 
     // 선택한 사건에 첨부파일을 포함한 증거물 등록
+    @Operation(summary = "첨부파일 포함 증거물 등록")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<EvidenceCreateResponse> createEvidenceWithFile(
             @PathVariable("caseId") String caseId,
@@ -49,6 +53,7 @@ public class EvidenceController {
     }
 
     // 선택한 사건에 파일 없이 증거물 등록
+    @Operation(summary = "증거물 등록")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<EvidenceCreateResponse> createEvidence(
             @PathVariable("caseId") String caseId,
@@ -68,6 +73,7 @@ public class EvidenceController {
     }
 
     // 선택한 사건의 증거물 목록 조회
+    @Operation(summary = "증거물 목록 조회")
     @GetMapping
     public ResponseEntity<List<EvidenceListResponse>> findEvidenceList(
             @PathVariable("caseId") String caseId,

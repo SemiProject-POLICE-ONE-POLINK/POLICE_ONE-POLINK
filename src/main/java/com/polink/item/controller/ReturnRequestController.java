@@ -9,8 +9,12 @@ import com.polink.item.returnrequest.dto.ReturnRequestRejectRequest;
 import com.polink.item.returnrequest.entity.ReturnRequestStatus;
 import com.polink.item.returnrequest.service.ReturnRequestService;
 import com.polink.user.entity.UserRole;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+
 import java.net.URI;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +37,7 @@ import com.polink.item.returnrequest.dto.ReturnRequestProcessResponse;
  * 시민은 반환 신청 등록과 본인 신청 목록 조회를 할 수 있다.
  * 경찰은 전체 신청 조회·상세 조회·승인·반려·반환 완료 처리를 할 수 있다.
  */
+@Tag(name = "분실물·습득물")
 @RestController
 @RequestMapping("/api/v1/return-requests")
 @RequiredArgsConstructor
@@ -45,6 +50,7 @@ public class ReturnRequestController {
      * POST /api/v1/return-requests
      * 시민이 본인이 등록한 분실물과 습득물을 연결해 반환을 신청한다.
      */
+    @Operation(summary = "반환 신청")
     @PostMapping
     public ResponseEntity<ReturnRequestCreateResponse> createReturnRequest(
             // Authorization 헤더의 Bearer 토큰에서 추출된 JWT다.
@@ -74,6 +80,7 @@ public class ReturnRequestController {
      * 로그인한 시민이 본인의 반환 신청 목록만 조회한다.
      * status를 전달하면 해당 상태의 신청만 조회한다.
      */
+    @Operation(summary = "내 반환 신청 목록 조회")
     @GetMapping("/my")
     public ResponseEntity<MyReturnRequestListResponse> getMyReturnRequests(
             @AuthenticationPrincipal Jwt jwt,
@@ -107,6 +114,7 @@ public class ReturnRequestController {
      * 로그인한 시민이 본인이 만든 반환 신청 한 건의 상세 정보만 조회한다.
      * 경찰용 GET /{requestId}와 구분하기 위해 URL에 /my를 포함한다.
      */
+    @Operation(summary = "내 반환 신청 상세 조회")
     @GetMapping("/my/{requestId}")
     public ResponseEntity<ReturnRequestDetailResponse> getMyReturnRequestDetail(
             // Authorization 헤더에서 인증된 시민 JWT를 받는다.
@@ -137,6 +145,7 @@ public class ReturnRequestController {
      * 경찰이 전체 반환 신청을 조회한다.
      * 상태와 검색어는 선택값이며, 최신 신청순으로 페이지 조회한다.
      */
+    @Operation(summary = "경찰용 반환 신청 목록 조회")
     @GetMapping
     public ResponseEntity<PoliceReturnRequestListResponse> getReturnRequests(
             // Authorization 헤더에서 인증된 경찰 JWT를 받는다.
@@ -174,6 +183,7 @@ public class ReturnRequestController {
      * 경찰이 반환 신청 한 건의 상세 정보와
      * 연결된 분실물·습득물 정보를 조회한다.
      */
+    @Operation(summary = "경찰용 반환 신청 상세 조회")
     @GetMapping("/{requestId}")
     public ResponseEntity<ReturnRequestDetailResponse> getReturnRequestDetail(
             // Authorization 헤더에서 인증된 경찰 JWT를 받는다.
@@ -197,6 +207,7 @@ public class ReturnRequestController {
      * 경찰이 대기 상태의 반환 신청을 승인한다.
      * 승인되면 신청과 연결된 물품은 인계 대기 상태가 된다.
      */
+    @Operation(summary = "반환 신청 승인")
     @PatchMapping("/{requestId}/approve")
     public ResponseEntity<ReturnRequestProcessResponse> approveReturnRequest(
             // Authorization 헤더에서 인증된 경찰 JWT를 받는다.
@@ -221,44 +232,46 @@ public class ReturnRequestController {
         return ResponseEntity.ok(response);
     }
 
-        /*
-         * PATCH /api/v1/return-requests/{requestId}/reject
-         * 경찰이 대기 상태의 반환 신청을 반려하고,
-         * 반려 사유와 처리 정보를 저장한다.
-         */
-        @PatchMapping("/{requestId}/reject")
-        public ResponseEntity<ReturnRequestProcessResponse> rejectReturnRequest(
-                // Authorization 헤더에서 인증된 경찰 JWT를 받는다.
-                @AuthenticationPrincipal Jwt jwt,
+    /*
+     * PATCH /api/v1/return-requests/{requestId}/reject
+     * 경찰이 대기 상태의 반환 신청을 반려하고,
+     * 반려 사유와 처리 정보를 저장한다.
+     */
+    @Operation(summary = "반환 신청 반려")
+    @PatchMapping("/{requestId}/reject")
+    public ResponseEntity<ReturnRequestProcessResponse> rejectReturnRequest(
+            // Authorization 헤더에서 인증된 경찰 JWT를 받는다.
+            @AuthenticationPrincipal Jwt jwt,
 
-                // URL의 반환 신청 번호를 받는다.
-                @PathVariable Integer requestId,
+            // URL의 반환 신청 번호를 받는다.
+            @PathVariable Integer requestId,
 
-                // 반려 사유를 JSON 요청 본문에서 받는다.
-                @Valid @RequestBody ReturnRequestRejectRequest request
-        ) {
-            // JWT의 sub Claim에서 반려 처리 경찰관의 회원 번호를 가져온다.
-            Integer currentPoliceId = requireLoggedInUserId(jwt);
+            // 반려 사유를 JSON 요청 본문에서 받는다.
+            @Valid @RequestBody ReturnRequestRejectRequest request
+    ) {
+        // JWT의 sub Claim에서 반려 처리 경찰관의 회원 번호를 가져온다.
+        Integer currentPoliceId = requireLoggedInUserId(jwt);
 
-            // 반려 처리는 경찰 계정만 가능하다.
-            requirePolice(jwt);
+        // 반려 처리는 경찰 계정만 가능하다.
+        requirePolice(jwt);
 
-            // Service가 PENDING 상태 검증, 반려 사유 저장, 처리 시각 저장을 수행한다.
-            ReturnRequestProcessResponse response =
-                    returnRequestService.rejectReturnRequest(
-                            currentPoliceId,
-                            requestId,
-                            request.rejectReason()
-                    );
+        // Service가 PENDING 상태 검증, 반려 사유 저장, 처리 시각 저장을 수행한다.
+        ReturnRequestProcessResponse response =
+                returnRequestService.rejectReturnRequest(
+                        currentPoliceId,
+                        requestId,
+                        request.rejectReason()
+                );
 
-            // 처리된 신청 번호, REJECTED 상태, 처리 시각을 200 OK로 반환한다.
-            return ResponseEntity.ok(response);
-        }
+        // 처리된 신청 번호, REJECTED 상태, 처리 시각을 200 OK로 반환한다.
+        return ResponseEntity.ok(response);
+    }
 
     /*
      * PATCH /api/v1/return-requests/{requestId}/complete
      * 경찰이 승인된 반환 신청의 실제 물품 인계를 완료한다.
      */
+    @Operation(summary = "물품 반환 완료 처리")
     @PatchMapping("/{requestId}/complete")
     public ResponseEntity<ReturnRequestCompleteResponse> completeReturnRequest(
             // Authorization 헤더에서 인증된 경찰 JWT를 받는다.
@@ -332,7 +345,9 @@ public class ReturnRequestController {
         }
     }
 
-    /** 시민 역할만 허용한다. 시민이 아니면 403 Forbidden을 반환한다. */
+    /**
+     * 시민 역할만 허용한다. 시민이 아니면 403 Forbidden을 반환한다.
+     */
     private void requireCitizen(Jwt jwt) {
         if (requireLoggedInUserRole(jwt) != UserRole.CITIZEN) {
             throw new ResponseStatusException(
@@ -342,7 +357,9 @@ public class ReturnRequestController {
         }
     }
 
-    /** 경찰 역할만 허용한다. 경찰이 아니면 403 Forbidden을 반환한다. */
+    /**
+     * 경찰 역할만 허용한다. 경찰이 아니면 403 Forbidden을 반환한다.
+     */
     private void requirePolice(Jwt jwt) {
         if (requireLoggedInUserRole(jwt) != UserRole.POLICE) {
             throw new ResponseStatusException(
