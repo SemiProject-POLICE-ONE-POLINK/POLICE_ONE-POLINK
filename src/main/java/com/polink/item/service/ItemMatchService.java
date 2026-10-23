@@ -9,6 +9,7 @@ import com.polink.item.entity.ItemType;
 import com.polink.item.exception.ItemNotFoundException;
 import com.polink.item.repository.ItemRepository;
 import java.util.HashSet;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.Map;
@@ -170,6 +171,16 @@ public class ItemMatchService {
                             candidate.score()
                     );
                 })
+                /*
+                 * 규칙 기반 AI는 자체 정렬하지만 외부 AI는 응답 순서를 보장하지 않는다.
+                 * 어떤 구현체를 사용해도 API 명세의 "유사도 높은 순"을 지키도록
+                 * 서버가 최종 점수와 물품 번호로 정렬한다.
+                 */
+                .sorted(
+                        Comparator.comparingInt(ItemMatchResponse::score)
+                                .reversed()
+                                .thenComparing(ItemMatchResponse::foundItemId)
+                )
                 // 화면에 너무 많은 후보가 표시되지 않도록 최대 10건만 반환한다.
                 .limit(MAX_MATCH_COUNT)
                 .toList();

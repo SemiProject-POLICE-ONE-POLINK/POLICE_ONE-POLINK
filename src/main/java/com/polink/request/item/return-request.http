@@ -78,7 +78,8 @@ PATCH {{baseUrl}}/api/v1/return-requests/{{createdReturnRequestId}}/approve
 Authorization: Bearer {{policeToken}}
 
 ### RET-008. 경찰: 승인된 반환 신청의 물품 인계 완료 → 200
-### 응답: requestId, completedAt
+### 응답: requestId, returnedAt
+### returnedAt은 연결된 물품이 RETURNED 상태로 바뀐 실제 인계 완료 시각이다.
 PATCH {{baseUrl}}/api/v1/return-requests/{{createdReturnRequestId}}/complete
 Authorization: Bearer {{policeToken}}
 

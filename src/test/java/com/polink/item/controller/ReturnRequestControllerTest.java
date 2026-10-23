@@ -218,7 +218,8 @@ class ReturnRequestControllerTest {
         // 응답 본문에는 완료 신청 번호와 완료 시각이 있어야 한다.
         ReturnRequestCompleteResponse response = requireNonNull(result.getBody());
         assertEquals(1, response.requestId());
-        assertEquals(completedAt, response.completedAt());
+        // 응답 JSON 필드명은 API 명세에 맞춰 returnedAt을 사용한다.
+        assertEquals(completedAt, response.returnedAt());
 
         // Controller가 로그인한 경찰 번호와 신청 번호를 Service에 정확히 전달해야 한다.
         verify(returnRequestService).completeReturnRequest(2, 1);

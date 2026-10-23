@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.polink.item.dto.ItemPageResponse;
+import com.polink.item.entity.ItemStatus;
+import com.polink.item.entity.ItemType;
 import com.polink.item.service.ItemService;
 import com.polink.user.entity.UserRole;
 import java.util.List;
@@ -165,10 +167,13 @@ class MyItemControllerTest {
     // URL이 바뀌면 프론트엔드와 API 문서가 함께 깨질 수 있으므로 경로 자체를 테스트한다.
     @Test
     void getMyItemsUsesMyEndpoint() throws NoSuchMethodException {
-        // getMyItems 메서드의 JWT, page, size 파라미터 구성을 기준으로 메서드를 찾는다.
+        // 선택 필터(itemType, status)를 포함한 실제 HTTP API 메서드를 찾는다.
+        // 필터가 추가돼도 /my 경로 자체가 바뀌면 안 된다.
         Method method = MyItemController.class.getDeclaredMethod(
                 "getMyItems",
                 Jwt.class,
+                ItemType.class,
+                ItemStatus.class,
                 int.class,
                 int.class
         );

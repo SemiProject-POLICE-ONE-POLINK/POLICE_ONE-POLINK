@@ -977,10 +977,11 @@ class ReturnRequestServiceTest {
         assertNotNull(foundItem.getReturnedAt());
 
         // 응답에는 신청 엔티티에 기록된 실제 완료 시각이 포함되어야 한다.
-        assertNotNull(response.completedAt());
+        // 외부 API 계약은 반환 완료 시각을 returnedAt이라는 이름으로 노출한다.
+        assertNotNull(response.returnedAt());
         assertEquals(
                 returnRequest.getCompletedAt(),
-                response.completedAt()
+                response.returnedAt()
         );
     }
 

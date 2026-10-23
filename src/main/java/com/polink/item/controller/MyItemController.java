@@ -1,6 +1,8 @@
 package com.polink.item.controller;
 
 import com.polink.item.dto.ItemPageResponse;
+import com.polink.item.entity.ItemStatus;
+import com.polink.item.entity.ItemType;
 import com.polink.item.service.ItemService;
 import com.polink.user.entity.UserRole;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,7 +33,7 @@ public class MyItemController {
     private final ItemService itemService;
 
     /*
-     * GET /api/v1/items/my?page=0&size=10
+     * GET /api/v1/items/my?itemType=LOST&status=LOST&page=0&size=10
      * JWT로 로그인한 시민 본인이 등록한 물품만 최신 등록순으로 조회한다.
      * URL의 my는 JWT subject(sub)의 사용자 ID를 기준으로
      * "내가 등록한 물품"만 조회한다는 뜻이다.
@@ -41,6 +43,12 @@ public class MyItemController {
     public ResponseEntity<ItemPageResponse> getMyItems(
             // Authorization 헤더의 Bearer 토큰에서 Spring Security가 추출한 JWT다.
             @AuthenticationPrincipal Jwt jwt,
+
+            // 내 등록 물품 중 분실물/습득물만 골라 보고 싶을 때 사용하는 선택 필터다.
+            @RequestParam(required = false) ItemType itemType,
+
+            // 반환 진행 상태까지 포함해 "내가 현재 처리해야 할 물품"을 좁힐 때 사용한다.
+            @RequestParam(required = false) ItemStatus status,
 
             // page는 0부터 시작하며 기본값은 첫 번째 페이지인 0이다.
             @RequestParam(defaultValue = "0") int page,
@@ -57,8 +65,24 @@ public class MyItemController {
         // 요청에서 registrantId를 받지 않고 JWT 사용자 ID만 사용한다.
         // 따라서 다른 사용자의 등록 물품을 임의로 조회할 수 없다.
         return ResponseEntity.ok(
-                itemService.getMyItems(currentUserId, page, size)
+                itemService.getMyItems(currentUserId, itemType, status, page, size)
         );
+    }
+
+    /**
+     * 기존 Controller 단위 테스트와 내부 호출을 위한 호환용 메서드다.
+     * HTTP 요청은 위의 {@code @GetMapping} 메서드로만 받고, 이 메서드는
+     * 필터를 생략한 이전 API 호출을 동일하게 처리한다.
+     */
+    public ResponseEntity<ItemPageResponse> getMyItems(
+            Jwt jwt,
+            int page,
+            int size
+    ) {
+        Integer currentUserId = requireLoggedInUserId(jwt);
+        requireCitizen(jwt);
+
+        return ResponseEntity.ok(itemService.getMyItems(currentUserId, page, size));
     }
 
     /*
