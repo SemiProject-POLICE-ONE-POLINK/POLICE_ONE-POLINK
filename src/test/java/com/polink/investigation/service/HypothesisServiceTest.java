@@ -47,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-// 실제 DB·AI 없이 가설 채택·조회와 접근 제한 검사
+// 실제 DB·AI 없이 가설 채택·조회, 분석별 채택 제한, 접근 권한 검사
 @ExtendWith(MockitoExtension.class)
 class HypothesisServiceTest {
 
@@ -109,7 +109,7 @@ class HypothesisServiceTest {
         caseFile = createCase(CASE_ID);
         caseFile.assignOfficer(officer);
 
-        // 커밋 후 실행할 작업의 등록 공간만 준비
+        // 저장 결과 처리 작업의 등록 공간만 준비
         // 실제 DB 트랜잭션을 시작하는 것은 아님
         TransactionSynchronizationManager.initSynchronization();
     }
@@ -122,46 +122,24 @@ class HypothesisServiceTest {
         }
     }
 
-    // ==================== 가설 채택 테스트 ====================
+    // ==================== 가설 채택·체크리스트 저장 ====================
 
     @Test
-    @DisplayName("가설과 미완료 체크리스트를 저장하고 응답에는 원문을 반환한다")
+    @DisplayName("원본 가설과 미완료 체크리스트를 저장하고 응답에는 원문을 반환한다")
     void adoptHypothesis() {
         prepareAccess();
+        prepareValidBasis();
+        prepareSaveSuccess();
 
         HypothesisAiCandidate candidate = candidate(
+                "제3자가 현장에 출입했을 가능성이 있다.",
                 List.of(EVIDENCE_ID),
                 List.of(STATEMENT_ID)
         );
 
         String candidateId = storeCandidate(candidate);
-        prepareValidBasis();
 
-        // DB가 가설 번호와 채택 일시를 생성하는 상황 재현
-        when(hypothesisRepository.save(any(Hypothesis.class)))
-                .thenAnswer(invocation -> {
-                    Hypothesis hypothesis = invocation.getArgument(0);
-
-                    ReflectionTestUtils.setField(
-                            hypothesis,
-                            "hypothesisId",
-                            20
-                    );
-
-                    ReflectionTestUtils.setField(
-                            hypothesis,
-                            "adoptedAt",
-                            BASE_TIME
-                    );
-
-                    return hypothesis;
-                });
-
-        HypothesisResponse response = service.adoptHypothesis(
-                CASE_ID,
-                OFFICER_ID,
-                new HypothesisSaveRequest(candidateId)
-        );
+        HypothesisResponse response = adopt(candidateId);
 
         ArgumentCaptor<Hypothesis> captor =
                 ArgumentCaptor.forClass(Hypothesis.class);
@@ -189,14 +167,11 @@ class HypothesisServiceTest {
                 savedChecklist.recommendation()
         );
 
-        // 최초 저장 시 확인 항목은 1번·미완료 상태
+        // 줄별 확인 항목을 생성하고 최초 상태를 미완료로 설정
         assertEquals(
                 List.of(
-                        new CheckItem(
-                                1,
-                                "출입 시각을 추가 확인해주세요.",
-                                false
-                        )
+                        new CheckItem(1, "출입 시각 확인", false),
+                        new CheckItem(2, "현장 CCTV 추가 확보", false)
                 ),
                 savedChecklist.checkItems()
         );
@@ -207,7 +182,6 @@ class HypothesisServiceTest {
                 candidate.circumstances()
         );
 
-        // 근거 번호와 정황이 기존 방식대로 JSON에 저장되는지 확인
         assertEquals(
                 expectedBasis,
                 objectMapper.readValue(
@@ -216,7 +190,6 @@ class HypothesisServiceTest {
                 )
         );
 
-        // 기존 가설 응답의 기본 정보 확인
         assertEquals(Integer.valueOf(20), response.hypothesisId());
         assertEquals(CASE_ID, response.caseId());
         assertEquals(candidate.content(), response.content());
@@ -237,108 +210,265 @@ class HypothesisServiceTest {
         // 커밋 전에는 임시 후보 유지
         assertTrue(candidateStore.find(candidateId).isPresent());
 
-        // 실제 DB 대신 정상 커밋 callback 실행
         simulateCommit();
 
         assertTrue(candidateStore.find(candidateId).isEmpty());
     }
 
+    // ==================== 같은 분석에서 하나만 채택 ====================
+
     @Test
-    @DisplayName("정상 커밋 후 같은 후보로 다시 채택하면 저장하지 않는다")
-    void rejectAlreadyAdoptedCandidate() {
+    @DisplayName("하나를 채택 완료하면 같은 분석의 다른 후보도 채택할 수 없다")
+    void rejectOtherCandidatesAfterAdoption() {
         prepareAccess();
+        prepareSaveSuccess();
 
-        String candidateId = storeCandidate(
-                candidate(List.of(), List.of())
-        );
+        String first = storeCandidate("analysis-1", "가설 A");
+        String second = storeCandidate("analysis-1", "가설 B");
+        String third = storeCandidate("analysis-1", "가설 C");
 
-        when(hypothesisRepository.save(any(Hypothesis.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        adopt(second);
 
-        HypothesisSaveRequest request =
-                new HypothesisSaveRequest(candidateId);
-
-        service.adoptHypothesis(CASE_ID, OFFICER_ID, request);
+        // DB 저장이 완료되기 전까지 후보 자체는 보관
+        assertTrue(candidateStore.find(first).isPresent());
+        assertTrue(candidateStore.find(second).isPresent());
+        assertTrue(candidateStore.find(third).isPresent());
 
         simulateCommit();
 
-        assertStatus(404, () ->
-                service.adoptHypothesis(
-                        CASE_ID,
-                        OFFICER_ID,
-                        request
-                )
-        );
+        // 같은 분석의 모든 후보를 추가 채택 대상에서 제외
+        assertTrue(candidateStore.find(first).isEmpty());
+        assertTrue(candidateStore.find(second).isEmpty());
+        assertTrue(candidateStore.find(third).isEmpty());
 
-        // 첫 요청만 저장되고 두 번째 요청에서는 저장하지 않음
+        assertStatus(404, () -> adopt(first));
+        assertStatus(404, () -> adopt(second));
+        assertStatus(404, () -> adopt(third));
+
         verify(hypothesisRepository, times(1))
                 .save(any(Hypothesis.class));
     }
 
     @Test
-    @DisplayName("DB 저장에 실패하면 예외를 전달하고 후보를 유지한다")
-    void keepCandidateWhenSaveFails() {
+    @DisplayName("채택 처리 중에는 같은 분석의 다른 후보 요청을 거부한다")
+    void rejectOtherCandidateWhileAdopting() {
+        prepareAccess();
+        prepareSaveSuccess();
+
+        String first = storeCandidate("analysis-1", "가설 A");
+        String second = storeCandidate("analysis-1", "가설 B");
+
+        // 아직 커밋 결과를 전달하지 않은 채택 요청
+        adopt(first);
+
+        // 첫 요청의 저장 결과가 확정되기 전에는 다른 후보 저장 금지
+        assertStatus(409, () -> adopt(second));
+
+        verify(hypothesisRepository, times(1))
+                .save(any(Hypothesis.class));
+
+        simulateCommit();
+
+        assertTrue(candidateStore.find(first).isEmpty());
+        assertTrue(candidateStore.find(second).isEmpty());
+    }
+
+    @Test
+    @DisplayName("채택 처리 중 같은 후보를 다시 요청해도 한 번만 저장한다")
+    void rejectSameCandidateWhileAdopting() {
+        prepareAccess();
+        prepareSaveSuccess();
+
+        String candidateId =
+                storeCandidate(candidate(List.of(), List.of()));
+
+        adopt(candidateId);
+
+        assertStatus(409, () -> adopt(candidateId));
+
+        verify(hypothesisRepository, times(1))
+                .save(any(Hypothesis.class));
+    }
+
+    @Test
+    @DisplayName("정상 커밋 후 같은 후보를 다시 채택하면 404를 반환한다")
+    void rejectAlreadyAdoptedCandidate() {
+        prepareAccess();
+        prepareSaveSuccess();
+
+        String candidateId =
+                storeCandidate(candidate(List.of(), List.of()));
+
+        adopt(candidateId);
+        simulateCommit();
+
+        assertStatus(404, () -> adopt(candidateId));
+
+        verify(hypothesisRepository, times(1))
+                .save(any(Hypothesis.class));
+    }
+
+    @Test
+    @DisplayName("한 분석의 채택 완료가 다른 분석의 후보에는 영향을 주지 않는다")
+    void keepCandidatesFromOtherAnalysis() {
+        prepareAccess();
+        prepareSaveSuccess();
+
+        String firstAnalysis =
+                storeCandidate("analysis-1", "첫 번째 분석의 가설");
+
+        String secondAnalysis =
+                storeCandidate("analysis-2", "두 번째 분석의 가설");
+
+        adopt(firstAnalysis);
+        simulateCommit();
+
+        assertTrue(candidateStore.find(firstAnalysis).isEmpty());
+        assertTrue(candidateStore.find(secondAnalysis).isPresent());
+
+        // 다른 분석에서는 별도로 하나를 채택할 수 있음
+        assertDoesNotThrow(() -> adopt(secondAnalysis));
+
+        simulateCommit();
+
+        assertTrue(candidateStore.find(secondAnalysis).isEmpty());
+
+        verify(hypothesisRepository, times(2))
+                .save(any(Hypothesis.class));
+    }
+
+    // ==================== 저장 실패·취소 결과 처리 ====================
+
+    @Test
+    @DisplayName("DB 저장 실패 후 롤백되면 같은 분석의 다른 후보를 다시 채택할 수 있다")
+    void allowRetryAfterSaveFailure() {
         prepareAccess();
 
-        String candidateId = storeCandidate(
-                candidate(List.of(), List.of())
-        );
+        String first = storeCandidate("analysis-1", "가설 A");
+        String second = storeCandidate("analysis-1", "가설 B");
 
         RuntimeException saveFailure =
                 new IllegalStateException("테스트용 DB 저장 실패");
 
         when(hypothesisRepository.save(any(Hypothesis.class)))
-                .thenThrow(saveFailure);
+                .thenThrow(saveFailure)
+                .thenAnswer(invocation ->
+                        assignGeneratedValues(invocation.getArgument(0))
+                );
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
-                () -> service.adoptHypothesis(
-                        CASE_ID,
-                        OFFICER_ID,
-                        new HypothesisSaveRequest(candidateId)
-                )
+                () -> adopt(first)
         );
 
         assertSame(saveFailure, exception);
-        assertTrue(candidateStore.find(candidateId).isPresent());
+        assertTrue(candidateStore.find(first).isPresent());
+        assertTrue(candidateStore.find(second).isPresent());
 
-        // 저장에 실패했으므로 후보 제거 작업도 등록되지 않음
-        assertTrue(
+        // 현재 구현은 저장 전에 결과 처리 작업을 등록함
+        assertEquals(
+                1,
                 TransactionSynchronizationManager
                         .getSynchronizations()
-                        .isEmpty()
+                        .size()
         );
+
+        simulateCompletion(
+                TransactionSynchronization.STATUS_ROLLED_BACK
+        );
+
+        // 롤백 결과를 전달하면 채택 처리 상태가 해제됨
+        assertDoesNotThrow(() -> adopt(second));
+
+        simulateCommit();
+
+        assertTrue(candidateStore.find(first).isEmpty());
+        assertTrue(candidateStore.find(second).isEmpty());
+
+        // 첫 저장 시도 실패 + 두 번째 저장 시도 성공
+        verify(hypothesisRepository, times(2))
+                .save(any(Hypothesis.class));
     }
 
     @Test
-    @DisplayName("롤백 결과가 전달되면 임시 후보를 제거하지 않는다")
-    void keepCandidateWhenRolledBack() {
+    @DisplayName("롤백 결과가 전달되면 후보를 유지하고 다른 후보의 채택을 허용한다")
+    void allowAnotherCandidateAfterRollback() {
+        prepareAccess();
+        prepareSaveSuccess();
+
+        String first = storeCandidate("analysis-1", "가설 A");
+        String second = storeCandidate("analysis-1", "가설 B");
+
+        adopt(first);
+
+        // Repository 호출 후 트랜잭션이 취소된 상황을 전달
+        simulateCompletion(
+                TransactionSynchronization.STATUS_ROLLED_BACK
+        );
+
+        assertTrue(candidateStore.find(first).isPresent());
+        assertTrue(candidateStore.find(second).isPresent());
+
+        assertDoesNotThrow(() -> adopt(second));
+
+        simulateCommit();
+
+        assertTrue(candidateStore.find(first).isEmpty());
+        assertTrue(candidateStore.find(second).isEmpty());
+
+        verify(hypothesisRepository, times(2))
+                .save(any(Hypothesis.class));
+    }
+
+    @Test
+    @DisplayName("저장 결과가 불확실하면 후보를 유지하지만 추가 채택은 제한한다")
+    void keepAdoptionBlockedWhenResultUnknown() {
+        prepareAccess();
+        prepareSaveSuccess();
+
+        String first = storeCandidate("analysis-1", "가설 A");
+        String second = storeCandidate("analysis-1", "가설 B");
+
+        adopt(first);
+
+        simulateCompletion(
+                TransactionSynchronization.STATUS_UNKNOWN
+        );
+
+        assertTrue(candidateStore.find(first).isPresent());
+        assertTrue(candidateStore.find(second).isPresent());
+
+        assertStatus(409, () -> adopt(second));
+
+        verify(hypothesisRepository, times(1))
+                .save(any(Hypothesis.class));
+    }
+
+    @Test
+    @DisplayName("저장 결과 처리 공간이 없으면 채택을 시작하거나 DB에 저장하지 않는다")
+    void rejectWithoutTransactionSynchronization() {
         prepareAccess();
 
-        String candidateId = storeCandidate(
-                candidate(List.of(), List.of())
+        String candidateId =
+                storeCandidate(candidate(List.of(), List.of()));
+
+        TransactionSynchronizationManager.clearSynchronization();
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> adopt(candidateId)
         );
-
-        when(hypothesisRepository.save(any(Hypothesis.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        service.adoptHypothesis(
-                CASE_ID,
-                OFFICER_ID,
-                new HypothesisSaveRequest(candidateId)
-        );
-
-        // 정상 커밋 없이 롤백 완료 상황만 전달
-        for (TransactionSynchronization synchronization :
-                TransactionSynchronizationManager.getSynchronizations()) {
-
-            synchronization.afterCompletion(
-                    TransactionSynchronization.STATUS_ROLLED_BACK
-            );
-        }
 
         assertTrue(candidateStore.find(candidateId).isPresent());
+
+        verify(hypothesisRepository, never())
+                .save(any(Hypothesis.class));
+
+        // 채택 시작 상태를 남기지 않았는지 확인
+        assertTrue(candidateStore.tryBeginAdoption(candidateId));
     }
+
+    // ==================== 후보·사건 상태·근거 검증 ====================
 
     @Test
     @DisplayName("저장소에서 찾을 수 없는 후보는 채택하지 않는다")
@@ -380,11 +510,7 @@ class HypothesisServiceTest {
     void rejectAdoptionWhenNotInvestigating(CaseStatus status) {
         prepareAccess();
 
-        ReflectionTestUtils.setField(
-                caseFile,
-                "status",
-                status
-        );
+        ReflectionTestUtils.setField(caseFile, "status", status);
 
         assertAdoptRejected(409, "unused-candidate");
     }
@@ -414,6 +540,12 @@ class HypothesisServiceTest {
         }
 
         assertAdoptRejected(400, candidateId);
+
+        assertTrue(
+                TransactionSynchronizationManager
+                        .getSynchronizations()
+                        .isEmpty()
+        );
     }
 
     @Test
@@ -443,10 +575,8 @@ class HypothesisServiceTest {
         Statement statement = mock(Statement.class);
 
         when(statement.getWitnessId()).thenReturn(WITNESS_ID);
-
         when(statementRepository.findById(STATEMENT_ID))
                 .thenReturn(Optional.of(statement));
-
         when(witnessRepository.findById(WITNESS_ID))
                 .thenReturn(Optional.empty());
 
@@ -466,20 +596,18 @@ class HypothesisServiceTest {
         Witness witness = mock(Witness.class);
 
         when(statement.getWitnessId()).thenReturn(WITNESS_ID);
-
         when(witness.getCaseFile())
                 .thenReturn(createCase(OTHER_CASE_ID));
 
         when(statementRepository.findById(STATEMENT_ID))
                 .thenReturn(Optional.of(statement));
-
         when(witnessRepository.findById(WITNESS_ID))
                 .thenReturn(Optional.of(witness));
 
         assertAdoptRejected(400, candidateId);
     }
 
-    // ==================== 기존 가설 조회 테스트 ====================
+    // ==================== 기존 가설 조회 ====================
 
     @Test
     @DisplayName("기존 문자열 가설을 DTO로 변환하고 근거 JSON을 복원한다")
@@ -510,11 +638,7 @@ class HypothesisServiceTest {
         when(hypothesisRepository.findAdoptedByCaseId(CASE_ID))
                 .thenReturn(List.of(newest, older));
 
-        List<HypothesisResponse> responses =
-                service.findAdoptedHypotheses(
-                        CASE_ID,
-                        OFFICER_ID
-                );
+        List<HypothesisResponse> responses = findAdopted();
 
         assertEquals(2, responses.size());
 
@@ -544,7 +668,6 @@ class HypothesisServiceTest {
         );
 
         verify(hypothesisRepository).findAdoptedByCaseId(CASE_ID);
-
         verify(hypothesisRepository, never())
                 .save(any(Hypothesis.class));
     }
@@ -557,11 +680,7 @@ class HypothesisServiceTest {
         when(hypothesisRepository.findAdoptedByCaseId(CASE_ID))
                 .thenReturn(List.of());
 
-        List<HypothesisResponse> responses =
-                service.findAdoptedHypotheses(
-                        CASE_ID,
-                        OFFICER_ID
-                );
+        List<HypothesisResponse> responses = findAdopted();
 
         assertNotNull(responses);
         assertTrue(responses.isEmpty());
@@ -573,21 +692,12 @@ class HypothesisServiceTest {
     void allowReadRegardlessOfCaseStatus(CaseStatus status) {
         prepareAccess();
 
-        ReflectionTestUtils.setField(
-                caseFile,
-                "status",
-                status
-        );
+        ReflectionTestUtils.setField(caseFile, "status", status);
 
         when(hypothesisRepository.findAdoptedByCaseId(CASE_ID))
                 .thenReturn(List.of());
 
-        assertDoesNotThrow(() ->
-                service.findAdoptedHypotheses(
-                        CASE_ID,
-                        OFFICER_ID
-                )
-        );
+        assertDoesNotThrow(() -> findAdopted());
 
         verify(hypothesisRepository).findAdoptedByCaseId(CASE_ID);
     }
@@ -609,10 +719,7 @@ class HypothesisServiceTest {
 
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
-                () -> service.findAdoptedHypotheses(
-                        CASE_ID,
-                        OFFICER_ID
-                )
+                () -> findAdopted()
         );
 
         assertEquals(
@@ -621,16 +728,16 @@ class HypothesisServiceTest {
         );
     }
 
-    // ==================== 체크리스트 JSON 호환 테스트 ====================
+    // ==================== 체크리스트 JSON 호환 ====================
 
     @Test
-    @DisplayName("체크리스트 JSON에서 원문을 반환하고 저장된 체크 상태는 유지한다")
+    @DisplayName("체크리스트 JSON에서 원문을 반환하고 기존 체크 상태는 유지한다")
     void findHypothesisWithChecklistJson() {
         prepareAccess();
 
         HypothesisChecklist storedChecklist =
                 new HypothesisChecklist(
-                        "- CCTV 확인\n- 목격자 조사",
+                        "CCTV 확인\n목격자 조사",
                         List.of(
                                 new CheckItem(1, "CCTV 확인", true),
                                 new CheckItem(2, "목격자 조사", false)
@@ -651,11 +758,7 @@ class HypothesisServiceTest {
         when(hypothesisRepository.findAdoptedByCaseId(CASE_ID))
                 .thenReturn(List.of(hypothesis));
 
-        List<HypothesisResponse> responses =
-                service.findAdoptedHypotheses(
-                        CASE_ID,
-                        OFFICER_ID
-                );
+        List<HypothesisResponse> responses = findAdopted();
 
         assertEquals(1, responses.size());
 
@@ -680,7 +783,7 @@ class HypothesisServiceTest {
     }
 
     @Test
-    @DisplayName("체크리스트 JSON을 읽지 못하면 원문이나 상태를 임의로 초기화하지 않는다")
+    @DisplayName("체크리스트 JSON을 읽지 못하면 기존 저장값을 초기화하지 않는다")
     void rejectInvalidStoredChecklistJson() {
         prepareAccess();
 
@@ -692,7 +795,6 @@ class HypothesisServiceTest {
         );
 
         String invalidChecklistJson = "{invalid-checklist-json";
-
         hypothesis.updateChecklist(invalidChecklistJson);
 
         when(hypothesisRepository.findAdoptedByCaseId(CASE_ID))
@@ -700,10 +802,7 @@ class HypothesisServiceTest {
 
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
-                () -> service.findAdoptedHypotheses(
-                        CASE_ID,
-                        OFFICER_ID
-                )
+                () -> findAdopted()
         );
 
         assertEquals(
@@ -711,7 +810,6 @@ class HypothesisServiceTest {
                 exception.getMessage()
         );
 
-        // 변환 실패 후에도 기존 저장값을 덮어쓰지 않음
         assertEquals(
                 invalidChecklistJson,
                 hypothesis.getAdditionalRecommendation()
@@ -824,15 +922,36 @@ class HypothesisServiceTest {
 
         when(evidenceRepository.findById(EVIDENCE_ID))
                 .thenReturn(Optional.of(evidence));
-
         when(statementRepository.findById(STATEMENT_ID))
                 .thenReturn(Optional.of(statement));
-
         when(witnessRepository.findById(WITNESS_ID))
                 .thenReturn(Optional.of(witness));
     }
 
-    // 서버에 보관할 가설 후보 등록
+    // DB가 가설 번호와 채택 일시를 생성하는 상황 재현
+    private void prepareSaveSuccess() {
+        when(hypothesisRepository.save(any(Hypothesis.class)))
+                .thenAnswer(invocation ->
+                        assignGeneratedValues(invocation.getArgument(0))
+                );
+    }
+
+    private Hypothesis assignGeneratedValues(Hypothesis hypothesis) {
+        ReflectionTestUtils.setField(
+                hypothesis,
+                "hypothesisId",
+                20
+        );
+        ReflectionTestUtils.setField(
+                hypothesis,
+                "adoptedAt",
+                BASE_TIME
+        );
+
+        return hypothesis;
+    }
+
+    // 기존 저장 방식으로 후보 하나를 별도 분석에 보관
     private String storeCandidate(HypothesisAiCandidate candidate) {
         return candidateStore.put(
                 CASE_ID,
@@ -842,15 +961,41 @@ class HypothesisServiceTest {
         );
     }
 
-    // 테스트용 AI 가설 후보 생성
+    // 동일한 analysisId를 전달하면 같은 분석의 후보로 보관
+    private String storeCandidate(
+            String analysisId,
+            String content
+    ) {
+        return candidateStore.put(
+                analysisId,
+                CASE_ID,
+                OFFICER_ID,
+                candidate(content, List.of(), List.of()),
+                75
+        );
+    }
+
     private HypothesisAiCandidate candidate(
             List<String> evidenceIds,
             List<Integer> statementIds
     ) {
+        return candidate(
+                "제3자가 현장에 출입했을 가능성이 있다.",
+                evidenceIds,
+                statementIds
+        );
+    }
+
+    // 테스트용 AI 가설 후보 생성
+    private HypothesisAiCandidate candidate(
+            String content,
+            List<String> evidenceIds,
+            List<Integer> statementIds
+    ) {
         return new HypothesisAiCandidate(
-                "제3자가 현장에 출입했을 가능성",
+                content,
                 "출입 기록과 진술을 함께 검토한 가설",
-                "출입 시각을 추가 확인해주세요.",
+                "출입 시각 확인\n현장 CCTV 추가 확보",
                 evidenceIds,
                 statementIds,
                 List.of(),
@@ -882,7 +1027,6 @@ class HypothesisServiceTest {
                 "hypothesisId",
                 id
         );
-
         ReflectionTestUtils.setField(
                 hypothesis,
                 "adoptedAt",
@@ -918,15 +1062,27 @@ class HypothesisServiceTest {
         );
     }
 
-    // 실패 상태 코드와 가설 저장 미호출 확인
-    private void assertAdoptRejected(int status, String candidateId) {
-        assertStatus(status, () ->
-                service.adoptHypothesis(
-                        CASE_ID,
-                        OFFICER_ID,
-                        new HypothesisSaveRequest(candidateId)
-                )
+    private HypothesisResponse adopt(String candidateId) {
+        return service.adoptHypothesis(
+                CASE_ID,
+                OFFICER_ID,
+                new HypothesisSaveRequest(candidateId)
         );
+    }
+
+    private List<HypothesisResponse> findAdopted() {
+        return service.findAdoptedHypotheses(
+                CASE_ID,
+                OFFICER_ID
+        );
+    }
+
+    // 실패 상태 코드와 가설 저장 미호출 확인
+    private void assertAdoptRejected(
+            int status,
+            String candidateId
+    ) {
+        assertStatus(status, () -> adopt(candidateId));
 
         verify(hypothesisRepository, never())
                 .save(any(Hypothesis.class));
@@ -934,25 +1090,16 @@ class HypothesisServiceTest {
 
     // 동일한 권한 오류가 채택과 조회에 모두 적용되는지 확인
     private void assertBothRejected(int status) {
-        assertStatus(status, () ->
-                service.adoptHypothesis(
-                        CASE_ID,
-                        OFFICER_ID,
-                        new HypothesisSaveRequest("unused")
-                )
-        );
-
-        assertStatus(status, () ->
-                service.findAdoptedHypotheses(
-                        CASE_ID,
-                        OFFICER_ID
-                )
-        );
+        assertStatus(status, () -> adopt("unused"));
+        assertStatus(status, () -> findAdopted());
 
         verifyNoInteractions(hypothesisRepository);
     }
 
-    private void assertStatus(int expectedStatus, Runnable action) {
+    private void assertStatus(
+            int expectedStatus,
+            Runnable action
+    ) {
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
                 action::run
@@ -964,16 +1111,50 @@ class HypothesisServiceTest {
         );
     }
 
-    // 실제 DB 커밋 대신 등록된 정상 커밋 callback 실행
+    // 실제 DB 커밋 대신 등록된 정상 커밋·완료 callback 실행
     private void simulateCommit() {
-        for (TransactionSynchronization synchronization :
-                TransactionSynchronizationManager.getSynchronizations()) {
+        List<TransactionSynchronization> synchronizations =
+                TransactionSynchronizationManager
+                        .getSynchronizations();
 
-            synchronization.afterCommit();
+        try {
+            for (TransactionSynchronization synchronization
+                    : synchronizations) {
+                synchronization.afterCommit();
+            }
 
-            synchronization.afterCompletion(
-                    TransactionSynchronization.STATUS_COMMITTED
-            );
+            for (TransactionSynchronization synchronization
+                    : synchronizations) {
+                synchronization.afterCompletion(
+                        TransactionSynchronization.STATUS_COMMITTED
+                );
+            }
+
+        } finally {
+            resetSynchronizations();
         }
+    }
+
+    // 실제 DB 처리 없이 롤백 또는 결과 불명 상태를 전달
+    private void simulateCompletion(int status) {
+        List<TransactionSynchronization> synchronizations =
+                TransactionSynchronizationManager
+                        .getSynchronizations();
+
+        try {
+            for (TransactionSynchronization synchronization
+                    : synchronizations) {
+                synchronization.afterCompletion(status);
+            }
+
+        } finally {
+            resetSynchronizations();
+        }
+    }
+
+    // 다음 요청에 이전 요청의 callback이 남지 않도록 정리
+    private void resetSynchronizations() {
+        TransactionSynchronizationManager.clearSynchronization();
+        TransactionSynchronizationManager.initSynchronization();
     }
 }
