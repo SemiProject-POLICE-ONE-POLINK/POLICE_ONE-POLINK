@@ -107,7 +107,7 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/cases/*/evidences"
                         )
-                        .hasAuthority("POLICE")
+                        .hasAnyAuthority("POLICE", "ADMIN")
 
                         // ==================== 목격자·진술 ====================
 
@@ -123,7 +123,7 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/cases/*/witnesses"
                         )
-                        .hasAuthority("POLICE")
+                        .hasAnyAuthority("POLICE", "ADMIN")
 
                         // 기존 목격자의 추가·정정·번복 진술 등록
                         .requestMatchers(
@@ -146,7 +146,7 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/cases/*/investigations"
                         )
-                        .hasAuthority("POLICE")
+                        .hasAnyAuthority("POLICE", "ADMIN")
 
                         // ==================== 수사 가설 ====================
 

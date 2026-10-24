@@ -70,7 +70,7 @@ public class InvestigationLogService {
     ) {
 
         // 1. 해당 사건의 담당 경찰인지 확인
-        investigationAccessService.findAssignedCase(
+        investigationAccessService.findReadableCase(
                 caseId,
                 loggedInUserId
         );
