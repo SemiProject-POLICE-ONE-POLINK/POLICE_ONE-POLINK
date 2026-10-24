@@ -171,6 +171,20 @@ public class SecurityConfig {
                         )
                         .hasAuthority("POLICE")
 
+                        // 수사 가설 체크리스트 조회
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/cases/*/hypotheses/*/checklist"
+                        )
+                        .hasAuthority("POLICE")
+
+                        // 수사 가설 확인 항목 체크·해제
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/v1/cases/*/hypotheses/*/checklist/*"
+                        )
+                        .hasAuthority("POLICE")
+
                         // ==================== 수사 종결 ====================
 
                         // 수사 종결 요청 — 상태 연결 완성과는 별개
