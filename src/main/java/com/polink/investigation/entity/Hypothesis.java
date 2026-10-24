@@ -105,6 +105,11 @@ public class Hypothesis {
         return additionalRecommendation;
     }
 
+    // 변경한 체크 상태가 담긴 JSON으로 값 변경
+    public void updateChecklist(String checklistJson) {
+        this.additionalRecommendation = checklistJson;
+    }
+
     public Integer getConfidence() {
         return confidence;
     }

@@ -42,8 +42,9 @@ public class HypothesisService {
     private final StatementRepository statementRepository;
     private final WitnessRepository witnessRepository;
     private final ObjectMapper objectMapper;
+    private final HypothesisChecklistConverter checklistConverter;
 
-    public HypothesisService(HypothesisCandidateStore hypothesisCandidateStore, HypothesisRepository hypothesisRepository, CaseRepository caseRepository, UserRepository userRepository, EvidenceRepository evidenceRepository, StatementRepository statementRepository, WitnessRepository witnessRepository, ObjectMapper objectMapper) {
+    public HypothesisService(HypothesisCandidateStore hypothesisCandidateStore, HypothesisRepository hypothesisRepository, CaseRepository caseRepository, UserRepository userRepository, EvidenceRepository evidenceRepository, StatementRepository statementRepository, WitnessRepository witnessRepository, ObjectMapper objectMapper, HypothesisChecklistConverter checklistConverter) {
         this.hypothesisCandidateStore = hypothesisCandidateStore;
         this.hypothesisRepository = hypothesisRepository;
         this.caseRepository = caseRepository;
@@ -52,6 +53,7 @@ public class HypothesisService {
         this.statementRepository = statementRepository;
         this.witnessRepository = witnessRepository;
         this.objectMapper = objectMapper;
+        this.checklistConverter = checklistConverter;
     }
 
     // 경찰관이 AI 가설 후보를 채택하여 저장
@@ -129,12 +131,19 @@ public class HypothesisService {
 
         String basisJson = writeBasisJson(basis);
 
+        // 추가 확인 사항을 미완료 체크리스트로 만들고 JSON으로 변환
+        String checklistJson = checklistConverter.write(
+                checklistConverter.fromText(
+                        candidate.additionalRecommendation()
+                )
+        );
+
         Hypothesis hypothesis = new Hypothesis(
                 caseFile,
                 officer,
                 candidate.content(),
                 candidate.reason(),
-                candidate.additionalRecommendation(),
+                checklistJson,
                 stored.confidence(),
                 basisJson
         );
@@ -156,7 +165,7 @@ public class HypothesisService {
                 saved.getCaseFile().getCaseId(),
                 saved.getContent(),
                 saved.getReason(),
-                saved.getAdditionalRecommendation(),
+                readRecommendation(saved.getAdditionalRecommendation()),
                 saved.getConfidence(),
                 saved.getSource(),
                 basis,
@@ -298,7 +307,7 @@ public class HypothesisService {
                     hypothesis.getCaseFile().getCaseId(),
                     hypothesis.getContent(),
                     hypothesis.getReason(),
-                    hypothesis.getAdditionalRecommendation(),
+                    readRecommendation(hypothesis.getAdditionalRecommendation()),
                     hypothesis.getConfidence(),
                     hypothesis.getSource(),
                     readBasisJson(hypothesis.getBasisJson()),
@@ -325,5 +334,10 @@ public class HypothesisService {
                     exception
             );
         }
+    }
+
+    // 일반 문자열 또는 체크리스트 JSON에서 추가 확인 사항 원문 반환
+    private String readRecommendation(String storedValue) {
+        return checklistConverter.read(storedValue).recommendation();
     }
 }
