@@ -1,5 +1,6 @@
 package com.polink.user.config;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -37,6 +38,10 @@ public class SecurityConfig {
 
                 // JWT 검증을 연결하기 전까지 모든 경로 허용(임시)
                 .authorizeHttpRequests(authorize -> authorize
+
+                        // 서버 내부 오류 응답이 권한 오류로 가려지지 않도록 허용
+                        .dispatcherTypeMatchers(DispatcherType.ERROR)
+                        .permitAll()
 
                         // ==================== 인증 ====================
 

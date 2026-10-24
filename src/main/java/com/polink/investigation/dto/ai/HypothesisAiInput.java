@@ -7,13 +7,35 @@ import java.util.List;
 
 // 한 사건의 자료 중 AI 가설 생성에 필요한 전체 정보
 public record HypothesisAiInput(
-        String caseId,                                // 추론할 사건 번호
-        String caseTitle,                             // 사건명
-        String caseDescription,                       // 사건의 전체 내용
-        List<EvidenceInput> evidences,                // 해당 사건의 증거물 목록
-        List<StatementInput> statements,              // 해당 사건 목격자들의 진술 목록
-        List<InvestigationLogInput> investigationLogs // 해당 사건의 수사기록 목록
+        String caseId,                                  // 추론할 사건 번호
+        String caseTitle,                               // 사건명
+        String caseDescription,                         // 사건의 전체 내용
+        List<EvidenceInput> evidences,                  // 해당 사건의 증거물 목록
+        List<StatementInput> statements,                // 해당 사건 목격자들의 진술 목록
+        List<InvestigationLogInput> investigationLogs,  // 해당 사건의 수사기록 목록
+        List<String> previousHypotheses                 // 이전 가설 내용
 ) {
+
+    // 기존 6개 인자로 생성할 때는 이전 가설 목록을 빈 목록으로 설정
+    public HypothesisAiInput(
+            String caseId,
+            String caseTitle,
+            String caseDescription,
+            List<EvidenceInput> evidences,
+            List<StatementInput> statements,
+            List<InvestigationLogInput> investigationLogs
+    ) {
+        this(
+                caseId,
+                caseTitle,
+                caseDescription,
+                evidences,
+                statements,
+                investigationLogs,
+                List.of()
+        );
+    }
+
     // AI가 증거물을 이해하고 근거 번호를 지목할 수 있도록 전달
     public record EvidenceInput(
             String evidenceId,                // 증거물 번호
