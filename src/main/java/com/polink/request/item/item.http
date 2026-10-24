@@ -181,6 +181,7 @@ Content-Type: application/json
 ###
 # ITEM-014. 시민이 본인의 분실물에 이미지 한 장 첨부
 # @imagePath 경로에 실제 이미지 파일이 있어야 한다.
+# 성공 응답의 imagePath는 /api/v1/item-images/{파일명} 형식이며, 프론트엔드 img src에 그대로 사용한다.
 POST {{baseUrl}}/api/v1/items/{{createdLostItemId}}/image
 Authorization: Bearer {{citizenToken}}
 Content-Type: multipart/form-data; boundary=imageBoundary
