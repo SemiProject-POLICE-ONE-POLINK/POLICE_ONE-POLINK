@@ -2,6 +2,7 @@ package com.polink.casefile.repository;
 
 import com.polink.casefile.entity.CaseFile;
 import com.polink.casefile.entity.CaseStatus;
+import com.polink.casefile.entity.CaseType;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -34,6 +35,25 @@ public interface CaseRepository extends JpaRepository<CaseFile, String> {
 
     Page<CaseFile> findByAssignedOfficer_UserId(
             Integer userId, Pageable pageable);
+
+    @Query("""
+        select c
+        from CaseFile c
+        where (
+            :keyword is null
+            or lower(c.caseId) like lower(concat('%', :keyword, '%'))
+            or lower(c.title) like lower(concat('%', :keyword, '%'))
+            or lower(c.location) like lower(concat('%', :keyword, '%'))
+        )
+        and (:caseType is null or c.caseType = :caseType)
+        and (:status is null or c.status = :status)
+        """)
+    Page<CaseFile> searchCases(
+            @Param("keyword") String keyword,
+            @Param("caseType") CaseType caseType,
+            @Param("status") CaseStatus status,
+            Pageable pageable
+    );
 
     long countByAssignedOfficer_UserIdAndStatus(
             Integer userId,

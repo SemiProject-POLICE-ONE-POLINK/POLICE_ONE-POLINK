@@ -5,6 +5,8 @@ import com.polink.casefile.dto.request.CaseCloseRequest;
 import com.polink.casefile.dto.request.CaseCreateRequest;
 import com.polink.casefile.dto.request.CaseOfficerRequest;
 import com.polink.casefile.dto.response.*;
+import com.polink.casefile.entity.CaseStatus;
+import com.polink.casefile.entity.CaseType;
 import com.polink.casefile.service.CaseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -45,10 +47,28 @@ public class CaseController {
     @GetMapping
     public ResponseEntity<CaseListResponse> getCases(
             @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(
+                    name = "keyword",
+                    required = false
+            ) String keyword,
+            @RequestParam(
+                    name = "caseType",
+                    required = false
+            ) CaseType caseType,
+            @RequestParam(
+                    name = "status",
+                    required = false
+            ) CaseStatus status,
             Pageable pageable
     ) {
         CaseListResponse response =
-                caseService.getCases(toLoggedInUserId(jwt), pageable);
+                caseService.getCases(
+                        toLoggedInUserId(jwt),
+                        keyword,
+                        caseType,
+                        status,
+                        pageable
+                );
 
         return ResponseEntity.ok(response);
     }
