@@ -1,13 +1,21 @@
 package com.polink.investigation.service;
 
+import com.polink.investigation.dto.response.EvidenceFileResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -196,5 +204,129 @@ class EvidenceFileServiceTest {
 
         // 삭제가 거부되어 원래 파일이 남아 있는지 검사
         assertTrue(Files.exists(outsidePath));
+    }
+
+    // ==================== 첨부파일 조회 테스트 ====================
+
+    @ParameterizedTest
+    @ValueSource(strings = {"jpg", "jpeg", "png"})
+    @DisplayName("저장된 이미지 내용·파일 형식·응답 파일명을 반환한다")
+    void readSavedImage(String extension) throws IOException {
+        Files.createDirectories(uploadDirectory);
+
+        Path savedPath = uploadDirectory.resolve(
+                "scene." + extension
+        );
+
+        // 실제 이미지 형식의 테스트 파일 생성
+        BufferedImage image =
+                new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
+
+        assertTrue(
+                ImageIO.write(image, extension, savedPath.toFile())
+        );
+
+        EvidenceFileResponse response =
+                evidenceFileService.readFile(
+                        savedPath.toString(),
+                        "EV-2026-0405-01"
+                );
+
+        // 저장된 파일 내용이 그대로 반환되는지 확인
+        assertArrayEquals(
+                Files.readAllBytes(savedPath),
+                response.content()
+        );
+
+        // 확장자에 맞는 Content-Type인지 확인
+        assertEquals(
+                extension.equals("png")
+                        ? "image/png"
+                        : "image/jpeg",
+                response.contentType()
+        );
+
+        // 서버 경로 대신 증거물 번호로 파일명을 반환하는지 확인
+        assertEquals(
+                "EV-2026-0405-01." + extension,
+                response.filename()
+        );
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   "})
+    @DisplayName("첨부파일 경로가 없으면 404 예외가 발생한다")
+    void rejectMissingFilePath(String filePath) {
+        assertReadRejected(filePath);
+    }
+
+    @Test
+    @DisplayName("저장 경로에 실제 파일이 없으면 404 예외가 발생한다")
+    void rejectMissingPhysicalFile() {
+        Path missingPath = uploadDirectory.resolve("missing.jpg");
+
+        assertReadRejected(missingPath.toString());
+    }
+
+    @Test
+    @DisplayName("저장 폴더 밖의 파일은 조회할 수 없다")
+    void rejectOutsideFileRead() throws IOException {
+        Path outsidePath = Files.write(
+                tempDirectory.resolve("outside.jpg"),
+                new byte[]{1, 2, 3}
+        );
+
+        assertReadRejected(outsidePath.toString());
+
+        // 조회를 거부해도 원본 파일은 유지
+        assertTrue(Files.exists(outsidePath));
+    }
+
+    @Test
+    @DisplayName("저장 폴더의 하위 폴더에 있는 파일도 조회를 거부한다")
+    void rejectNestedFileRead() throws IOException {
+        Path nestedDirectory =
+                uploadDirectory.resolve("nested");
+
+        Files.createDirectories(nestedDirectory);
+
+        Path nestedPath = Files.write(
+                nestedDirectory.resolve("scene.jpg"),
+                new byte[]{1, 2, 3}
+        );
+
+        // 현재 정책은 저장 폴더 바로 아래의 파일만 허용
+        assertReadRejected(nestedPath.toString());
+    }
+
+    @Test
+    @DisplayName("파일 대신 폴더 경로가 전달되면 조회를 거부한다")
+    void rejectDirectoryRead() throws IOException {
+        Path directory = uploadDirectory.resolve("scene.jpg");
+
+        Files.createDirectories(directory);
+
+        assertReadRejected(directory.toString());
+    }
+
+    // 파일 조회 실패 시 404와 안내 문구 확인
+    private void assertReadRejected(String filePath) {
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> evidenceFileService.readFile(
+                        filePath,
+                        "EV-2026-0405-01"
+                )
+        );
+
+        assertEquals(
+                HttpStatus.NOT_FOUND,
+                exception.getStatusCode()
+        );
+        assertEquals(
+                "첨부파일을 찾을 수 없습니다.",
+                exception.getReason()
+        );
     }
 }

@@ -1,13 +1,16 @@
 package com.polink.investigation.service;
 
+import com.polink.investigation.dto.response.EvidenceFileResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.nio.file.*;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -27,6 +30,15 @@ public class EvidenceFileService {
             "polink-uploads",
             "evidence"
     ).toAbsolutePath().normalize();
+
+    // 확장자별 응답 파일 형식
+    private static final Map<String, String> CONTENT_TYPES = Map.of(
+            "jpg", "image/jpeg",
+            "jpeg", "image/jpeg",
+            "png", "image/png",
+            "pdf", "application/pdf",
+            "mp4", "video/mp4"
+    );
 
     // 첨부파일을 검증·저장하고, DB에 기록할 경로 반환
     public String save(MultipartFile file) {
@@ -118,20 +130,91 @@ public class EvidenceFileService {
 
         } catch (IOException exception) {
 
-                // 파일 생성·읽기·복사 중 오류가 발생한 경우 처리
-                // 생성된 파일이 있다면 불완전한 파일이 남지 않도록 삭제 시도
-                if (savedPath != null) {
-                    try {
-                        Files.deleteIfExists(savedPath);
-                    } catch (IOException cleanupException) {
+            // 파일 생성·읽기·복사 중 오류가 발생한 경우 처리
+            // 생성된 파일이 있다면 불완전한 파일이 남지 않도록 삭제 시도
+            if (savedPath != null) {
+                try {
+                    Files.deleteIfExists(savedPath);
+                } catch (IOException cleanupException) {
 
-                        // 삭제까지 실패 시 실패 원인도 함께 기록
-                        exception.addSuppressed(cleanupException);
-                    }
+                    // 삭제까지 실패 시 실패 원인도 함께 기록
+                    exception.addSuppressed(cleanupException);
                 }
+            }
 
             // 저장 실패 메시지와 실제 오류 원인을 함께 전달
-                throw new IllegalStateException("첨부파일 저장에 실패했습니다.", exception);
+            throw new IllegalStateException("첨부파일 저장에 실패했습니다.", exception);
+        }
+    }
+
+    // 저장된 파일을 읽어 내용·파일 형식·응답 파일명 반환
+    public EvidenceFileResponse readFile(
+            String filePath,
+            String evidenceId
+    ) {
+
+        // 1. 첨부파일 경로가 없으면 조회 중단
+        if (filePath == null || filePath.isBlank()) {
+            throw fileNotFound();
+        }
+
+        try {
+            Path savedPath = Path.of(filePath)
+                    .toAbsolutePath()
+                    .normalize();
+
+            // 2. 증거물 저장 폴더 바로 아래의 실제 파일인지 확인
+            // 다른 위치의 파일과 심볼릭 링크는 조회 불가
+            if (!uploadDirectory.equals(savedPath.getParent())
+                    || !Files.isRegularFile(
+                    savedPath,
+                    LinkOption.NOFOLLOW_LINKS
+            )) {
+                throw fileNotFound();
+            }
+
+            // 3. 실제 경로로도 저장 폴더를 벗어나지 않는지 확인
+            Path realDirectory = uploadDirectory.toRealPath();
+            Path realPath = savedPath.toRealPath();
+
+            if (!realDirectory.equals(realPath.getParent())) {
+                throw fileNotFound();
+            }
+
+            // 4. 저장된 파일명에서 확장자 추출
+            String savedFilename = realPath.getFileName().toString();
+            int dotIndex = savedFilename.lastIndexOf('.');
+
+            String extension = dotIndex < 0
+                    ? "bin"
+                    : savedFilename.substring(dotIndex + 1)
+                    .toLowerCase(Locale.ROOT);
+
+            // 5. 확장자에 맞는 응답 파일 형식 선택
+            String contentType = CONTENT_TYPES.getOrDefault(
+                    extension,
+                    "application/octet-stream"
+            );
+
+            // 서버 경로 대신 증거물 번호로 응답 파일명 생성
+            String filename = evidenceId + "." + extension;
+
+            // 6. 실제 파일 내용을 읽어 반환
+            return new EvidenceFileResponse(
+                    Files.readAllBytes(realPath),
+                    contentType,
+                    filename
+            );
+
+        } catch (NoSuchFileException | InvalidPathException exception) {
+            throw fileNotFound();
+
+        } catch (IOException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "첨부파일을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.",
+                    exception
+            );
         }
     }
 
@@ -161,5 +244,13 @@ public class EvidenceFileService {
         } catch (IOException exception) {
             throw new IllegalStateException("첨부파일 삭제에 실패했습니다.", exception);
         }
+    }
+
+    // 첨부파일이 없거나 허용된 저장 위치가 아닌 경우
+    private ResponseStatusException fileNotFound() {
+        return new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "첨부파일을 찾을 수 없습니다."
+        );
     }
 }

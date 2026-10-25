@@ -3,16 +3,19 @@ package com.polink.investigation.service;
 import com.polink.casefile.entity.CaseFile;
 import com.polink.investigation.dto.request.EvidenceCreateRequest;
 import com.polink.investigation.dto.response.EvidenceCreateResponse;
+import com.polink.investigation.dto.response.EvidenceFileResponse;
 import com.polink.investigation.dto.response.EvidenceListResponse;
 import com.polink.investigation.entity.Evidence;
 import com.polink.investigation.repository.EvidenceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -132,6 +135,37 @@ public class EvidenceService {
 
         // 증거물이 없으면 빈 목록 반환
         return responses;
+    }
+
+    // 관리자 또는 담당 경찰이 증거물 첨부파일 조회
+    @Transactional(readOnly = true)
+    public EvidenceFileResponse findEvidenceFile(
+            String caseId,
+            String evidenceId,
+            Integer loggedInUserId
+    ) {
+
+        // 1. 관리자 또는 해당 사건의 담당 경찰인지 확인
+        investigationAccessService.findReadableCase(
+                caseId,
+                loggedInUserId
+        );
+
+        // 2. 선택한 사건에 속한 증거물인지 확인
+        Evidence evidence = evidenceRepository.findById(evidenceId)
+                .filter(saved -> caseId.equals(
+                        saved.getCaseFile().getCaseId()
+                ))
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "선택한 사건의 증거물을 찾을 수 없습니다."
+                ));
+
+        // 3. DB에 저장된 경로로 실제 파일 읽기
+        return evidenceFileService.readFile(
+                evidence.getFilePath(),
+                evidence.getEvidenceId()
+        );
     }
 
     // DB 등록이 취소되면 저장된 첨부파일 정리

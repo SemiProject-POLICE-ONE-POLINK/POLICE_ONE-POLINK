@@ -14,10 +14,16 @@ public record BoardEvidenceSummaryResponse(
         LocalDateTime acquiredAt,   // 확보 일시
         String acquiredLocation,    // 확보 장소
         String description,         // 메모
-        boolean fileAttached        // 첨부파일 유무
+        boolean fileAttached,       // 첨부파일 유무
+        String fileUrl              // 첨부파일 조회 API 주소
 ) {
 
+    // 증거물 Entity를 수사보드 요약 응답으로 변환
     public static BoardEvidenceSummaryResponse from(Evidence evidence) {
+
+        // 목록 DTO와 같은 방식으로 파일 조회 주소 생성
+        String fileUrl = EvidenceListResponse.fileUrlOf(evidence);
+
         return new BoardEvidenceSummaryResponse(
                 evidence.getEvidenceId(),
                 evidence.getEvidenceName(),
@@ -25,7 +31,8 @@ public record BoardEvidenceSummaryResponse(
                 evidence.getAcquiredAt(),
                 evidence.getAcquiredLocation(),
                 evidence.getDescription(),
-                evidence.getFilePath() != null
+                fileUrl != null,
+                fileUrl
         );
     }
 }

@@ -161,6 +161,13 @@ public class SecurityConfig {
                         )
                         .hasAnyAuthority("POLICE", "ADMIN")
 
+                        // 증거물 첨부파일 조회
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/cases/*/evidences/*/file"
+                        )
+                        .hasAnyAuthority("POLICE", "ADMIN")
+
                         // ==================== 목격자·진술 ====================
 
                         // 목격자와 최초 진술 등록
