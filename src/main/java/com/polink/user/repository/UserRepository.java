@@ -20,4 +20,7 @@ public interface UserRepository extends JpaRepository<User, Integer> {
 
     // 담당 경찰 배정 목록용 - 경찰 역할 회원을 이름순으로 조회
     List<User> findByRoleOrderByNameAsc(UserRole role);
+
+    // 관리자 회원 목록용 - 전체 회원을 회원 번호순으로 조회
+    List<User> findAllByOrderByUserIdAsc();
 }

@@ -1,5 +1,6 @@
 package com.polink.user.controller;
 
+import com.polink.user.dto.response.AdminUserListResponse;
 import com.polink.user.dto.response.AssignablePoliceListResponse;
 import com.polink.user.service.AdminUserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +21,19 @@ public class AdminUserController {
 
     public AdminUserController(AdminUserService adminUserService) {
         this.adminUserService = adminUserService;
+    }
+
+    @Operation(summary = "관리자 회원 전체 목록 조회")
+    @GetMapping
+    public ResponseEntity<AdminUserListResponse> getAllUsers(
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        AdminUserListResponse response =
+                adminUserService.getAllUsers(
+                        toLoggedInUserId(jwt)
+                );
+
+        return ResponseEntity.ok(response);
     }
 
     @Operation(summary = "배정 가능한 경찰관 목록 조회")

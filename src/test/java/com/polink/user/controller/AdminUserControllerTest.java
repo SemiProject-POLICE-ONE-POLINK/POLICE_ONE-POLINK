@@ -1,7 +1,10 @@
 package com.polink.user.controller;
 
+import com.polink.user.dto.response.AdminUserListResponse;
+import com.polink.user.dto.response.AdminUserResponse;
 import com.polink.user.dto.response.AssignablePoliceListResponse;
 import com.polink.user.dto.response.AssignablePoliceResponse;
+import com.polink.user.entity.UserRole;
 import com.polink.user.exception.UserExceptionHandler;
 import com.polink.user.service.AdminUserService;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,6 +63,86 @@ class AdminUserControllerTest {
                         .value("로그인 사용자 정보가 필요합니다."));
 
         verify(adminUserService).getAssignablePolice(null);
+    }
+
+    @Test
+    void getAllUsers_success_returnsOk() throws Exception {
+        AdminUserListResponse response =
+                new AdminUserListResponse(
+                        List.of(
+                                new AdminUserResponse(
+                                        1,
+                                        "citizen01",
+                                        "테스트시민",
+                                        "010-1111-1111",
+                                        UserRole.CITIZEN
+                                ),
+                                new AdminUserResponse(
+                                        7,
+                                        "police01",
+                                        "테스트경찰",
+                                        "010-2222-2222",
+                                        UserRole.POLICE
+                                ),
+                                new AdminUserResponse(
+                                        11,
+                                        "admin01",
+                                        "테스트관리자",
+                                        "010-3333-3333",
+                                        UserRole.ADMIN
+                                )
+                        )
+                );
+
+        when(adminUserService.getAllUsers(11))
+                .thenReturn(response);
+
+        mockMvc.perform(
+                        get("/api/v1/users")
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.users.length()")
+                        .value(3))
+                .andExpect(jsonPath("$.users[0].userId")
+                        .value(1))
+                .andExpect(jsonPath("$.users[0].userName")
+                        .value("citizen01"))
+                .andExpect(jsonPath("$.users[0].name")
+                        .value("테스트시민"))
+                .andExpect(jsonPath("$.users[0].phone")
+                        .value("010-1111-1111"))
+                .andExpect(jsonPath("$.users[0].role")
+                        .value("CITIZEN"))
+                .andExpect(jsonPath("$.users[1].role")
+                        .value("POLICE"))
+                .andExpect(jsonPath("$.users[2].role")
+                        .value("ADMIN"));
+
+        verify(adminUserService).getAllUsers(11);
+    }
+
+    @Test
+    void getAllUsers_withoutLogin_returnsUnauthorized()
+            throws Exception {
+
+        requestJwt = null;
+
+        when(adminUserService.getAllUsers(null))
+                .thenThrow(new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "로그인 사용자 정보가 필요합니다."
+                ));
+
+        mockMvc.perform(
+                        get("/api/v1/users")
+                )
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status")
+                        .value(401))
+                .andExpect(jsonPath("$.message")
+                        .value("로그인 사용자 정보가 필요합니다."));
+
+        verify(adminUserService).getAllUsers(null);
     }
 
     @BeforeEach

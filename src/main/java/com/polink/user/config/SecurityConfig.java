@@ -122,6 +122,13 @@ public class SecurityConfig {
                         )
                         .hasAuthority("ADMIN")
 
+                        // 관리자 회원 전체 목록 조회
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/users"
+                        )
+                        .hasAuthority("ADMIN")
+
                         // 배정 가능한 경찰관 목록 조회
                         .requestMatchers(
                                 HttpMethod.GET,
