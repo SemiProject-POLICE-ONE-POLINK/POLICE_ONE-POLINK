@@ -9,12 +9,15 @@ public class CaseOfficerResponse {
 
     private final String caseId;
     private final Integer assignedOfficerId;
+    private final String assignedOfficerName;
     private final CaseStatus status;
 
     public CaseOfficerResponse(CaseFile caseFile) {
         this.caseId = caseFile.getCaseId();
         this.assignedOfficerId =
                 caseFile.getAssignedOfficer().getUserId();
+        this.assignedOfficerName =
+                caseFile.getAssignedOfficer().getName();
         this.status = caseFile.getStatus();
     }
 }

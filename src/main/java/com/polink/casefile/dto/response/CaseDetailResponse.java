@@ -18,6 +18,7 @@ public class CaseDetailResponse {
     private final String location;
     private final CaseStatus status;
     private final Integer assignedOfficerId;
+    private final String assignedOfficerName;
 
     public CaseDetailResponse(CaseFile caseFile) {
         this.caseId = caseFile.getCaseId();
@@ -32,5 +33,10 @@ public class CaseDetailResponse {
                 caseFile.getAssignedOfficer() == null
                         ? null
                         : caseFile.getAssignedOfficer().getUserId();
+
+        this.assignedOfficerName =
+                caseFile.getAssignedOfficer() == null
+                        ? null
+                        : caseFile.getAssignedOfficer().getName();
     }
 }

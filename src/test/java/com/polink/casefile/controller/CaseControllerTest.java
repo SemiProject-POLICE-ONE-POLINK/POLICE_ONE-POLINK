@@ -466,6 +466,12 @@ public class CaseControllerTest {
     void getCaseDetail_success_returnsOk() throws Exception {
         CaseFile caseFile = mock(CaseFile.class);
 
+        User officer = mock(User.class);
+        when(officer.getUserId())
+                .thenReturn(7);
+        when(officer.getName())
+                .thenReturn("신형선");
+
         when(caseFile.getCaseId())
                 .thenReturn("SMPA-2026-0042");
         when(caseFile.getTitle())
@@ -481,9 +487,9 @@ public class CaseControllerTest {
         when(caseFile.getLocation())
                 .thenReturn("서울역");
         when(caseFile.getStatus())
-                .thenReturn(CaseStatus.WAITING);
+                .thenReturn(CaseStatus.INVESTIGATING);
         when(caseFile.getAssignedOfficer())
-                .thenReturn(null);
+                .thenReturn(officer);
 
         CaseDetailResponse response =
                 new CaseDetailResponse(caseFile);
@@ -511,7 +517,11 @@ public class CaseControllerTest {
                 .andExpect(jsonPath("$.location")
                         .value("서울역"))
                 .andExpect(jsonPath("$.status")
-                        .value("WAITING"));
+                        .value("INVESTIGATING"))
+                .andExpect(jsonPath("$.assignedOfficerId")
+                        .value(7))
+                .andExpect(jsonPath("$.assignedOfficerName")
+                        .value("신형선"));
 
         verify(caseService).getCaseDetail(
                 1,
@@ -526,6 +536,8 @@ public class CaseControllerTest {
         User officer = mock(User.class);
         when(officer.getUserId())
                 .thenReturn(7);
+        when(officer.getName())
+                .thenReturn("신형선");
 
         CaseFile caseFile = mock(CaseFile.class);
         when(caseFile.getCaseId())
@@ -561,6 +573,8 @@ public class CaseControllerTest {
                         .value("SMPA-2026-0042"))
                 .andExpect(jsonPath("$.assignedOfficerId")
                         .value(7))
+                .andExpect(jsonPath("$.assignedOfficerName")
+                        .value("신형선"))
                 .andExpect(jsonPath("$.status")
                         .value("INVESTIGATING"));
 
