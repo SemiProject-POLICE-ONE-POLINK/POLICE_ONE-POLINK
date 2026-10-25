@@ -1,5 +1,6 @@
 package com.polink.casefile.service;
 
+import com.polink.casefile.dto.request.CaseCancelRequest;
 import com.polink.casefile.dto.request.CaseCloseRequest;
 import com.polink.casefile.dto.request.CaseCreateRequest;
 import com.polink.casefile.dto.request.CaseOfficerRequest;
@@ -834,6 +835,360 @@ public class CaseServiceTest {
                 .findByAssignedOfficer_UserId(any(), any(Pageable.class));
 
         verifyNoInteractions(caseNumberGenerator);
+    }
+
+    @Test
+    void cancelCase_withoutLogin_throwsUnauthorized() {
+        CaseCancelRequest request = new CaseCancelRequest();
+        ReflectionTestUtils.setField(
+                request,
+                "cancelReason",
+                "중복 접수"
+        );
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.cancelCase(
+                        null,
+                        "SMPA-2026-0042",
+                        request
+                )
+        );
+
+        assertEquals(
+                HttpStatus.UNAUTHORIZED,
+                exception.getStatusCode()
+        );
+        assertEquals(
+                "로그인 사용자 정보가 필요합니다.",
+                exception.getReason()
+        );
+
+        verifyNoInteractions(
+                userRepository,
+                caseRepository,
+                caseNumberGenerator,
+                caseCloseRepository
+        );
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = UserRole.class,
+            names = {"CITIZEN", "POLICE"}
+    )
+    void cancelCase_nonAdmin_forbidden(UserRole role) {
+        User user = new User(
+                "user01", "test-hash", "테스트회원", "010-0000-9983"
+        );
+        ReflectionTestUtils.setField(user, "userId", 10);
+        ReflectionTestUtils.setField(user, "role", role);
+
+        CaseCancelRequest request = new CaseCancelRequest();
+        ReflectionTestUtils.setField(
+                request,
+                "cancelReason",
+                "중복 접수"
+        );
+
+        when(userRepository.findById(10))
+                .thenReturn(Optional.of(user));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.cancelCase(
+                        10,
+                        "SMPA-2026-0042",
+                        request
+                )
+        );
+
+        assertEquals(
+                HttpStatus.FORBIDDEN,
+                exception.getStatusCode()
+        );
+        assertEquals(
+                "사건 접수 취소는 관리자만 가능합니다.",
+                exception.getReason()
+        );
+
+        verifyNoInteractions(
+                caseRepository,
+                caseNumberGenerator,
+                caseCloseRepository
+        );
+    }
+
+    @Test
+    void cancelCase_adminNotFound_throwsNotFound() {
+        CaseCancelRequest request = new CaseCancelRequest();
+        ReflectionTestUtils.setField(
+                request,
+                "cancelReason",
+                "중복 접수"
+        );
+
+        when(userRepository.findById(999))
+                .thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.cancelCase(
+                        999,
+                        "SMPA-2026-0042",
+                        request
+                )
+        );
+
+        assertEquals(
+                HttpStatus.NOT_FOUND,
+                exception.getStatusCode()
+        );
+        assertEquals(
+                "회원을 찾을 수 없습니다.",
+                exception.getReason()
+        );
+
+        verifyNoInteractions(
+                caseRepository,
+                caseNumberGenerator,
+                caseCloseRepository
+        );
+    }
+
+    @Test
+    void cancelCase_caseNotFound_throwsNotFound() {
+        User admin = new User(
+                "admin01", "test-hash", "테스트관리자", "010-0000-9984"
+        );
+        ReflectionTestUtils.setField(admin, "userId", 10);
+        ReflectionTestUtils.setField(admin, "role", UserRole.ADMIN);
+
+        CaseCancelRequest request = new CaseCancelRequest();
+        ReflectionTestUtils.setField(
+                request,
+                "cancelReason",
+                "중복 접수"
+        );
+
+        when(userRepository.findById(10))
+                .thenReturn(Optional.of(admin));
+        when(caseRepository.findByCaseIdForUpdate("SMPA-2026-9999"))
+                .thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.cancelCase(
+                        10,
+                        "SMPA-2026-9999",
+                        request
+                )
+        );
+
+        assertEquals(
+                HttpStatus.NOT_FOUND,
+                exception.getStatusCode()
+        );
+        assertEquals(
+                "사건을 찾을 수 없습니다.",
+                exception.getReason()
+        );
+
+        verify(caseRepository)
+                .findByCaseIdForUpdate("SMPA-2026-9999");
+        verifyNoInteractions(
+                caseNumberGenerator,
+                caseCloseRepository
+        );
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = CaseStatus.class,
+            names = {
+                    "INVESTIGATING",
+                    "INVESTIGATION_DONE",
+                    "CLOSED",
+                    "CANCELED"
+            }
+    )
+    void cancelCase_nonCancelableStatus_conflict(CaseStatus status) {
+        User admin = new User(
+                "admin01", "test-hash", "테스트관리자", "010-0000-9985"
+        );
+        ReflectionTestUtils.setField(admin, "userId", 10);
+        ReflectionTestUtils.setField(admin, "role", UserRole.ADMIN);
+
+        User reporter = new User(
+                "citizen01", "test-hash", "테스트시민", "010-0000-9986"
+        );
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                reporter,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                LocalDateTime.of(2026, 10, 18, 10, 0),
+                "테스트 장소"
+        );
+        ReflectionTestUtils.setField(caseFile, "status", status);
+
+        CaseCancelRequest request = new CaseCancelRequest();
+        ReflectionTestUtils.setField(
+                request,
+                "cancelReason",
+                "중복 접수"
+        );
+
+        when(userRepository.findById(10))
+                .thenReturn(Optional.of(admin));
+        when(caseRepository.findByCaseIdForUpdate("SMPA-2026-0042"))
+                .thenReturn(Optional.of(caseFile));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.cancelCase(
+                        10,
+                        "SMPA-2026-0042",
+                        request
+                )
+        );
+
+        assertEquals(
+                HttpStatus.CONFLICT,
+                exception.getStatusCode()
+        );
+        assertEquals(
+                "담당 경찰이 배정되지 않은 대기 중 사건만 취소할 수 있습니다.",
+                exception.getReason()
+        );
+        assertEquals(status, caseFile.getStatus());
+        assertEquals("", caseFile.getCancelReason());
+
+        verify(caseRepository, never()).save(any(CaseFile.class));
+    }
+
+    @Test
+    void cancelCase_waitingButAssigned_conflict() {
+        User admin = new User(
+                "admin01", "test-hash", "테스트관리자", "010-0000-9987"
+        );
+        ReflectionTestUtils.setField(admin, "userId", 10);
+        ReflectionTestUtils.setField(admin, "role", UserRole.ADMIN);
+
+        User reporter = new User(
+                "citizen01", "test-hash", "테스트시민", "010-0000-9988"
+        );
+
+        User officer = new User(
+                "police01", "test-hash", "테스트경찰", "010-0000-9989"
+        );
+        ReflectionTestUtils.setField(officer, "role", UserRole.POLICE);
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                reporter,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                LocalDateTime.of(2026, 10, 18, 10, 0),
+                "테스트 장소"
+        );
+
+        // DB 데이터가 비정상적으로 WAITING이면서 담당자가 있는 경우를 재현한다.
+        ReflectionTestUtils.setField(
+                caseFile,
+                "assignedOfficer",
+                officer
+        );
+
+        CaseCancelRequest request = new CaseCancelRequest();
+        ReflectionTestUtils.setField(
+                request,
+                "cancelReason",
+                "중복 접수"
+        );
+
+        when(userRepository.findById(10))
+                .thenReturn(Optional.of(admin));
+        when(caseRepository.findByCaseIdForUpdate("SMPA-2026-0042"))
+                .thenReturn(Optional.of(caseFile));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> caseService.cancelCase(
+                        10,
+                        "SMPA-2026-0042",
+                        request
+                )
+        );
+
+        assertEquals(
+                HttpStatus.CONFLICT,
+                exception.getStatusCode()
+        );
+        assertEquals(
+                "담당 경찰이 배정되지 않은 대기 중 사건만 취소할 수 있습니다.",
+                exception.getReason()
+        );
+        assertEquals(CaseStatus.WAITING, caseFile.getStatus());
+        assertEquals("", caseFile.getCancelReason());
+
+        verify(caseRepository, never()).save(any(CaseFile.class));
+    }
+
+    @Test
+    void cancelCase_success() {
+        User admin = new User(
+                "admin01", "test-hash", "테스트관리자", "010-0000-9981"
+        );
+        ReflectionTestUtils.setField(admin, "userId", 10);
+        ReflectionTestUtils.setField(admin, "role", UserRole.ADMIN);
+
+        User reporter = new User(
+                "citizen01", "test-hash", "테스트시민", "010-0000-9982"
+        );
+
+        CaseFile caseFile = new CaseFile(
+                "SMPA-2026-0042",
+                reporter,
+                "지갑 절도 신고",
+                CaseType.THEFT,
+                "가상 사건 내용",
+                LocalDateTime.of(2026, 10, 18, 10, 0),
+                "테스트 장소"
+        );
+
+        CaseCancelRequest request = new CaseCancelRequest();
+        ReflectionTestUtils.setField(
+                request,
+                "cancelReason",
+                "  중복 접수  "
+        );
+
+        when(userRepository.findById(10))
+                .thenReturn(Optional.of(admin));
+        when(caseRepository.findByCaseIdForUpdate("SMPA-2026-0042"))
+                .thenReturn(Optional.of(caseFile));
+
+        CaseCancelResponse response =
+                caseService.cancelCase(
+                        10,
+                        "SMPA-2026-0042",
+                        request
+                );
+
+        assertEquals("SMPA-2026-0042", response.getCaseId());
+        assertEquals(CaseStatus.CANCELED, response.getStatus());
+        assertEquals("중복 접수", response.getCancelReason());
+
+        assertEquals(CaseStatus.CANCELED, caseFile.getStatus());
+        assertEquals("중복 접수", caseFile.getCancelReason());
+
+        verify(caseRepository)
+                .findByCaseIdForUpdate("SMPA-2026-0042");
+        verify(caseRepository, never()).save(any(CaseFile.class));
     }
 
     @Test

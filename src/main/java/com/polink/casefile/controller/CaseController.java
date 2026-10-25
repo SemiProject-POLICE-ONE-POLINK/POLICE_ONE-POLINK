@@ -1,5 +1,6 @@
 package com.polink.casefile.controller;
 
+import com.polink.casefile.dto.request.CaseCancelRequest;
 import com.polink.casefile.dto.request.CaseCloseRequest;
 import com.polink.casefile.dto.request.CaseCreateRequest;
 import com.polink.casefile.dto.request.CaseOfficerRequest;
@@ -85,6 +86,23 @@ public class CaseController {
     ) {
         CaseOfficerResponse response =
                 caseService.assignOfficer(toLoggedInUserId(jwt), caseId, request);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "사건 접수 취소")
+    @PostMapping("/{caseId}/cancel")
+    public ResponseEntity<CaseCancelResponse> cancelCase(
+            @PathVariable("caseId") String caseId,
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody CaseCancelRequest request
+    ) {
+        CaseCancelResponse response =
+                caseService.cancelCase(
+                        toLoggedInUserId(jwt),
+                        caseId,
+                        request
+                );
 
         return ResponseEntity.ok(response);
     }

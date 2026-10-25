@@ -255,6 +255,13 @@ public class SecurityConfig {
                         )
                         .hasAuthority("ADMIN")
 
+                        // 사건 접수 취소
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/cases/*/cancel"
+                        )
+                        .hasAuthority("ADMIN")
+
                         // 사건 종결
                         .requestMatchers(
                                 HttpMethod.POST,

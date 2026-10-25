@@ -1,30 +1,27 @@
 package com.polink.casefile.service;
 
-import com.polink.casefile.dto.response.MyCaseListResponse;
+import com.polink.casefile.dto.request.CaseCancelRequest;
+import com.polink.casefile.dto.request.CaseCloseRequest;
+import com.polink.casefile.dto.request.CaseCreateRequest;
+import com.polink.casefile.dto.request.CaseOfficerRequest;
+import com.polink.casefile.dto.response.*;
+import com.polink.casefile.entity.CaseClose;
+import com.polink.casefile.entity.CaseFile;
+import com.polink.casefile.entity.CaseStatus;
 import com.polink.casefile.repository.CaseCloseRepository;
 import com.polink.casefile.repository.CaseRepository;
 import com.polink.user.entity.User;
 import com.polink.user.entity.UserRole;
 import com.polink.user.repository.UserRepository;
-import com.polink.casefile.dto.request.CaseCreateRequest;
-import com.polink.casefile.dto.response.CaseCreateResponse;
-import com.polink.casefile.entity.CaseFile;
-import org.springframework.transaction.annotation.Isolation;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
-import com.polink.casefile.dto.response.CaseDetailResponse;
-import java.util.Objects;
-import com.polink.casefile.dto.response.CaseListResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import com.polink.casefile.dto.request.CaseOfficerRequest;
-import com.polink.casefile.dto.response.CaseOfficerResponse;
-import com.polink.casefile.entity.CaseStatus;
-import com.polink.casefile.dto.request.CaseCloseRequest;
-import com.polink.casefile.dto.response.CaseCloseResponse;
-import com.polink.casefile.entity.CaseClose;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.Objects;
 
 @Service
 public class CaseService {
@@ -260,6 +257,51 @@ public class CaseService {
         caseFile.assignOfficer(officer);
 
         return new CaseOfficerResponse(caseFile);
+    }
+
+    @Transactional
+    public CaseCancelResponse cancelCase(
+            Integer adminId,
+            String caseId,
+            CaseCancelRequest request) {
+
+        if (adminId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "로그인 사용자 정보가 필요합니다."
+            );
+        }
+
+        User admin = userRepository.findById(adminId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "회원을 찾을 수 없습니다."
+                ));
+
+        if (admin.getRole() != UserRole.ADMIN) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "사건 접수 취소는 관리자만 가능합니다."
+            );
+        }
+
+        CaseFile caseFile = caseRepository.findByCaseIdForUpdate(caseId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "사건을 찾을 수 없습니다."
+                ));
+
+        if (caseFile.getStatus() != CaseStatus.WAITING
+                || caseFile.getAssignedOfficer() != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "담당 경찰이 배정되지 않은 대기 중 사건만 취소할 수 있습니다."
+            );
+        }
+
+        caseFile.cancel(request.getCancelReason().trim());
+
+        return new CaseCancelResponse(caseFile);
     }
 
     @Transactional
