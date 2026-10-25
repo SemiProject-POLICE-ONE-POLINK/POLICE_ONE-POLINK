@@ -30,6 +30,9 @@ public interface ItemRepository extends JpaRepository<Item, String> {
      * 목록 화면의 선택 검색 조건으로 물품을 페이지 단위로 조회한다.
      * 조건 값이 null이면 해당 조건은 적용하지 않는다.
      * location은 포함 검색이고,
+     * '가방'과 '백팩'은 시민이 같은 종류로 인식하는 대표 동의어이므로
+     * 둘 중 하나를 검색하면 이름·특징에 다른 단어가 있는 물품도 함께 반환한다.
+     * countQuery에도 같은 조건을 넣어 목록 수와 페이지 수가 일치하게 한다.
      * startDate는 발생일의 시작 시각,
      * endDateExclusive는 종료일 다음 날 00:00이다.
      * 종료일 다음 날보다 "작은" 조건을 사용해 종료일 하루 전체를 포함한다.
@@ -43,7 +46,13 @@ public interface ItemRepository extends JpaRepository<Item, String> {
                   and (:status is null or item.status = :status)
                   and (:keyword is null
                        or lower(item.itemName) like concat('%', lower(:keyword), '%')
-                       or lower(item.description) like concat('%', lower(:keyword), '%'))
+                       or lower(item.description) like concat('%', lower(:keyword), '%')
+                       or (lower(:keyword) = '가방'
+                           and (lower(item.itemName) like '%백팩%'
+                                or lower(item.description) like '%백팩%'))
+                       or (lower(:keyword) = '백팩'
+                           and (lower(item.itemName) like '%가방%'
+                                or lower(item.description) like '%가방%')))
                   and (:location is null
                        or lower(item.location) like concat('%', lower(:location), '%'))
                   and (:startDate is null or item.occurredAt >= :startDate)
@@ -58,7 +67,13 @@ public interface ItemRepository extends JpaRepository<Item, String> {
                   and (:status is null or item.status = :status)
                   and (:keyword is null
                        or lower(item.itemName) like concat('%', lower(:keyword), '%')
-                       or lower(item.description) like concat('%', lower(:keyword), '%'))
+                       or lower(item.description) like concat('%', lower(:keyword), '%')
+                       or (lower(:keyword) = '가방'
+                           and (lower(item.itemName) like '%백팩%'
+                                or lower(item.description) like '%백팩%'))
+                       or (lower(:keyword) = '백팩'
+                           and (lower(item.itemName) like '%가방%'
+                                or lower(item.description) like '%가방%')))
                   and (:location is null
                        or lower(item.location) like concat('%', lower(:location), '%'))
                   and (:startDate is null or item.occurredAt >= :startDate)

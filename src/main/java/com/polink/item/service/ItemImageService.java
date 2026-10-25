@@ -89,6 +89,7 @@ public class ItemImageService {
 
             // DB에는 C:\\... 같은 서버 내부 경로가 아니라 브라우저가 요청할 URL만 저장한다.
             return toPublicUrl(savedPath);
+          
         } catch (IOException exception) {
             // 저장 중 실패한 경우, 중간에 만든 빈 파일이 남지 않도록 정리한다.
             if (savedPath != null) {
@@ -126,6 +127,23 @@ public class ItemImageService {
         }
     }
 
+feat/item-overall-enhancements
+    /**
+     * DB에 저장된 이미지 경로를 브라우저 응답에 사용할 수 있는 실제 파일로 확인한다.
+     * DB 값만 믿고 임의 경로를 읽지 않도록, 반드시 물품 이미지 전용 폴더의 일반 파일만 허용한다.
+     */
+    public Path resolveReadablePath(String imagePath) {
+        if (imagePath == null || imagePath.isBlank()) {
+            throw new IllegalArgumentException("첨부된 이미지가 없습니다.");
+        }
+
+        Path savedPath = Path.of(imagePath).toAbsolutePath().normalize();
+        if (!uploadDirectory.equals(savedPath.getParent()) || !Files.isRegularFile(savedPath)) {
+            throw new IllegalArgumentException("첨부된 이미지 파일을 찾을 수 없습니다.");
+        }
+
+        return savedPath;
+=======
     /** 저장된 파일의 이름만 이용해 외부에서 접근 가능한 URL을 만든다. */
     private String toPublicUrl(Path savedPath) {
         return IMAGE_URL_PREFIX + savedPath.getFileName();
@@ -150,6 +168,7 @@ public class ItemImageService {
         }
 
         return Path.of(imagePath).toAbsolutePath().normalize();
+ main
     }
 
     private String extractExtension(String originalFilename) {

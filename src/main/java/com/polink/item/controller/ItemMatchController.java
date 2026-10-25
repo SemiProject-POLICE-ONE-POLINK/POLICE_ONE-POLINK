@@ -2,6 +2,7 @@ package com.polink.item.controller;
 
 import com.polink.item.dto.ItemMatchListResponse;
 import com.polink.item.dto.ItemMatchRequest;
+import com.polink.item.dto.ItemMatchPreviewRequest;
 import com.polink.item.service.ItemMatchService;
 import com.polink.user.entity.UserRole;
 import io.swagger.v3.oas.annotations.Operation;
@@ -58,6 +59,23 @@ public class ItemMatchController {
         );
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * POST /api/v1/ai/item-matches/preview
+     * 채팅으로 입력한 설명을 임시 분실물로 사용해 일치도를 계산한다.
+     * 사용자가 등록 버튼을 누르기 전에는 DB 물품·반환 신청 데이터를 절대 만들지 않는다.
+     */
+    @Operation(summary = "AI 분실물 매칭 미리보기")
+    @PostMapping("/preview")
+    public ResponseEntity<ItemMatchListResponse> previewMatches(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody ItemMatchPreviewRequest request
+    ) {
+        requireLoggedInUserId(jwt);
+        requireCitizen(jwt);
+
+        return ResponseEntity.ok(itemMatchService.previewMatches(request));
     }
 
     /*
