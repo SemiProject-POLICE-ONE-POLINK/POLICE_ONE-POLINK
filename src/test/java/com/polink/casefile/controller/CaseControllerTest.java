@@ -1,5 +1,6 @@
 package com.polink.casefile.controller;
 
+import com.polink.casefile.dto.request.CaseCancelRequest;
 import com.polink.casefile.dto.request.CaseCloseRequest;
 import com.polink.casefile.dto.request.CaseCreateRequest;
 import com.polink.casefile.dto.request.CaseOfficerRequest;
@@ -86,6 +87,140 @@ public class CaseControllerTest {
                         new PageableHandlerMethodArgumentResolver()
                 )
                 .build();
+    }
+
+    @Test
+    void cancelCase_blankReason_returnsBadRequest() throws Exception {
+        requestJwt = createJwt("11", "ADMIN");
+
+        mockMvc.perform(
+                        post(
+                                "/api/v1/cases/{caseId}/cancel",
+                                "SMPA-2026-0042"
+                        )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"cancelReason\":\"  \"}")
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message")
+                        .value("사건 취소 사유는 필수입니다."));
+
+        verifyNoInteractions(caseService);
+    }
+
+    @Test
+    void cancelCase_reasonTooLong_returnsBadRequest() throws Exception {
+        requestJwt = createJwt("11", "ADMIN");
+
+        String cancelReason = "가".repeat(501);
+
+        mockMvc.perform(
+                        post(
+                                "/api/v1/cases/{caseId}/cancel",
+                                "SMPA-2026-0042"
+                        )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"cancelReason\":\"%s\"}"
+                                                .formatted(cancelReason)
+                                )
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message")
+                        .value("사건 취소 사유는 500자 이하여야 합니다."));
+
+        verifyNoInteractions(caseService);
+    }
+
+    @Test
+    void cancelCase_success_returnsOk() throws Exception {
+        requestJwt = createJwt("11", "ADMIN");
+
+        CaseFile caseFile = mock(CaseFile.class);
+        when(caseFile.getCaseId())
+                .thenReturn("SMPA-2026-0042");
+        when(caseFile.getStatus())
+                .thenReturn(CaseStatus.CANCELED);
+        when(caseFile.getCancelReason())
+                .thenReturn("중복 접수");
+
+        CaseCancelResponse response =
+                new CaseCancelResponse(caseFile);
+
+        when(caseService.cancelCase(
+                eq(11),
+                eq("SMPA-2026-0042"),
+                any(CaseCancelRequest.class)
+        )).thenReturn(response);
+
+        mockMvc.perform(
+                        post(
+                                "/api/v1/cases/{caseId}/cancel",
+                                "SMPA-2026-0042"
+                        )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"cancelReason\":\"중복 접수\"}"
+                                )
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.caseId")
+                        .value("SMPA-2026-0042"))
+                .andExpect(jsonPath("$.status")
+                        .value("CANCELED"))
+                .andExpect(jsonPath("$.cancelReason")
+                        .value("중복 접수"));
+
+        ArgumentCaptor<CaseCancelRequest> requestCaptor =
+                ArgumentCaptor.forClass(CaseCancelRequest.class);
+
+        verify(caseService).cancelCase(
+                eq(11),
+                eq("SMPA-2026-0042"),
+                requestCaptor.capture()
+        );
+
+        assertEquals(
+                "중복 접수",
+                requestCaptor.getValue().getCancelReason()
+        );
+    }
+
+    @Test
+    void cancelCase_withoutJwt_returnsUnauthorized() throws Exception {
+        requestJwt = null;
+
+        when(caseService.cancelCase(
+                isNull(),
+                eq("SMPA-2026-0042"),
+                any(CaseCancelRequest.class)
+        )).thenThrow(new ResponseStatusException(
+                HttpStatus.UNAUTHORIZED,
+                "로그인 사용자 정보가 필요합니다."
+        ));
+
+        mockMvc.perform(
+                        post(
+                                "/api/v1/cases/{caseId}/cancel",
+                                "SMPA-2026-0042"
+                        )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"cancelReason\":\"중복 접수\"}"
+                                )
+                )
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.message")
+                        .value("로그인 사용자 정보가 필요합니다."));
+
+        verify(caseService).cancelCase(
+                isNull(),
+                eq("SMPA-2026-0042"),
+                any(CaseCancelRequest.class)
+        );
     }
 
     @Test

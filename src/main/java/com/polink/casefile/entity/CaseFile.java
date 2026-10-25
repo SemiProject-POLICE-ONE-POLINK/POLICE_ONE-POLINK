@@ -80,6 +80,11 @@ public class CaseFile {
         this.assignedOfficer = officer;
     }
 
+    public void cancel(String cancelReason) {
+        this.status = CaseStatus.CANCELED;
+        this.cancelReason = cancelReason;
+    }
+
     public void finishInvestigation() {
         this.status = CaseStatus.INVESTIGATION_DONE;
     }
