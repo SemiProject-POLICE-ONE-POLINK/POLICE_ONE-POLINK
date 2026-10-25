@@ -1,6 +1,7 @@
 package com.polink.casefile.dto.response;
 
 import com.polink.casefile.entity.CaseFile;
+import com.polink.user.entity.UserRole;
 import lombok.Getter;
 import org.springframework.data.domain.Page;
 
@@ -17,10 +18,18 @@ public class CaseListResponse {
     private final boolean first;
     private final boolean last;
 
-    public CaseListResponse(Page<CaseFile> page) {
+    public CaseListResponse(
+            Page<CaseFile> page,
+            Integer viewerId,
+            UserRole viewerRole
+    ) {
         this.items = page.getContent()
                 .stream()
-                .map(caseFile -> new CaseSummaryResponse(caseFile))
+                .map(caseFile -> new CaseSummaryResponse(
+                        caseFile,
+                        viewerId,
+                        viewerRole
+                ))
                 .toList();
 
         this.page = page.getNumber();

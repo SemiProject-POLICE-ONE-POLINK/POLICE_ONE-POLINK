@@ -12,6 +12,7 @@ import com.polink.casefile.entity.CaseType;
 import com.polink.casefile.exception.CaseExceptionHandler;
 import com.polink.casefile.service.CaseService;
 import com.polink.user.entity.User;
+import com.polink.user.entity.UserRole;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -376,23 +377,32 @@ public class CaseControllerTest {
     }
 
     @Test
-    void getCases_success_returnsOk() throws Exception {
+    void getCases_withSearchConditions_success_returnsOk()
+            throws Exception {
         CaseListResponse response =
                 new CaseListResponse(
                         new PageImpl<>(
                                 List.of(),
                                 PageRequest.of(0, 10),
                                 0
-                        )
+                        ),
+                        1,
+                        UserRole.CITIZEN
                 );
 
         when(caseService.getCases(
                 eq(1),
+                eq("서울"),
+                eq(CaseType.THEFT),
+                eq(CaseStatus.WAITING),
                 any(Pageable.class)
         )).thenReturn(response);
 
         mockMvc.perform(
                         get("/api/v1/cases")
+                                .param("keyword", "서울")
+                                .param("caseType", "THEFT")
+                                .param("status", "WAITING")
                                 .param("page", "0")
                                 .param("size", "10")
                 )
@@ -410,6 +420,9 @@ public class CaseControllerTest {
 
         verify(caseService).getCases(
                 eq(1),
+                eq("서울"),
+                eq(CaseType.THEFT),
+                eq(CaseStatus.WAITING),
                 pageableCaptor.capture()
         );
 

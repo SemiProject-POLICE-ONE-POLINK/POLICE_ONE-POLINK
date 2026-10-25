@@ -8,6 +8,7 @@ import com.polink.casefile.dto.response.*;
 import com.polink.casefile.entity.CaseClose;
 import com.polink.casefile.entity.CaseFile;
 import com.polink.casefile.entity.CaseStatus;
+import com.polink.casefile.entity.CaseType;
 import com.polink.casefile.repository.CaseCloseRepository;
 import com.polink.casefile.repository.CaseRepository;
 import com.polink.user.entity.User;
@@ -150,8 +151,11 @@ public class CaseService {
     @Transactional(readOnly = true)
     public CaseListResponse getCases(
             Integer userId,
-            Pageable pageable) {
-
+            String keyword,
+            CaseType caseType,
+            CaseStatus status,
+            Pageable pageable
+    ) {
         if (userId == null) {
             throw new ResponseStatusException(
                     HttpStatus.UNAUTHORIZED,
@@ -165,22 +169,32 @@ public class CaseService {
                         "회원을 찾을 수 없습니다."
                 ));
 
-        Page<CaseFile> cases;
-
-        if (user.getRole() == UserRole.CITIZEN) {
-            cases = caseRepository.findByReporter_UserId(
-                    userId, pageable);
-        } else if (user.getRole() == UserRole.POLICE
-                || user.getRole() == UserRole.ADMIN) {
-            cases = caseRepository.findAll(pageable);
-        } else {
+        if (user.getRole() != UserRole.CITIZEN
+                && user.getRole() != UserRole.POLICE
+                && user.getRole() != UserRole.ADMIN) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "사건 목록을 조회할 권한이 없습니다."
             );
         }
 
-        return new CaseListResponse(cases);
+        String normalizedKeyword =
+                keyword == null || keyword.isBlank()
+                        ? null
+                        : keyword.trim();
+
+        Page<CaseFile> cases = caseRepository.searchCases(
+                normalizedKeyword,
+                caseType,
+                status,
+                pageable
+        );
+
+        return new CaseListResponse(
+                cases,
+                userId,
+                user.getRole()
+        );
     }
 
     @Transactional

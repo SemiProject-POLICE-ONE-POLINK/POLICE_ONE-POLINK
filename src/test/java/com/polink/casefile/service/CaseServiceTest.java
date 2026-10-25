@@ -432,7 +432,10 @@ public class CaseServiceTest {
     )
     void getCases_staffCanReadAll(UserRole role) {
         User staff = new User(
-                "staff01", "test-hash", "테스트직원", "010-0000-9501"
+                "staff01",
+                "test-hash",
+                "테스트직원",
+                "010-0000-9501"
         );
         ReflectionTestUtils.setField(staff, "userId", 2);
         ReflectionTestUtils.setField(staff, "role", role);
@@ -441,16 +444,31 @@ public class CaseServiceTest {
 
         when(userRepository.findById(2))
                 .thenReturn(Optional.of(staff));
-        when(caseRepository.findAll(pageable))
-                .thenReturn(Page.empty(pageable));
+        when(caseRepository.searchCases(
+                null,
+                null,
+                null,
+                pageable
+        )).thenReturn(Page.empty(pageable));
 
         CaseListResponse response =
-                caseService.getCases(2, pageable);
+                caseService.getCases(
+                        2,
+                        null,
+                        null,
+                        null,
+                        pageable
+                );
 
         assertTrue(response.getItems().isEmpty());
         assertEquals(0L, response.getTotalElements());
 
-        verify(caseRepository).findAll(pageable);
+        verify(caseRepository).searchCases(
+                null,
+                null,
+                null,
+                pageable
+        );
         verify(caseRepository, never())
                 .findByReporter_UserId(any(), any(Pageable.class));
         verify(caseRepository, never())
@@ -459,57 +477,97 @@ public class CaseServiceTest {
     }
 
     @Test
-    void getCases_citizenOnlyOwnCases() {
+    void getCases_citizenCanReadAllWithMineAndLocked() {
         User citizen = new User(
-                "citizen01", "test-hash", "테스트시민", "010-0000-9601"
+                "citizen01",
+                "test-hash",
+                "테스트시민",
+                "010-0000-9601"
         );
         ReflectionTestUtils.setField(citizen, "userId", 1);
+
+        User otherCitizen = new User(
+                "citizen02",
+                "test-hash",
+                "다른시민",
+                "010-0000-9602"
+        );
+        ReflectionTestUtils.setField(otherCitizen, "userId", 2);
 
         LocalDateTime occurredAt =
                 LocalDateTime.of(2026, 10, 18, 10, 0);
 
-        CaseFile caseFile = new CaseFile(
+        CaseFile ownCase = new CaseFile(
                 "SMPA-2026-0042",
                 citizen,
-                "지갑 절도 신고",
+                "내 지갑 절도 신고",
                 CaseType.THEFT,
-                "가상 사건 내용",
+                "내 사건 내용",
                 occurredAt,
-                "테스트 장소"
+                "서울역"
+        );
+
+        CaseFile otherCase = new CaseFile(
+                "SMPA-2026-0043",
+                otherCitizen,
+                "다른 시민 지갑 절도 신고",
+                CaseType.THEFT,
+                "다른 시민 사건 내용",
+                occurredAt,
+                "서울광장"
         );
 
         Pageable pageable = PageRequest.of(0, 10);
-        Page<CaseFile> page =
-                new PageImpl<>(List.of(caseFile), pageable, 1);
+        Page<CaseFile> page = new PageImpl<>(
+                List.of(ownCase, otherCase),
+                pageable,
+                2
+        );
 
         when(userRepository.findById(1))
                 .thenReturn(Optional.of(citizen));
-        when(caseRepository.findByReporter_UserId(1, pageable))
-                .thenReturn(page);
+        when(caseRepository.searchCases(
+                "지갑",
+                CaseType.THEFT,
+                CaseStatus.WAITING,
+                pageable
+        )).thenReturn(page);
 
         CaseListResponse response =
-                caseService.getCases(1, pageable);
+                caseService.getCases(
+                        1,
+                        "  지갑  ",
+                        CaseType.THEFT,
+                        CaseStatus.WAITING,
+                        pageable
+                );
 
-        assertEquals(1, response.getItems().size());
+        assertEquals(2, response.getItems().size());
         assertEquals(0, response.getPage());
         assertEquals(10, response.getSize());
-        assertEquals(1L, response.getTotalElements());
+        assertEquals(2L, response.getTotalElements());
         assertEquals(1, response.getTotalPages());
         assertTrue(response.isFirst());
         assertTrue(response.isLast());
 
-        var item = response.getItems().get(0);
-        assertEquals("SMPA-2026-0042", item.getCaseId());
-        assertEquals("지갑 절도 신고", item.getTitle());
-        assertEquals(CaseType.THEFT, item.getCaseType());
-        assertEquals(occurredAt, item.getOccurredAt());
-        assertEquals("테스트 장소", item.getLocation());
-        assertEquals(CaseStatus.WAITING, item.getStatus());
+        var ownItem = response.getItems().get(0);
+        assertEquals("SMPA-2026-0042", ownItem.getCaseId());
+        assertTrue(ownItem.isMine());
+        assertFalse(ownItem.isLocked());
 
-        verify(caseRepository).findByReporter_UserId(1, pageable);
-        verify(caseRepository, never()).findAll(any(Pageable.class));
+        var otherItem = response.getItems().get(1);
+        assertEquals("SMPA-2026-0043", otherItem.getCaseId());
+        assertFalse(otherItem.isMine());
+        assertTrue(otherItem.isLocked());
+
+        verify(caseRepository).searchCases(
+                "지갑",
+                CaseType.THEFT,
+                CaseStatus.WAITING,
+                pageable
+        );
         verify(caseRepository, never())
-                .findByAssignedOfficer_UserId(any(), any(Pageable.class));
+                .findByReporter_UserId(any(), any(Pageable.class));
         verifyNoInteractions(caseNumberGenerator);
     }
 
@@ -820,7 +878,13 @@ public class CaseServiceTest {
 
         ResponseStatusException listException = assertThrows(
                 ResponseStatusException.class,
-                () -> caseService.getCases(null, pageable)
+                () -> caseService.getCases(
+                        null,
+                        null,
+                        null,
+                        null,
+                        pageable
+                )
         );
 
         ResponseStatusException myCasesException = assertThrows(
@@ -843,7 +907,10 @@ public class CaseServiceTest {
     @Test
     void getCases_citizenWithoutCases_emptyList() {
         User citizen = new User(
-                "citizen01", "test-hash", "테스트시민", "010-0000-9941"
+                "citizen01",
+                "test-hash",
+                "테스트시민",
+                "010-0000-9941"
         );
         ReflectionTestUtils.setField(citizen, "userId", 1);
 
@@ -851,16 +918,33 @@ public class CaseServiceTest {
 
         when(userRepository.findById(1))
                 .thenReturn(Optional.of(citizen));
-        when(caseRepository.findByReporter_UserId(1, pageable))
-                .thenReturn(Page.empty(pageable));
+        when(caseRepository.searchCases(
+                null,
+                null,
+                null,
+                pageable
+        )).thenReturn(Page.empty(pageable));
 
-        CaseListResponse response = caseService.getCases(1, pageable);
+        CaseListResponse response =
+                caseService.getCases(
+                        1,
+                        null,
+                        null,
+                        null,
+                        pageable
+                );
 
         assertTrue(response.getItems().isEmpty());
         assertEquals(0L, response.getTotalElements());
 
-        verify(caseRepository).findByReporter_UserId(1, pageable);
-        verify(caseRepository, never()).findAll(any(Pageable.class));
+        verify(caseRepository).searchCases(
+                null,
+                null,
+                null,
+                pageable
+        );
+        verify(caseRepository, never())
+                .findByReporter_UserId(any(), any(Pageable.class));
         verify(caseRepository, never())
                 .findByAssignedOfficer_UserId(any(), any(Pageable.class));
 
