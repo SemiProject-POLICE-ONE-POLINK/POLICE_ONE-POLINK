@@ -1,36 +1,36 @@
 package com.polink.casefile.service;
 
 import com.polink.casefile.dto.request.CaseCloseRequest;
+import com.polink.casefile.dto.request.CaseCreateRequest;
+import com.polink.casefile.dto.request.CaseOfficerRequest;
 import com.polink.casefile.dto.response.*;
 import com.polink.casefile.entity.CaseClose;
-import com.polink.user.entity.UserRole;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
-import com.polink.casefile.repository.CaseRepository;
-import com.polink.casefile.repository.CaseCloseRepository;
-import com.polink.user.repository.UserRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import com.polink.casefile.dto.request.CaseCreateRequest;
 import com.polink.casefile.entity.CaseFile;
 import com.polink.casefile.entity.CaseStatus;
 import com.polink.casefile.entity.CaseType;
+import com.polink.casefile.repository.CaseCloseRepository;
+import com.polink.casefile.repository.CaseRepository;
 import com.polink.user.entity.User;
+import com.polink.user.entity.UserRole;
+import com.polink.user.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.PageImpl;
-import java.util.List;
-import com.polink.casefile.dto.request.CaseOfficerRequest;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -350,8 +350,13 @@ public class CaseServiceTest {
         MyCaseListResponse response =
                 caseService.getMyCases(1, pageable);
 
-        assertEquals(1L, response.getTotalElements());
         assertEquals(1, response.getItems().size());
+        assertEquals(0, response.getPage());
+        assertEquals(10, response.getSize());
+        assertEquals(1L, response.getTotalElements());
+        assertEquals(1, response.getTotalPages());
+        assertTrue(response.isFirst());
+        assertTrue(response.isLast());
 
         var item = response.getItems().get(0);
         assertEquals("SMPA-2026-0042", item.getCaseId());
@@ -462,8 +467,13 @@ public class CaseServiceTest {
         CaseListResponse response =
                 caseService.getCases(1, pageable);
 
-        assertEquals(1L, response.getTotalElements());
         assertEquals(1, response.getItems().size());
+        assertEquals(0, response.getPage());
+        assertEquals(10, response.getSize());
+        assertEquals(1L, response.getTotalElements());
+        assertEquals(1, response.getTotalPages());
+        assertTrue(response.isFirst());
+        assertTrue(response.isLast());
 
         var item = response.getItems().get(0);
         assertEquals("SMPA-2026-0042", item.getCaseId());

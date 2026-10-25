@@ -1,17 +1,7 @@
 package com.polink.item.controller;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-import static java.util.Objects.requireNonNull;
-
-import com.polink.item.returnrequest.dto.ReturnRequestCreateRequest;
-import com.polink.item.returnrequest.dto.ReturnRequestCreateResponse;
+import com.polink.item.returnrequest.dto.*;
 import com.polink.item.returnrequest.entity.ReturnRequestStatus;
-import com.polink.item.returnrequest.dto.ReturnRequestRejectRequest;
 import com.polink.item.returnrequest.service.ReturnRequestService;
 import com.polink.user.entity.UserRole;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,11 +13,15 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.server.ResponseStatusException;
-import com.polink.item.returnrequest.dto.ReturnRequestCompleteResponse;
+
 import java.time.LocalDateTime;
-import com.polink.item.returnrequest.dto.ReturnRequestProcessResponse;
-import com.polink.item.returnrequest.dto.MyReturnRequestListResponse;
 import java.util.List;
+
+import static java.util.Objects.requireNonNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ReturnRequestControllerTest {
@@ -304,6 +298,59 @@ class ReturnRequestControllerTest {
         verify(returnRequestService).getMyReturnRequests(
                 1,
                 ReturnRequestStatus.PENDING,
+                0,
+                10
+        );
+    }
+
+    @Test
+    void 경찰은_페이지_메타데이터가_포함된_반환_신청_목록을_조회할_수_있다() {
+        when(jwt.getSubject()).thenReturn("2");
+        when(jwt.getClaimAsString("role"))
+                .thenReturn(UserRole.POLICE.name());
+
+        PoliceReturnRequestListResponse serviceResponse =
+                new PoliceReturnRequestListResponse(
+                        List.of(),
+                        0,
+                        10,
+                        0,
+                        0,
+                        true,
+                        true
+                );
+
+        when(returnRequestService.getReturnRequests(
+                ReturnRequestStatus.PENDING,
+                "카드지갑",
+                0,
+                10
+        )).thenReturn(serviceResponse);
+
+        ResponseEntity<PoliceReturnRequestListResponse> result =
+                returnRequestController.getReturnRequests(
+                        jwt,
+                        ReturnRequestStatus.PENDING,
+                        "카드지갑",
+                        0,
+                        10
+                );
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+
+        PoliceReturnRequestListResponse response =
+                requireNonNull(result.getBody());
+
+        assertEquals(0, response.page());
+        assertEquals(10, response.size());
+        assertEquals(0L, response.totalElements());
+        assertEquals(0, response.totalPages());
+        assertTrue(response.first());
+        assertTrue(response.last());
+
+        verify(returnRequestService).getReturnRequests(
+                ReturnRequestStatus.PENDING,
+                "카드지갑",
                 0,
                 10
         );

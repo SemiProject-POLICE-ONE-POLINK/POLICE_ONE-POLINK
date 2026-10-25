@@ -10,7 +10,12 @@ import java.util.List;
 public class MyCaseListResponse {
 
     private final List<MyCaseSummaryResponse> items;
+    private final int page;
+    private final int size;
     private final long totalElements;
+    private final int totalPages;
+    private final boolean first;
+    private final boolean last;
 
     public MyCaseListResponse(Page<CaseFile> page) {
         this.items = page.getContent()
@@ -18,6 +23,11 @@ public class MyCaseListResponse {
                 .map(MyCaseSummaryResponse::new)
                 .toList();
 
+        this.page = page.getNumber();
+        this.size = page.getSize();
         this.totalElements = page.getTotalElements();
+        this.totalPages = page.getTotalPages();
+        this.first = page.isFirst();
+        this.last = page.isLast();
     }
 }
