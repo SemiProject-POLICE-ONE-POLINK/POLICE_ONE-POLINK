@@ -63,7 +63,6 @@ public class ItemMatchController {
 
     /**
      * POST /api/v1/ai/item-matches/preview
-     *
      * 채팅으로 입력한 설명을 임시 분실물로 사용해 일치도를 계산한다.
      * 사용자가 등록 버튼을 누르기 전에는 DB 물품·반환 신청 데이터를 절대 만들지 않는다.
      */

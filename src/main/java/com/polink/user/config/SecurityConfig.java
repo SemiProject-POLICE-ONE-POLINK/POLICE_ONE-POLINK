@@ -20,8 +20,7 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http)
-            throws Exception {
-
+    {
         http
                 // 현재는 세션 로그인 사용 X
                 .sessionManagement(session -> session

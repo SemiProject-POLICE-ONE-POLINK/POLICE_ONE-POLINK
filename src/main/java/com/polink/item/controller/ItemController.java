@@ -259,7 +259,6 @@ public class ItemController {
 
     /**
      * GET /api/v1/items/{itemId}/image
-     *
      * DB에는 운영체제의 절대 파일 경로를 보관하므로 그 값을 그대로 프론트에 노출하거나
      * img 태그에 넣으면 브라우저가 파일을 읽을 수 없다. 로그인한 사용자가 이 API로
      * 이미지 바이너리를 받아 목록과 상세 화면에 표시하도록 한다.
@@ -347,7 +346,6 @@ public class ItemController {
     /*
      * GET /api/v1/items/statistics
      * 예: /api/v1/items/statistics?startDate=2026-10-01&endDate=2026-10-31
-     *
      * 경찰과 관리자 계정이 등록일 기준의 분실물·습득물 현황 통계를 조회한다.
      * 날짜 조건을 생략하면 전체 기간 통계를 반환한다.
      */

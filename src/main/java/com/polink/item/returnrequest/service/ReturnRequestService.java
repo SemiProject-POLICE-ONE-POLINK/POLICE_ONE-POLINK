@@ -10,6 +10,7 @@ import com.polink.item.returnrequest.dto.ReturnRequestCreateRequest;
 import com.polink.item.returnrequest.dto.ReturnRequestCreateResponse;
 import com.polink.item.returnrequest.entity.ReturnRequest;
 import com.polink.item.returnrequest.repository.ReturnRequestRepository;
+import com.polink.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -139,7 +140,7 @@ public class ReturnRequestService {
 
         // 이전 DB의 REQUESTED도 현재 화면에서는 "신청(PENDING)"으로 표시된다.
         // 두 값을 함께 허용해야 레거시 신청을 승인할 수 있다.
-        if (!returnRequest.getStatus().isPendingForProcessing()) {
+        if (returnRequest.getStatus() != ReturnRequestStatus.PENDING) {
             throw new ReturnRequestConflictException("대기 상태의 반환 신청만 승인할 수 있습니다.");
         }
 
@@ -205,7 +206,7 @@ public class ReturnRequestService {
 
         // 아직 처리되지 않은 PENDING 상태만 반려할 수 있다.
         // 승인과 동일하게, 과거 REQUESTED 신청도 반려 가능한 대기 신청으로 취급한다.
-        if (!returnRequest.getStatus().isPendingForProcessing()) {
+        if (returnRequest.getStatus() != ReturnRequestStatus.PENDING) {
             throw new ReturnRequestConflictException("대기 상태의 반환 신청만 반려할 수 있습니다.");
         }
 
@@ -480,7 +481,7 @@ public class ReturnRequestService {
      */
     private String findRequesterName(Integer requesterId) {
         return userRepository.findById(requesterId)
-                .map(user -> user.getName())
+                .map(User::getName)
                 .orElse("회원 " + requesterId);
     }
 

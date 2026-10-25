@@ -52,6 +52,7 @@ class ReturnRequestServiceTest {
     private ItemRepository itemRepository;
 
     // 반환 신청 이력에 신청자 이름을 넣기 위해 Service가 회원 정보를 조회한다.
+    @SuppressWarnings("unused")
     @Mock
     private UserRepository userRepository;
 
