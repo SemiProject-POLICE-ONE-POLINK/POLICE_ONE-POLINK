@@ -2,6 +2,7 @@ package com.polink.item.service;
 
 import com.polink.item.dto.ItemMatchListResponse;
 import com.polink.item.dto.ItemMatchResponse;
+import com.polink.item.dto.ItemMatchPreviewRequest;
 import com.polink.item.dto.ai.ItemMatchAiInput;
 import com.polink.item.entity.Item;
 import com.polink.item.entity.ItemStatus;
@@ -13,6 +14,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.Map;
+import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -96,12 +98,44 @@ public class ItemMatchService {
                         ItemStatus.STORED
                 );
 
+        return generateMatchResponse(toAiItemInput(lostItem), foundItems);
+    }
+
+    /**
+     * 챗봇 입력만으로 일치도를 계산하는 미리보기다. 등록된 물품 소유권 검사는 필요 없지만,
+     * 비교 대상은 실제로 보관 중인 습득물만 사용한다.
+     */
+    public ItemMatchListResponse previewMatches(ItemMatchPreviewRequest request) {
+        List<Item> foundItems = itemRepository
+                .findByItemTypeAndStatusOrderByCreatedAtDescItemIdDesc(
+                        ItemType.FOUND,
+                        ItemStatus.STORED
+                );
+
+        ItemMatchAiInput.ItemInput previewItem = new ItemMatchAiInput.ItemInput(
+                "CHAT-PREVIEW",
+                ItemType.LOST.name(),
+                request.itemName().trim(),
+                request.category().trim(),
+                request.description() == null ? "" : request.description().trim(),
+                request.location() == null ? "" : request.location().trim(),
+                request.occurredAt() == null
+                        ? LocalDateTime.now()
+                        : request.occurredAt().atStartOfDay()
+        );
+
+        return generateMatchResponse(previewItem, foundItems);
+    }
+
+    /** 등록 물품과 챗봇 미리보기가 공통으로 쓰는 후보 검증·점수 정렬 과정이다. */
+    private ItemMatchListResponse generateMatchResponse(
+            ItemMatchAiInput.ItemInput lostItem,
+            List<Item> foundItems
+    ) {
         // Entity 전체를 외부 AI에 전달하지 않도록 최소 정보 DTO로 변환한다.
         ItemMatchAiInput aiInput = new ItemMatchAiInput(
-                toAiItemInput(lostItem),
-                foundItems.stream()
-                        .map(this::toAiItemInput)
-                        .toList()
+                lostItem,
+                foundItems.stream().map(this::toAiItemInput).toList()
         );
 
         // AI가 반환할 수 있는 후보 번호를 서버가 조회한 습득물 번호로 제한한다.

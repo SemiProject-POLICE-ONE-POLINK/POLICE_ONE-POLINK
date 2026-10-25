@@ -38,3 +38,15 @@ ALTER TABLE tbl_return_request
     ADD COLUMN completed_by INT NULL COMMENT '실제 반환 완료 처리 경찰 회원 번호',
     ADD CONSTRAINT fk_return_request_completed_by
         FOREIGN KEY (completed_by) REFERENCES tbl_user (user_id);
+
+-- 과거 반환 신청 대기 상태 REQUESTED를 현재 표준값 PENDING으로 정리한다.
+-- DB나 테이블을 새로 만들지 않고 기존 행의 status 값만 변경한다.
+-- WHERE 조건이 있어 동일한 UPDATE를 다시 실행해도 이미 PENDING인 행은 바뀌지 않는다.
+UPDATE tbl_return_request
+SET status = 'PENDING'
+WHERE status = 'REQUESTED';
+
+-- 마이그레이션 후 legacy_requested_count가 0이면 상태값 정리가 완료된 것이다.
+SELECT COUNT(*) AS legacy_requested_count
+FROM tbl_return_request
+WHERE status = 'REQUESTED';

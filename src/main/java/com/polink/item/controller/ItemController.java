@@ -14,7 +14,9 @@ import java.net.URI;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.http.MediaTypeFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.core.io.Resource;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.polink.item.dto.ItemPageResponse;
@@ -255,6 +257,32 @@ public class ItemController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * GET /api/v1/items/{itemId}/image
+     * DB에는 운영체제의 절대 파일 경로를 보관하므로 그 값을 그대로 프론트에 노출하거나
+     * img 태그에 넣으면 브라우저가 파일을 읽을 수 없다. 로그인한 사용자가 이 API로
+     * 이미지 바이너리를 받아 목록과 상세 화면에 표시하도록 한다.
+     */
+    @Operation(summary = "분실물·습득물 이미지 조회")
+    @GetMapping("/{itemId}/image")
+    public ResponseEntity<Resource> getItemImage(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String itemId
+    ) {
+        // 상세 조회와 동일하게 로그인한 사용자만 이미지 파일을 가져갈 수 있다.
+        requireLoggedInUserId(jwt);
+
+        Resource image = itemService.getItemImageResource(itemId);
+
+        // 업로드 파일과 classpath 기본 이미지 모두 확장자로 MIME 타입을 판단한다.
+        MediaType mediaType = MediaTypeFactory.getMediaType(image)
+                .orElse(MediaType.APPLICATION_OCTET_STREAM);
+
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .body(image);
+    }
+
     /*
      * Authorization Bearer 토큰에서 로그인 회원 번호(sub)를 추출한다.
      * 토큰이 없거나 회원 번호 형식이 올바르지 않으면 401을 반환한다.
@@ -318,7 +346,6 @@ public class ItemController {
     /*
      * GET /api/v1/items/statistics
      * 예: /api/v1/items/statistics?startDate=2026-10-01&endDate=2026-10-31
-     *
      * 경찰과 관리자 계정이 등록일 기준의 분실물·습득물 현황 통계를 조회한다.
      * 날짜 조건을 생략하면 전체 기간 통계를 반환한다.
      */

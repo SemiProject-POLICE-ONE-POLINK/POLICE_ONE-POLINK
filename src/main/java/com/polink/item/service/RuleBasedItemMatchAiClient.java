@@ -62,7 +62,7 @@ public class RuleBasedItemMatchAiClient implements ItemMatchAiClient {
         List<String> reasons = new ArrayList<>();
 
         // 같은 카테고리는 가장 중요한 기본 매칭 기준이다.
-        if (lostItem.category().equals(foundItem.category())) {
+        if (categoriesMatch(lostItem.category(), foundItem.category())) {
             score += 50;
             reasons.add("카테고리가 일치합니다.");
         }
@@ -114,6 +114,26 @@ public class RuleBasedItemMatchAiClient implements ItemMatchAiClient {
 
         return normalizedFirst.contains(normalizedSecond)
                 || normalizedSecond.contains(normalizedFirst);
+    }
+
+    /**
+     * 이전에 "가방" 또는 BAG으로 저장된 데이터도 현재의 CLOTHING_GOODS 분류와
+     * 같은 계열로 본다. 이 호환 처리가 없으면 이름과 장소가 비슷해도 기본 50점에
+     * 도달하지 못해 챗봇의 AI 후보 목록에서 빠진다.
+     */
+    private boolean categoriesMatch(String first, String second) {
+        return normalizeCategory(first).equals(normalizeCategory(second));
+    }
+
+    private String normalizeCategory(String category) {
+        if (category == null) {
+            return "";
+        }
+
+        return switch (category.trim().toUpperCase(Locale.ROOT)) {
+            case "BAG", "가방", "CLOTHING_GOODS" -> "CLOTHING_GOODS";
+            default -> category.trim().toUpperCase(Locale.ROOT);
+        };
     }
 
     // 비교 전에 공백을 없애고, 언어 영향 없이 소문자로 통일한다.

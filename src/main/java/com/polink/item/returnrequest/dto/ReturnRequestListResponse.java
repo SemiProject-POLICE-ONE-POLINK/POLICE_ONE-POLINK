@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
  * 경찰은 전체 신청 목록을, 시민은 본인 신청 목록을 조회한다.
  * 두 화면 모두 공통으로 사용할 수 있도록 신청자·물품·처리 상태 정보를 담는다.
  * User Entity와 JPA 연관관계를 직접 맺지 않고,
- * 현재 도메인 경계를 유지하기 위해 신청자 이름 대신 requesterId만 반환한다.
+ * Service가 조회한 신청자 표시 이름을 함께 담는다.
  */
 public record ReturnRequestListResponse(
 
@@ -20,6 +20,9 @@ public record ReturnRequestListResponse(
 
         // 반환 신청을 만든 시민의 회원 번호다.
         Integer requesterId,
+
+        // 이력 카드와 경찰 목록에서 신청자를 식별할 수 있는 이름이다.
+        String requesterName,
 
         // 연결된 분실물 번호다. 예: L-0116
         String lostItemId,
@@ -47,7 +50,11 @@ public record ReturnRequestListResponse(
 
         // 경찰이 승인 또는 반려를 처리한 서버 시각이다.
         // 아직 PENDING 상태면 null이다.
-        LocalDateTime processedAt
+        LocalDateTime processedAt,
+
+        // 반려 상태일 때만 표시할 수 있는 반려 사유다.
+        // 관리자·경찰의 물품 상세 이력 카드에서 신청 처리 배경을 확인하는 데 사용한다.
+        String rejectReason
 ) {
 
     /*
@@ -59,12 +66,14 @@ public record ReturnRequestListResponse(
     public static ReturnRequestListResponse from(
             ReturnRequest returnRequest,
             Item lostItem,
-            Item foundItem
+            Item foundItem,
+            String requesterName
     ) {
         return new ReturnRequestListResponse(
                 // 반환 신청 기본 정보
                 returnRequest.getRequestId(),
                 returnRequest.getRequesterId(),
+                requesterName,
 
                 // 연결된 분실물 정보
                 lostItem.getItemId(),
@@ -79,7 +88,8 @@ public record ReturnRequestListResponse(
                 // 신청 처리 상태와 시간 정보
                 returnRequest.getStatus(),
                 returnRequest.getCreatedAt(),
-                returnRequest.getProcessedAt()
+                returnRequest.getProcessedAt(),
+                returnRequest.getRejectReason()
         );
     }
 }

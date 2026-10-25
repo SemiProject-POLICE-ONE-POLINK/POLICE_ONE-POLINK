@@ -8,6 +8,7 @@ import com.polink.item.returnrequest.dto.*;
 import com.polink.item.returnrequest.entity.ReturnRequest;
 import com.polink.item.returnrequest.entity.ReturnRequestStatus;
 import com.polink.item.returnrequest.repository.ReturnRequestRepository;
+import com.polink.user.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +40,11 @@ class ReturnRequestServiceTest {
 
     @Mock
     private ItemRepository itemRepository;
+
+    // 반환 신청 이력에 신청자 이름을 넣기 위해 Service가 회원 정보를 조회한다.
+    @SuppressWarnings("unused")
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private ReturnRequestService returnRequestService;
