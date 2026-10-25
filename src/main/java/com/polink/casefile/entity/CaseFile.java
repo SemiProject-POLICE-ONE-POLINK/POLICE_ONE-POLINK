@@ -80,6 +80,10 @@ public class CaseFile {
         this.assignedOfficer = officer;
     }
 
+    public void finishInvestigation() {
+        this.status = CaseStatus.INVESTIGATION_DONE;
+    }
+
     public void close() {
         this.status = CaseStatus.CLOSED;
     }

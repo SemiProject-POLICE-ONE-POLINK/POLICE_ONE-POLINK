@@ -695,9 +695,9 @@ public class CaseServiceTest {
     @ParameterizedTest
     @EnumSource(
             value = CaseStatus.class,
-            names = {"CLOSED", "CANCELED"}
+            names = {"INVESTIGATION_DONE", "CLOSED", "CANCELED"}
     )
-    void assignOfficer_finishedCase_conflict(CaseStatus status) {
+    void assignOfficer_nonAssignableStatus_conflict(CaseStatus status) {
         User admin = new User(
                 "admin01", "test-hash", "테스트관리자", "010-0000-9921"
         );
@@ -743,7 +743,7 @@ public class CaseServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         assertEquals(
-                "종결 또는 취소된 사건은 담당 경찰을 변경할 수 없습니다.",
+                "종결 대기, 종결 또는 취소된 사건은 담당 경찰을 변경할 수 없습니다.",
                 exception.getReason()
         );
 
@@ -865,8 +865,9 @@ public class CaseServiceTest {
                 "테스트 장소"
         );
 
-        // 담당 경찰이 배정된 수사 중 사건을 준비한다.
+        // 담당 경찰이 수사 종결을 요청한 종결 대기 사건을 준비한다.
         caseFile.assignOfficer(officer);
+        caseFile.finishInvestigation();
 
         CaseCloseRequest request = new CaseCloseRequest();
         ReflectionTestUtils.setField(
@@ -1010,9 +1011,9 @@ public class CaseServiceTest {
     @ParameterizedTest
     @EnumSource(
             value = CaseStatus.class,
-            names = {"WAITING", "CLOSED", "CANCELED"}
+            names = {"WAITING", "INVESTIGATING", "CLOSED", "CANCELED"}
     )
-    void closeCase_notInvestigating_conflict(CaseStatus status) {
+    void closeCase_notInvestigationDone_conflict(CaseStatus status) {
         User admin = new User(
                 "admin01", "test-hash", "테스트관리자", "010-0000-9962"
         );
@@ -1053,7 +1054,7 @@ public class CaseServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         assertEquals(
-                "수사 중인 사건만 종결할 수 있습니다.",
+                "종결 대기 상태인 사건만 종결할 수 있습니다.",
                 exception.getReason()
         );
         assertEquals(status, caseFile.getStatus());
@@ -1119,6 +1120,7 @@ public class CaseServiceTest {
                 "테스트 장소"
         );
         caseFile.assignOfficer(officer);
+        caseFile.finishInvestigation();
 
         CaseCloseRequest request = new CaseCloseRequest();
         ReflectionTestUtils.setField(
@@ -1144,7 +1146,10 @@ public class CaseServiceTest {
                 "이미 종결 기록이 존재합니다.",
                 exception.getReason()
         );
-        assertEquals(CaseStatus.INVESTIGATING, caseFile.getStatus());
+        assertEquals(
+                CaseStatus.INVESTIGATION_DONE,
+                caseFile.getStatus()
+        );
 
         verify(caseCloseRepository, never()).save(any(CaseClose.class));
         verifyNoInteractions(caseNumberGenerator);
