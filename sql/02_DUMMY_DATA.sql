@@ -46,11 +46,11 @@ VALUES (1, 'miran', '$2a$10$jgcM2bV8D984fg3mBs4wLuUxw7dyrigOGjOn7HUFzZMSoP5InSbJ
        (4, 'conan', '$2a$10$LYBCj9i8E3zCucmnSddSQ.8NnLOp3XSWGv8BJoBTrspGKeJ5rcF5.', '코난', '010-4869-1004', 'CITIZEN'),
        (5, 'myeonghan', '$2a$10$X9VE0DjCKahSsz3mp3l/7eAq86l.DpMzhEIq0W5TvQWzQr09om6cu', '유명한', '010-4869-1005',
         'CITIZEN'),
-       (6, 'golombo', '$2a$10$JWMX6XPwQkVxFuZXpPhMveSTbIgeq2qcQFhNpLduVF6iGnXKALP9S', '골롬보', '02-3150-0110', 'POLICE'),
-       (7, 'shin', '$2a$10$gPBaR78te00AIewotga5TesgExWXHx1MUn1x2k3Nx72u8hlsyAKUa', '신형선', '02-3150-0111', 'POLICE'),
-       (8, 'oh', '$2a$10$iT9uKL.Mmc7cg7LssgbQT.gK2U48pPDf1/lwf3l42KnTtboFy7aTm', '오지인', '02-3150-0112', 'POLICE'),
-       (9, 'baek', '$2a$10$34uUFNtbagK7f5k5UgqAyelUxm.1M8ovFPQXQpt1gsuCKCZYI7DPC', '백동훈', '02-3150-0113', 'POLICE'),
-       (10, 'lim', '$2a$10$Lp3YkwW4xGzbPdSgAuZmNezpNz4p2KrEUgug0.9BA/ws9MrLpcVju', '임은삼', '02-3150-0114', 'POLICE'),
+       (6, 'golombo', '$2a$10$JWMX6XPwQkVxFuZXpPhMveSTbIgeq2qcQFhNpLduVF6iGnXKALP9S', '골롬보 경감', '02-3150-0110', 'POLICE'),
+       (7, 'shin', '$2a$10$gPBaR78te00AIewotga5TesgExWXHx1MUn1x2k3Nx72u8hlsyAKUa', '신형선 경사', '02-3150-0111', 'POLICE'),
+       (8, 'oh', '$2a$10$iT9uKL.Mmc7cg7LssgbQT.gK2U48pPDf1/lwf3l42KnTtboFy7aTm', '오지인 경위', '02-3150-0112', 'POLICE'),
+       (9, 'baek', '$2a$10$34uUFNtbagK7f5k5UgqAyelUxm.1M8ovFPQXQpt1gsuCKCZYI7DPC', '백동훈 경감', '02-3150-0113', 'POLICE'),
+       (10, 'lim', '$2a$10$Lp3YkwW4xGzbPdSgAuZmNezpNz4p2KrEUgug0.9BA/ws9MrLpcVju', '임은삼 경감', '02-3150-0114', 'POLICE'),
        (11, 'admin', '$2a$10$HyYYc4.UmDDHndUTX2alC.EvrVVfyXN91HQubbjj54kCY4KKaz0vy', '현병위', '02-3150-0100', 'ADMIN');
 
 -- 사건
