@@ -1,7 +1,7 @@
 ### 사건 관리 흐름
 # 시민 계정이 없으면 case.http의 준비 요청을 먼저 실행합니다.
 # 경찰 shin과 관리자 admin 계정은 테스트 DB에 별도로 준비해야 합니다.
-# 아래 요청을 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 순서로 실행합니다.
+# 아래 요청을 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 순서로 실행합니다.
 
 ### 0. 시민 로그인 및 토큰 저장 — 예상 결과 200
 POST http://localhost:8080/api/v1/auth/login
@@ -75,7 +75,11 @@ Content-Type: application/json
 GET http://localhost:8080/api/v1/cases?page=0&size=10
 Authorization: Bearer {{adminToken}}
 
-### 5. 담당 경찰 배정 — 예상 결과 200
+### 5. 배정 가능한 경찰관 목록 조회 — 예상 결과 200
+GET http://localhost:8080/api/v1/users/police-officers
+Authorization: Bearer {{adminToken}}
+
+### 6. 담당 경찰 배정 — 예상 결과 200
 PATCH http://localhost:8080/api/v1/cases/{{managementCaseId}}/officer
 Content-Type: application/json
 Authorization: Bearer {{adminToken}}
@@ -84,11 +88,20 @@ Authorization: Bearer {{adminToken}}
   "officerId": 7
 }
 
-### 6. 경찰 담당 사건 목록 조회 — 예상 결과 200
+### 7. 경찰 담당 사건 목록 조회 — 예상 결과 200
 GET http://localhost:8080/api/v1/cases/my?page=0&size=10
 Authorization: Bearer {{policeToken}}
 
-### 7. 사건 종결 — 예상 결과 200
+### 8. 담당 경찰 수사 종결 — 예상 결과 200
+POST http://localhost:8080/api/v1/cases/{{managementCaseId}}/investigation/close
+Content-Type: application/json
+Authorization: Bearer {{policeToken}}
+
+{
+  "closeReason": "HTTP 테스트 수사 완료"
+}
+
+### 9. 사건 종결 — 예상 결과 200
 POST http://localhost:8080/api/v1/cases/{{managementCaseId}}/close
 Content-Type: application/json
 Authorization: Bearer {{adminToken}}
@@ -97,6 +110,6 @@ Authorization: Bearer {{adminToken}}
   "closeReason": "HTTP 테스트 사건 처리 완료"
 }
 
-### 8. 종결된 사건 상세 조회 — 예상 결과 200
+### 10. 종결된 사건 상세 조회 — 예상 결과 200
 GET http://localhost:8080/api/v1/cases/{{managementCaseId}}
 Authorization: Bearer {{adminToken}}

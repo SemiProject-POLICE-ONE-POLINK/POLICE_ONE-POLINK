@@ -122,6 +122,13 @@ public class SecurityConfig {
                         )
                         .hasAuthority("ADMIN")
 
+                        // 배정 가능한 경찰관 목록 조회
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/users/police-officers"
+                        )
+                        .hasAuthority("ADMIN")
+
                         // ==================== 수사보드 ====================
 
                         // 사건별 수사보드 조회

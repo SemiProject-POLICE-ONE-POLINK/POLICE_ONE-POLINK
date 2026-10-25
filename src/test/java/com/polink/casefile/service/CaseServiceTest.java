@@ -191,6 +191,21 @@ public class CaseServiceTest {
                 "테스트 장소"
         );
 
+        User officer = new User(
+                "police01",
+                "test-hash",
+                "신형선",
+                "010-0000-9102"
+        );
+        ReflectionTestUtils.setField(officer, "userId", 7);
+        ReflectionTestUtils.setField(
+                officer,
+                "role",
+                UserRole.POLICE
+        );
+
+        caseFile.assignOfficer(officer);
+
         when(userRepository.findById(1))
                 .thenReturn(Optional.of(reporter));
         when(caseRepository.findById("SMPA-2026-0042"))
@@ -201,8 +216,15 @@ public class CaseServiceTest {
 
         assertEquals("SMPA-2026-0042", response.getCaseId());
         assertEquals("지갑 절도 신고", response.getTitle());
-        assertEquals(CaseStatus.WAITING, response.getStatus());
-        assertNull(response.getAssignedOfficerId());
+        assertEquals(
+                CaseStatus.INVESTIGATING,
+                response.getStatus()
+        );
+        assertEquals(7, response.getAssignedOfficerId());
+        assertEquals(
+                "신형선",
+                response.getAssignedOfficerName()
+        );
 
         verifyNoInteractions(caseNumberGenerator);
         verify(caseRepository, never()).save(any(CaseFile.class));
@@ -536,6 +558,10 @@ public class CaseServiceTest {
 
         assertEquals("SMPA-2026-0042", response.getCaseId());
         assertEquals(20, response.getAssignedOfficerId());
+        assertEquals(
+                "테스트경찰",
+                response.getAssignedOfficerName()
+        );
         assertEquals(CaseStatus.INVESTIGATING, response.getStatus());
         assertSame(officer, caseFile.getAssignedOfficer());
 
@@ -597,6 +623,10 @@ public class CaseServiceTest {
 
         assertEquals("SMPA-2026-0042", response.getCaseId());
         assertEquals(21, response.getAssignedOfficerId());
+        assertEquals(
+                "새담당경찰",
+                response.getAssignedOfficerName()
+        );
         assertEquals(CaseStatus.INVESTIGATING, response.getStatus());
 
         assertSame(newOfficer, caseFile.getAssignedOfficer());
