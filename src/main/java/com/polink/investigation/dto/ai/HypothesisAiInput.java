@@ -58,7 +58,8 @@ public record HypothesisAiInput(
     // 이전 수사 내용을 AI 추론에 포함
     public record InvestigationLogInput(
             Integer logId,                    // 수사기록 번호
-            String content                    // 경찰관이 작성한 수사 내용
+            String content,                    // 경찰관이 작성한 수사 내용
+            LocalDateTime investigatedAt   // 수사를 진행한 일시
     ) {
     }
 }
