@@ -11,8 +11,8 @@ import java.time.LocalDateTime;
  * 반환 신청 한 건의 상세 조회 응답 DTO다.
  * 경찰은 전체 반환 신청 상세를 조회할 수 있고,
  * 시민은 본인이 신청한 반환 신청 상세만 조회할 수 있게 만들 예정이다.
- * User 도메인을 직접 조회하지 않기 위해
- * 신청자와 처리 경찰관의 이름 대신 회원 번호만 반환한다.
+ * 신청자 이름은 이력 카드에서 표시할 수 있도록 함께 반환한다.
+ * 처리 경찰관은 업무상 회원 번호만 반환한다.
  */
 public record ReturnRequestDetailResponse(
 
@@ -21,6 +21,9 @@ public record ReturnRequestDetailResponse(
 
         // 반환 신청을 만든 시민의 회원 번호다.
         Integer requesterId,
+
+        // 반환 신청을 만든 시민의 표시 이름이다.
+        String requesterName,
 
         // ===== 분실물 상세 정보 =====
 
@@ -107,12 +110,14 @@ public record ReturnRequestDetailResponse(
     public static ReturnRequestDetailResponse from(
             ReturnRequest returnRequest,
             Item lostItem,
-            Item foundItem
+            Item foundItem,
+            String requesterName
     ) {
         return new ReturnRequestDetailResponse(
                 // ===== 반환 신청 기본 정보 =====
                 returnRequest.getRequestId(),
                 returnRequest.getRequesterId(),
+                requesterName,
 
                 // ===== 분실물 정보 =====
                 lostItem.getItemId(),

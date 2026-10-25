@@ -24,6 +24,7 @@ import com.polink.item.returnrequest.entity.ReturnRequestStatus;
 import com.polink.item.returnrequest.dto.ReturnRequestDetailResponse;
 import com.polink.item.returnrequest.dto.ReturnRequestCompleteResponse;
 import com.polink.item.returnrequest.dto.ReturnRequestProcessResponse;
+import com.polink.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -37,6 +38,8 @@ public class ReturnRequestService {
 
     private final ReturnRequestRepository returnRequestRepository;
     private final ItemRepository itemRepository;
+    // 반환 신청은 회원 번호만 저장하므로, 화면에 표시할 이름은 조회 시 보완한다.
+    private final UserRepository userRepository;
 
     /**
      * 시민이 본인의 분실물과 습득물을 연결하여 반환을 신청한다.
@@ -134,7 +137,9 @@ public class ReturnRequestService {
                 .orElseThrow(() ->
                         new ReturnRequestNotFoundException("반환 신청을 찾을 수 없습니다."));
 
-        if (returnRequest.getStatus() != ReturnRequestStatus.PENDING) {
+        // 이전 DB의 REQUESTED도 현재 화면에서는 "신청(PENDING)"으로 표시된다.
+        // 두 값을 함께 허용해야 레거시 신청을 승인할 수 있다.
+        if (!returnRequest.getStatus().isPendingForProcessing()) {
             throw new ReturnRequestConflictException("대기 상태의 반환 신청만 승인할 수 있습니다.");
         }
 
@@ -199,7 +204,8 @@ public class ReturnRequestService {
                         new ReturnRequestNotFoundException("반환 신청을 찾을 수 없습니다."));
 
         // 아직 처리되지 않은 PENDING 상태만 반려할 수 있다.
-        if (returnRequest.getStatus() != ReturnRequestStatus.PENDING) {
+        // 승인과 동일하게, 과거 REQUESTED 신청도 반려 가능한 대기 신청으로 취급한다.
+        if (!returnRequest.getStatus().isPendingForProcessing()) {
             throw new ReturnRequestConflictException("대기 상태의 반환 신청만 반려할 수 있습니다.");
         }
 
@@ -243,14 +249,18 @@ public class ReturnRequestService {
                 .orElseThrow(() ->
                         new ReturnRequestNotFoundException("연결된 습득물을 찾을 수 없습니다."));
 
-        // 승인 후 두 물품 모두 인계 대기 상태여야 한다.
-        if (lostItem.getItemType() != ItemType.LOST
-                || lostItem.getStatus() != ItemStatus.HANDOVER_PENDING) {
+        /*
+         * 인계 완료의 업무 기준은 "반환 신청이 승인되었는가"다.
+         * 과거 데이터는 승인 신청인데 물품 상태가 LOST/STORED/RETURNED로 남아
+         * 있을 수 있으므로, 여기서 물품 상태를 다시 제한하면 실제 인계 완료가
+         * 영원히 막힌다. 연결 물품의 유형만 검증하고 최종 상태는 아래에서
+         * RETURNED로 일관되게 저장한다.
+         */
+        if (lostItem.getItemType() != ItemType.LOST) {
             throw new ReturnRequestConflictException("인계 완료 가능한 상태의 분실물이 아닙니다.");
         }
 
-        if (foundItem.getItemType() != ItemType.FOUND
-                || foundItem.getStatus() != ItemStatus.HANDOVER_PENDING) {
+        if (foundItem.getItemType() != ItemType.FOUND) {
             throw new ReturnRequestConflictException("인계 완료 가능한 상태의 습득물이 아닙니다.");
         }
 
@@ -431,7 +441,8 @@ public class ReturnRequestService {
         return ReturnRequestListResponse.from(
                 returnRequest,
                 lostItem,
-                foundItem
+                foundItem,
+                findRequesterName(returnRequest.getRequesterId())
         );
     }
 
@@ -458,8 +469,19 @@ public class ReturnRequestService {
         return ReturnRequestDetailResponse.from(
                 returnRequest,
                 lostItem,
-                foundItem
+                foundItem,
+                findRequesterName(returnRequest.getRequesterId())
         );
+    }
+
+    /*
+     * 과거 데이터처럼 회원이 없어진 반환 신청도 목록 전체가 실패하지 않게 한다.
+     * 정상 회원은 실명(name)을, 없어진 회원은 기존처럼 회원 번호를 대체 표기로 쓴다.
+     */
+    private String findRequesterName(Integer requesterId) {
+        return userRepository.findById(requesterId)
+                .map(user -> user.getName())
+                .orElse("회원 " + requesterId);
     }
 
     /*

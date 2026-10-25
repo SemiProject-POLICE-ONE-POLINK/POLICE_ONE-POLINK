@@ -36,6 +36,7 @@ import com.polink.item.returnrequest.dto.ReturnRequestProcessResponse;
  * JWT로 로그인한 시민·경찰이 반환 신청 업무를 처리하는 Controller다.
  * 시민은 반환 신청 등록과 본인 신청 목록 조회를 할 수 있다.
  * 경찰은 전체 신청 조회·상세 조회·승인·반려·반환 완료 처리를 할 수 있다.
+ * 관리자는 감사 목적의 전체 신청 조회·상세 조회만 할 수 있고 상태 변경은 할 수 없다.
  */
 @Tag(name = "분실물·습득물")
 @RestController
@@ -142,10 +143,10 @@ public class ReturnRequestController {
     /*
      * GET /api/v1/return-requests
      *
-     * 경찰이 전체 반환 신청을 조회한다.
+     * 경찰 또는 관리자가 전체 반환 신청을 조회한다.
      * 상태와 검색어는 선택값이며, 최신 신청순으로 페이지 조회한다.
      */
-    @Operation(summary = "경찰용 반환 신청 목록 조회")
+    @Operation(summary = "경찰·관리자용 반환 신청 목록 조회")
     @GetMapping
     public ResponseEntity<PoliceReturnRequestListResponse> getReturnRequests(
             // Authorization 헤더에서 인증된 경찰 JWT를 받는다.
@@ -164,8 +165,8 @@ public class ReturnRequestController {
             // 한 페이지에 보여줄 신청 개수다.
             @RequestParam(defaultValue = "10") int size
     ) {
-        // 전체 반환 신청 목록은 경찰 계정만 조회할 수 있다.
-        requirePolice(jwt);
+        // 관리자는 조회만 허용한다. 승인·반려·완료 API는 아래에서 경찰만 검사한다.
+        requirePoliceOrAdmin(jwt);
 
         // Service가 상태·검색어·페이징 조건으로 목록을 조회한다.
         return ResponseEntity.ok(
@@ -180,10 +181,10 @@ public class ReturnRequestController {
 
     /*
      * GET /api/v1/return-requests/{requestId}
-     * 경찰이 반환 신청 한 건의 상세 정보와
+     * 경찰 또는 관리자가 반환 신청 한 건의 상세 정보와
      * 연결된 분실물·습득물 정보를 조회한다.
      */
-    @Operation(summary = "경찰용 반환 신청 상세 조회")
+    @Operation(summary = "경찰·관리자용 반환 신청 상세 조회")
     @GetMapping("/{requestId}")
     public ResponseEntity<ReturnRequestDetailResponse> getReturnRequestDetail(
             // Authorization 헤더에서 인증된 경찰 JWT를 받는다.
@@ -192,8 +193,8 @@ public class ReturnRequestController {
             // URL의 반환 신청 번호를 받는다.
             @PathVariable Integer requestId
     ) {
-        // 반환 신청 상세 정보는 경찰 계정만 조회할 수 있다.
-        requirePolice(jwt);
+        // 관리자는 상세 확인까지만 가능하다.
+        requirePoliceOrAdmin(jwt);
 
         // Service가 반환 신청과 연결된 두 물품 정보를 조회해 상세 DTO로 반환한다.
         return ResponseEntity.ok(
@@ -365,6 +366,20 @@ public class ReturnRequestController {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "경찰 계정만 사용할 수 있는 기능입니다."
+            );
+        }
+    }
+
+    /**
+     * 반환 신청의 열람 권한이다. 관리자는 감사·현황 확인만 할 수 있으며,
+     * 상태를 바꾸는 각 PATCH 메서드는 계속 {@link #requirePolice(Jwt)}를 사용한다.
+     */
+    private void requirePoliceOrAdmin(Jwt jwt) {
+        UserRole role = requireLoggedInUserRole(jwt);
+        if (role != UserRole.POLICE && role != UserRole.ADMIN) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "경찰 또는 관리자 계정만 조회할 수 있는 기능입니다."
             );
         }
     }

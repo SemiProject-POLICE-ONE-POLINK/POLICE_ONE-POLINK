@@ -264,6 +264,15 @@ public class SecurityConfig {
                         )
                         .hasAnyAuthority("CITIZEN", "POLICE", "ADMIN")
 
+                        // 물품 이미지는 /items/{itemId}/image처럼 경로가 두 단계다.
+                        // 아래 상세 조회의 /items/* 규칙에는 매칭되지 않으므로 별도로 허용한다.
+                        // 목록·상세와 같은 범위의 로그인 사용자만 이미지 파일을 조회할 수 있다.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/items/*/image"
+                        )
+                        .hasAnyAuthority("CITIZEN", "POLICE", "ADMIN")
+
                         // 물품 상세 조회
                         .requestMatchers(
                                 HttpMethod.GET,
@@ -292,6 +301,13 @@ public class SecurityConfig {
                         )
                         .hasAuthority("CITIZEN")
 
+                        // 채팅 설명만으로 점수를 확인하는 미리보기 역시 시민 전용이다.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/ai/item-matches/preview"
+                        )
+                        .hasAuthority("CITIZEN")
+
                         // ==================== 반환 신청 ====================
 
                         // 반환 신청 등록
@@ -316,19 +332,20 @@ public class SecurityConfig {
                         )
                         .hasAuthority("CITIZEN")
 
-                        // 전체 반환 신청 목록 조회
+                        // 반환 신청 목록·상세는 경찰과 관리자가 조회할 수 있다.
+                        // 상태 변경 PATCH는 아래에서 경찰만 허용한다.
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/return-requests"
                         )
-                        .hasAnyAuthority("POLICE")
+                        .hasAnyAuthority("POLICE", "ADMIN")
 
                         // 반환 신청 상세 조회
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/return-requests/*"
                         )
-                        .hasAuthority("POLICE")
+                        .hasAnyAuthority("POLICE", "ADMIN")
 
                         // 반환 신청 승인
                         .requestMatchers(

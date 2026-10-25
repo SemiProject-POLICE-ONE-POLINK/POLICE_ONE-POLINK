@@ -36,6 +36,10 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.nio.file.Path;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 
 /** 분실물·습득물의 등록 규칙을 담당한다. */
 @Service
@@ -563,6 +567,68 @@ public class ItemService {
 
         // Transaction이 끝날 때 JPA가 변경된 imagePath를 자동으로 UPDATE 한다.
         return ItemDetailResponse.from(item);
+    }
+
+    /**
+     * 목록·상세 화면에서 표시할 이미지를 찾는다.
+     *
+     * 등록자가 올린 파일은 로컬 업로드 폴더의 실제 파일을 우선 사용한다. 파일 경로가
+     * 비어 있거나 예전 형식이라 찾지 못하면, resources/static/item-images의 종류별
+     * 기본 이미지를 사용한다. 따라서 이미지가 선택 입력값이어도 물품 카드는 빈 영역으로
+     * 남지 않으며, DB에 저장된 외부 임의 경로는 절대 읽지 않는다.
+     */
+    public Resource getItemImageResource(String itemId) {
+        Item item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new ItemNotFoundException(itemId));
+
+        String imagePath = item.getImagePath();
+        if (imagePath != null && !imagePath.isBlank()) {
+            try {
+                // 새로 업로드한 이미지는 item 전용 업로드 폴더 내부일 때만 읽을 수 있다.
+                Path uploadedImage = itemImageService.resolveReadablePath(imagePath);
+                return new FileSystemResource(uploadedImage);
+            } catch (IllegalArgumentException ignored) {
+                // 이전 DB에 static/item-images 경로가 저장된 경우도 있어 아래에서 호환한다.
+                Resource bundledImage = findBundledImage(imagePath);
+                if (bundledImage != null) {
+                    return bundledImage;
+                }
+            }
+        }
+
+        return new ClassPathResource("static/item-images/" + defaultImageFilename(item));
+    }
+
+    /**
+     * 경로 어디에 있든 item-images/ 이후의 안전한 파일명만 classpath 자원으로 해석한다.
+     * ../ 같은 경로 이동은 차단해 static 폴더 밖의 파일을 읽을 수 없게 한다.
+     */
+    private Resource findBundledImage(String imagePath) {
+        String normalized = imagePath.replace('\\', '/');
+        int directoryIndex = normalized.indexOf("item-images/");
+        if (directoryIndex < 0) {
+            return null;
+        }
+
+        String relativePath = normalized.substring(directoryIndex);
+        if (relativePath.contains("..")) {
+            return null;
+        }
+
+        Resource resource = new ClassPathResource("static/" + relativePath);
+        return resource.exists() ? resource : null;
+    }
+
+    /** 물품 종류마다 준비된 기본 이미지 파일을 하나씩 연결한다. */
+    private String defaultImageFilename(Item item) {
+        return switch (item.getCategory()) {
+            case "ELECTRONICS" -> "electronics_digital-camera.jpg";
+            case "WALLET_CARD" -> "wallet-card_bifold-wallet.jpg";
+            case "ACCESSORY" -> "accessory_shoulder-bag.jpg";
+            case "WATCH" -> "watch_analog-steel.jpg";
+            case "CLOTHING_GOODS" -> "clothing-goods_cream-sweatshirt.jpg";
+            default -> "etc_hardcover-notebook.jpg";
+        };
     }
 
     /*

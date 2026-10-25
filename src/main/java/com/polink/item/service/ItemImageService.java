@@ -92,6 +92,23 @@ public class ItemImageService {
         }
     }
 
+    /**
+     * DB에 저장된 이미지 경로를 브라우저 응답에 사용할 수 있는 실제 파일로 확인한다.
+     * DB 값만 믿고 임의 경로를 읽지 않도록, 반드시 물품 이미지 전용 폴더의 일반 파일만 허용한다.
+     */
+    public Path resolveReadablePath(String imagePath) {
+        if (imagePath == null || imagePath.isBlank()) {
+            throw new IllegalArgumentException("첨부된 이미지가 없습니다.");
+        }
+
+        Path savedPath = Path.of(imagePath).toAbsolutePath().normalize();
+        if (!uploadDirectory.equals(savedPath.getParent()) || !Files.isRegularFile(savedPath)) {
+            throw new IllegalArgumentException("첨부된 이미지 파일을 찾을 수 없습니다.");
+        }
+
+        return savedPath;
+    }
+
     private String extractExtension(String originalFilename) {
         if (originalFilename == null || originalFilename.isBlank()) {
             throw new IllegalArgumentException("이미지 파일명을 확인해주세요.");
