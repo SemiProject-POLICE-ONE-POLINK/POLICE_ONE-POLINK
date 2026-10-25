@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
 import com.polink.item.controller.ItemMatchController;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 
 /*
  * ItemController, MyItemController, ItemMatchController에서 발생한 예외를
@@ -19,6 +21,7 @@ import com.polink.item.controller.ItemMatchController;
  * 기본 오류 응답의 내부 stack trace가 노출되지 않도록 막는다.
  */
 
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(assignableTypes = {
         ItemController.class,
         MyItemController.class,
@@ -50,7 +53,7 @@ public class ItemExceptionHandler {
                 .map(error -> {
                     String defaultMessage = error.getDefaultMessage();
 
-                    return defaultMessage == null
+                    return defaultMessage == null || defaultMessage.isBlank()
                             ? "입력값을 확인해주세요."
                             : defaultMessage;
                 })
@@ -109,9 +112,11 @@ public class ItemExceptionHandler {
     public ResponseEntity<ErrorResponse> handleResponseStatus(
             ResponseStatusException exception
     ) {
-        String message = exception.getReason() == null
-                ? "요청을 처리할 수 없습니다."
-                : exception.getReason();
+        String message = exception.getReason();
+
+        if (message == null || message.isBlank()) {
+            message = "요청을 처리하지 못했습니다.";
+        }
 
         return ResponseEntity
                 .status(exception.getStatusCode())
@@ -125,7 +130,12 @@ public class ItemExceptionHandler {
      * 400 Bad Request 공통 응답을 만드는 보조 메서드다.
      */
     private ResponseEntity<ErrorResponse> badRequest(String message) {
+        String resolvedMessage =
+                message == null || message.isBlank()
+                        ? "입력값을 확인해주세요."
+                        : message;
+
         return ResponseEntity.badRequest()
-                .body(new ErrorResponse(400, message));
+                .body(new ErrorResponse(400, resolvedMessage));
     }
 }

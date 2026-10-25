@@ -8,7 +8,10 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(assignableTypes = {
         CaseController.class,
         CaseAiSearchController.class
@@ -23,8 +26,14 @@ public class CaseExceptionHandler {
             ResponseStatusException exception
     ) {
         int status = exception.getStatusCode().value();
+        String message = exception.getReason();
+
+        if (message == null || message.isBlank()) {
+            message = "요청을 처리하지 못했습니다.";
+        }
+
         return ResponseEntity.status(status)
-                .body(new ErrorResponse(status, exception.getReason()));
+                .body(new ErrorResponse(status, message));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -34,7 +43,13 @@ public class CaseExceptionHandler {
         String message = exception.getBindingResult()
                 .getFieldErrors()
                 .stream()
-                .map(error -> error.getDefaultMessage())
+                .map(error -> {
+                    String defaultMessage = error.getDefaultMessage();
+
+                    return defaultMessage == null || defaultMessage.isBlank()
+                            ? "입력값을 확인해주세요."
+                            : defaultMessage;
+                })
                 .findFirst()
                 .orElse("입력값을 확인해주세요.");
 

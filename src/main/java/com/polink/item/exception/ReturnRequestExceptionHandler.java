@@ -8,12 +8,16 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 
 /**
  * 반환 신청 API에서 발생한 입력·상태 오류를 처리한다.
  * 실행 프로필과 관계없이 같은 API 오류 형식을 반환해야 하므로
  * local 프로필로 제한하지 않는다.
  */
+
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(assignableTypes = ReturnRequestController.class)
 public class ReturnRequestExceptionHandler {
 
@@ -30,7 +34,7 @@ public class ReturnRequestExceptionHandler {
                 .map(error -> {
                     String defaultMessage = error.getDefaultMessage();
 
-                    return defaultMessage == null
+                    return defaultMessage == null || defaultMessage.isBlank()
                             ? "입력값을 확인해주세요."
                             : defaultMessage;
                 })
@@ -71,8 +75,13 @@ public class ReturnRequestExceptionHandler {
     }
 
     private ResponseEntity<ErrorResponse> badRequest(String message) {
+        String resolvedMessage =
+                message == null || message.isBlank()
+                        ? "입력값을 확인해주세요."
+                        : message;
+
         return ResponseEntity.badRequest()
-                .body(new ErrorResponse(400, message));
+                .body(new ErrorResponse(400, resolvedMessage));
     }
 
     /*
@@ -84,9 +93,11 @@ public class ReturnRequestExceptionHandler {
     public ResponseEntity<ErrorResponse> handleResponseStatus(
             ResponseStatusException exception
     ) {
-        String message = exception.getReason() == null
-                ? "요청을 처리할 수 없습니다."
-                : exception.getReason();
+        String message = exception.getReason();
+
+        if (message == null || message.isBlank()) {
+            message = "요청을 처리하지 못했습니다.";
+        }
 
         return ResponseEntity
                 .status(exception.getStatusCode())
