@@ -22,7 +22,7 @@ public class InvestigationAccessService {
         this.userRepository = userRepository;
     }
 
-    // 로그인한 사용자가 해당 사건의 담당 경찰관인지 확인
+    // 로그인한 사용자가 해당 사건의 담당 경찰인지 확인
     @Transactional(readOnly = true)
     public CaseFile findAssignedCase(
             String caseId,
@@ -72,7 +72,7 @@ public class InvestigationAccessService {
         return caseFile;
     }
 
-    // 담당 경찰관 확인 후 사건이 수사중인지 추가 검사
+    // 담당 경찰 확인 후 사건이 수사중인지 추가 검사
     @Transactional(readOnly = true)
     public CaseFile findInvestigatingCase(
             String caseId,
@@ -92,6 +92,62 @@ public class InvestigationAccessService {
 
         // TODO: 별도 수사 상태 구현 후 수사중 여부도 함께 확인
         // 사건이 수사중이어도 수사가 종결되었다면 작업 거부
+
+        return caseFile;
+    }
+
+    // 수사 자료 조회 권한 확인: 관리자 또는 해당 사건의 담당 경찰
+    @Transactional(readOnly = true)
+    public CaseFile findReadableCase(
+            String caseId,
+            Integer loggedInUserId
+    ) {
+
+        // 1. 로그인 정보 확인
+        if (loggedInUserId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "로그인 후 이용해주세요."
+            );
+        }
+
+        User user = userRepository.findById(loggedInUserId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "로그인 정보를 확인할 수 없습니다."
+                ));
+
+        // 2. 관리자와 경찰만 수사 자료 조회 가능
+        if (user.getRole() != UserRole.ADMIN
+                && user.getRole() != UserRole.POLICE) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "수사 자료를 조회할 권한이 없습니다."
+            );
+        }
+
+        // 3. 조회할 사건 확인
+        CaseFile caseFile = caseRepository.findById(caseId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "사건 정보를 찾을 수 없습니다."
+                ));
+
+        // 4. 관리자는 담당 경찰 배정 여부와 관계없이 조회 허용
+        if (user.getRole() == UserRole.ADMIN) {
+            return caseFile;
+        }
+
+        // 5. 경찰은 본인에게 배정된 사건의 수사 자료만 조회 허용
+        User assignedOfficer = caseFile.getAssignedOfficer();
+
+        if (assignedOfficer == null
+                || !assignedOfficer.getUserId().equals(user.getUserId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "해당 사건의 담당 경찰만 수사 자료를 조회할 수 있습니다."
+            );
+        }
 
         return caseFile;
     }

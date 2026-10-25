@@ -1,8 +1,12 @@
 package com.polink.user.config;
 
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -10,17 +14,44 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import tools.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 
 @Configuration
 public class SecurityConfig {
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http)
-    {
+@Bean  
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            ObjectMapper objectMapper
+    ) throws Exception {
+
+        AuthenticationEntryPoint authenticationEntryPoint =
+                (request, response, authenticationException) ->
+                        writeErrorResponse(
+                                response,
+                                objectMapper,
+                                HttpStatus.UNAUTHORIZED,
+                                "로그인이 필요합니다."
+                        );
+
+        AccessDeniedHandler accessDeniedHandler =
+                (request, response, accessDeniedException) ->
+                        writeErrorResponse(
+                                response,
+                                objectMapper,
+                                HttpStatus.FORBIDDEN,
+                                "접근 권한이 없습니다."
+                        );
+
         http
                 // 현재는 세션 로그인 사용 X
                 .sessionManagement(session -> session
@@ -33,9 +64,17 @@ public class SecurityConfig {
                 // Spring Security의 기본 로그인 창과 Basic 인증은 사용 X
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
+                )
 
                 // JWT 검증을 연결하기 전까지 모든 경로 허용(임시)
                 .authorizeHttpRequests(authorize -> authorize
+
+                        // 서버 내부 오류 응답이 권한 오류로 가려지지 않도록 허용
+                        .dispatcherTypeMatchers(DispatcherType.ERROR)
+                        .permitAll()
 
                         // ==================== 인증 ====================
 
@@ -106,7 +145,7 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/cases/*/evidences"
                         )
-                        .hasAuthority("POLICE")
+                        .hasAnyAuthority("POLICE", "ADMIN")
 
                         // ==================== 목격자·진술 ====================
 
@@ -122,7 +161,7 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/cases/*/witnesses"
                         )
-                        .hasAuthority("POLICE")
+                        .hasAnyAuthority("POLICE", "ADMIN")
 
                         // 기존 목격자의 추가·정정·번복 진술 등록
                         .requestMatchers(
@@ -145,7 +184,7 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/cases/*/investigations"
                         )
-                        .hasAuthority("POLICE")
+                        .hasAnyAuthority("POLICE", "ADMIN")
 
                         // ==================== 수사 가설 ====================
 
@@ -167,6 +206,20 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/cases/*/hypotheses"
+                        )
+                        .hasAuthority("POLICE")
+
+                        // 수사 가설 체크리스트 조회
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/cases/*/hypotheses/*/checklist"
+                        )
+                        .hasAuthority("POLICE")
+
+                        // 수사 가설 확인 항목 체크·해제
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/v1/cases/*/hypotheses/*/checklist/*"
                         )
                         .hasAuthority("POLICE")
 
@@ -382,6 +435,8 @@ public class SecurityConfig {
 
                 // Authorization: Bearer 토큰이 오면 JWT 서명과 만료 여부를 검증
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
                         .jwt(jwt -> jwt
                                 .jwtAuthenticationConverter(
                                         jwtAuthenticationConverter()
@@ -391,6 +446,25 @@ public class SecurityConfig {
 
         return http.build();
 
+    }
+
+    private void writeErrorResponse(
+            HttpServletResponse response,
+            ObjectMapper objectMapper,
+            HttpStatus status,
+            String message
+    ) throws IOException {
+        response.setStatus(status.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+
+        objectMapper.writeValue(
+                response.getOutputStream(),
+                Map.of(
+                        "status", status.value(),
+                        "message", message
+                )
+        );
     }
 
     @Bean

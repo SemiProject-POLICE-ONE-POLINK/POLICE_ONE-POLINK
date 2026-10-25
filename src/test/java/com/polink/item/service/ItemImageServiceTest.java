@@ -51,8 +51,10 @@ class ItemImageServiceTest {
         );
 
         String imagePath = itemImageService.save(image);
-        Path savedPath = Path.of(imagePath);
+        // API 응답에는 서버 절대 경로 대신 프론트엔드에서 사용할 URL이 반환된다.
+        Path savedPath = itemImageService.resolveStoredPath(imagePath);
 
+        assertTrue(imagePath.startsWith(ItemImageService.IMAGE_URL_PREFIX));
         assertEquals(uploadDirectory, savedPath.getParent());
         assertTrue(Files.exists(savedPath));
         assertTrue(savedPath.getFileName().toString().endsWith(".png"));
@@ -123,7 +125,8 @@ class ItemImageServiceTest {
         Files.createDirectories(uploadDirectory);
         Path savedPath = Files.write(uploadDirectory.resolve("item.jpg"), new byte[]{1});
 
-        itemImageService.delete(savedPath.toString());
+        // 신규 DB 형식인 공개 URL로도 실제 파일을 안전하게 삭제할 수 있어야 한다.
+        itemImageService.delete(ItemImageService.IMAGE_URL_PREFIX + "item.jpg");
 
         assertFalse(Files.exists(savedPath));
     }
@@ -139,5 +142,17 @@ class ItemImageServiceTest {
                 () -> itemImageService.delete(outsidePath.toString())
         );
         assertTrue(Files.exists(outsidePath));
+    }
+
+    // 9. 공개 URL을 악용해 상위 폴더 파일을 삭제하려는 요청은 차단해야 한다.
+    @Test
+    @DisplayName("공개 이미지 URL의 상위 경로 이동을 차단한다")
+    void rejectTraversalInPublicImageUrl() {
+        String traversalUrl = ItemImageService.IMAGE_URL_PREFIX + "../outside.jpg";
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> itemImageService.delete(traversalUrl)
+        );
     }
 }

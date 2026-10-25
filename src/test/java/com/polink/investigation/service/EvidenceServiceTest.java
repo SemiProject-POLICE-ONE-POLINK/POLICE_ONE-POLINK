@@ -34,7 +34,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.transaction.support.TransactionSynchronization.STATUS_COMMITTED;
 import static org.springframework.transaction.support.TransactionSynchronization.STATUS_ROLLED_BACK;
 
-// 실제 DB·파일 저장 없이 증거물 Service 로직 검사
+// 실제 DB·파일 저장 없이 증거물 등록·조회 로직 검사
 @ExtendWith(MockitoExtension.class)
 class EvidenceServiceTest {
 
@@ -48,7 +48,7 @@ class EvidenceServiceTest {
     @Mock
     private EvidenceFileService evidenceFileService;
 
-    // 권한 검사의 결과는 가짜 객체로 설정
+    // 실제 권한 판단 대신 검사 통과·실패 결과를 설정
     @Mock
     private InvestigationAccessService investigationAccessService;
 
@@ -65,8 +65,7 @@ class EvidenceServiceTest {
 
     @BeforeEach
     void setUpSynchronization() {
-        // 파일 정리 callback을 등록할 수 있도록 준비
-        // 실제 DB 트랜잭션을 시작하는 것은 아님
+        // 파일 정리 callback 등록 준비 — 실제 DB 트랜잭션은 아님
         TransactionSynchronizationManager.initSynchronization();
     }
 
@@ -83,7 +82,6 @@ class EvidenceServiceTest {
     @Test
     @DisplayName("첫 증거물은 01번으로 등록되고 응답 DTO를 반환한다")
     void createFirstEvidence() {
-
         prepareRegistration();
 
         EvidenceCreateResponse response =
@@ -105,9 +103,12 @@ class EvidenceServiceTest {
         assertNotNull(response.acquiredAt());
         assertFalse(response.fileAttached());
 
-        // 등록에는 담당자·수사중 상태 검사를 사용
+        // 등록에는 담당 경찰·수사중 상태 검사 사용
         verify(investigationAccessService)
                 .findInvestigatingCase(CASE_ID, OFFICER_ID);
+
+        verify(investigationAccessService, never())
+                .findReadableCase(anyString(), anyInt());
 
         verify(evidenceRepository).save(any(Evidence.class));
 
@@ -118,7 +119,6 @@ class EvidenceServiceTest {
     @Test
     @DisplayName("조회 순서와 관계없이 최대 순번 다음 번호로 등록한다")
     void createNextEvidence() {
-
         when(investigationAccessService
                 .findInvestigatingCase(CASE_ID, OFFICER_ID))
                 .thenReturn(savedCase());
@@ -146,8 +146,6 @@ class EvidenceServiceTest {
     @ValueSource(ints = {401, 403, 404, 409})
     @DisplayName("접근 검사에 실패하면 증거물 조회·저장과 파일 처리를 중단한다")
     void rejectRegistrationWhenAccessFails(int status) {
-
-        // 로그인·권한·사건 존재·상태 검사 실패 상황을 각각 재현
         ResponseStatusException accessException =
                 new ResponseStatusException(
                         HttpStatus.valueOf(status),
@@ -180,7 +178,6 @@ class EvidenceServiceTest {
     @Test
     @DisplayName("최대 순번이 99이면 저장하지 않는다")
     void rejectSequenceOverflow() {
-
         when(investigationAccessService
                 .findInvestigatingCase(CASE_ID, OFFICER_ID))
                 .thenReturn(savedCase());
@@ -208,9 +205,8 @@ class EvidenceServiceTest {
     // ==================== 증거물 목록 조회 테스트 ====================
 
     @Test
-    @DisplayName("증거물을 번호 오름차순으로 정렬하고 응답 DTO로 변환한다")
+    @DisplayName("조회 권한 확인 후 증거물을 번호순으로 정렬하고 DTO로 변환한다")
     void findEvidenceListSorted() {
-
         LocalDateTime acquiredAt =
                 LocalDateTime.of(2026, 10, 18, 9, 0);
 
@@ -232,8 +228,9 @@ class EvidenceServiceTest {
         Evidence thirdEvidence =
                 savedEvidence("EV-2026-0405-03");
 
+        // 관리자 또는 담당 경찰의 조회 검사를 통과한 상황
         when(investigationAccessService
-                .findAssignedCase(CASE_ID, OFFICER_ID))
+                .findReadableCase(CASE_ID, OFFICER_ID))
                 .thenReturn(savedCase());
 
         when(evidenceRepository.findByCaseFile_CaseId(CASE_ID))
@@ -264,9 +261,12 @@ class EvidenceServiceTest {
         assertTrue(firstResponse.fileAttached());
         assertFalse(responses.get(1).fileAttached());
 
-        // 조회는 담당자 검사만 사용
+        // 조회에는 관리자·담당 경찰용 접근 검사 사용
         verify(investigationAccessService)
-                .findAssignedCase(CASE_ID, OFFICER_ID);
+                .findReadableCase(CASE_ID, OFFICER_ID);
+
+        verify(investigationAccessService, never())
+                .findAssignedCase(anyString(), anyInt());
 
         verify(investigationAccessService, never())
                 .findInvestigatingCase(anyString(), anyInt());
@@ -278,9 +278,8 @@ class EvidenceServiceTest {
     @Test
     @DisplayName("등록된 증거물이 없으면 빈 목록을 반환한다")
     void findEmptyEvidenceList() {
-
         when(investigationAccessService
-                .findAssignedCase(CASE_ID, OFFICER_ID))
+                .findReadableCase(CASE_ID, OFFICER_ID))
                 .thenReturn(savedCase());
 
         when(evidenceRepository.findByCaseFile_CaseId(CASE_ID))
@@ -295,15 +294,17 @@ class EvidenceServiceTest {
         assertNotNull(responses);
         assertTrue(responses.isEmpty());
 
+        verify(investigationAccessService)
+                .findReadableCase(CASE_ID, OFFICER_ID);
+
         verify(evidenceRepository, never())
                 .save(any(Evidence.class));
     }
 
     @ParameterizedTest(name = "조회 검사 실패 상태: {0}")
     @ValueSource(ints = {401, 403, 404})
-    @DisplayName("접근 검사에 실패하면 증거물 목록을 조회하지 않는다")
+    @DisplayName("조회 권한 검사에 실패하면 증거물 목록을 조회하지 않는다")
     void rejectListWhenAccessFails(int status) {
-
         ResponseStatusException accessException =
                 new ResponseStatusException(
                         HttpStatus.valueOf(status),
@@ -311,7 +312,7 @@ class EvidenceServiceTest {
                 );
 
         when(investigationAccessService
-                .findAssignedCase(CASE_ID, OFFICER_ID))
+                .findReadableCase(CASE_ID, OFFICER_ID))
                 .thenThrow(accessException);
 
         ResponseStatusException exception = assertThrows(
@@ -336,7 +337,6 @@ class EvidenceServiceTest {
     @Test
     @DisplayName("첨부파일 경로를 증거물에 설정하고 첨부 여부를 반환한다")
     void createEvidenceWithFile() {
-
         MockMultipartFile file = prepareFileRegistration();
 
         EvidenceCreateResponse response =
@@ -352,16 +352,15 @@ class EvidenceServiceTest {
 
         verify(evidenceRepository).save(captor.capture());
 
-        // DB 저장 요청에 파일 경로가 포함됐는지 확인
+        // 저장할 증거물에 파일 경로가 설정됐는지 확인
         assertEquals(FILE_PATH, captor.getValue().getFilePath());
         assertTrue(response.fileAttached());
 
         verify(evidenceFileService).save(file);
 
-        // 종료 결과를 받기 전에는 파일을 삭제하지 않음
+        // 트랜잭션 종료 결과를 받기 전에는 삭제하지 않음
         verify(evidenceFileService, never()).delete(anyString());
 
-        // 파일 정리 callback이 등록됐는지 확인
         assertEquals(
                 1,
                 TransactionSynchronizationManager
@@ -374,7 +373,6 @@ class EvidenceServiceTest {
     @ValueSource(ints = {STATUS_COMMITTED, STATUS_ROLLED_BACK})
     @DisplayName("롤백 결과에는 파일을 삭제하고 커밋 결과에는 유지한다")
     void cleanupAccordingToTransactionResult(int status) {
-
         MockMultipartFile file = prepareFileRegistration();
 
         evidenceService.createEvidence(
@@ -384,7 +382,7 @@ class EvidenceServiceTest {
                 file
         );
 
-        // 실제 DB 대신 트랜잭션 종료 결과를 callback에 전달
+        // 실제 DB 대신 종료 결과를 callback에 전달
         completeTransaction(status);
 
         if (status == STATUS_ROLLED_BACK) {
@@ -397,7 +395,6 @@ class EvidenceServiceTest {
     @Test
     @DisplayName("DB 저장 요청 실패 후 롤백 결과를 받으면 파일을 삭제한다")
     void cleanupFileAfterSaveFailure() {
-
         MockMultipartFile file = attachedFile();
 
         when(investigationAccessService
@@ -428,10 +425,10 @@ class EvidenceServiceTest {
 
         assertSame(saveException, exception);
 
-        // 저장 예외 발생만으로 callback이 자동 실행되는 것은 아님
+        // 저장 예외만으로 callback이 자동 실행되지는 않음
         verify(evidenceFileService, never()).delete(anyString());
 
-        // 롤백 종료 통지를 받는 상황을 별도로 재현
+        // 롤백 종료 통지를 받는 상황 재현
         completeTransaction(STATUS_ROLLED_BACK);
 
         verify(evidenceFileService).delete(FILE_PATH);
@@ -440,7 +437,6 @@ class EvidenceServiceTest {
     @Test
     @DisplayName("파일 검증·저장에 실패하면 증거물을 저장하지 않는다")
     void rejectFileFailure() {
-
         MockMultipartFile file = attachedFile();
 
         when(investigationAccessService
@@ -473,7 +469,7 @@ class EvidenceServiceTest {
         verify(evidenceRepository, never())
                 .save(any(Evidence.class));
 
-        // 파일 경로를 받지 못했으므로 종료 callback도 등록되지 않음
+        // 파일 저장에 실패했으므로 정리 callback도 등록되지 않음
         assertTrue(
                 TransactionSynchronizationManager
                         .getSynchronizations()
@@ -485,7 +481,6 @@ class EvidenceServiceTest {
 
     // 접근 검사 통과·첫 등록·정상 저장 상황 설정
     private void prepareRegistration() {
-
         when(investigationAccessService
                 .findInvestigatingCase(CASE_ID, OFFICER_ID))
                 .thenReturn(savedCase());
@@ -499,7 +494,6 @@ class EvidenceServiceTest {
 
     // 정상적인 첨부파일 등록 상황 설정
     private MockMultipartFile prepareFileRegistration() {
-
         prepareRegistration();
 
         MockMultipartFile file = attachedFile();
@@ -510,7 +504,7 @@ class EvidenceServiceTest {
         return file;
     }
 
-    // 실제 파일을 생성하지 않는 업로드 요청용 테스트 객체
+    // 실제 파일을 만들지 않는 업로드 요청용 객체
     private MockMultipartFile attachedFile() {
         return new MockMultipartFile(
                 "file",
@@ -520,23 +514,19 @@ class EvidenceServiceTest {
         );
     }
 
-    // 등록된 callback에 종료 상태를 전달
-    // 실제 트랜잭션 commit·rollback을 실행하는 것은 아님
+    // 등록된 callback에 종료 상태 전달 — 실제 DB commit·rollback은 아님
     private void completeTransaction(int status) {
-
         List<TransactionSynchronization> synchronizations =
                 TransactionSynchronizationManager.getSynchronizations();
 
-        for (TransactionSynchronization synchronization
-                : synchronizations) {
+        for (TransactionSynchronization synchronization : synchronizations) {
             synchronization.afterCompletion(status);
         }
 
         TransactionSynchronizationManager.clearSynchronization();
     }
 
-    // 응답 변환에 필요한 사건 정보만 가진 테스트 객체
-    // 권한·상태 판단은 이 테스트에서 가짜 AccessService로 대체
+    // 응답 변환용 사건 객체
     private CaseFile savedCase() {
         return new CaseFile(
                 CASE_ID,
@@ -549,7 +539,7 @@ class EvidenceServiceTest {
         );
     }
 
-    // 기존에 저장된 증거물 역할의 테스트 객체
+    // 이미 저장된 증거물 역할의 테스트 객체
     private Evidence savedEvidence(String evidenceId) {
         return new Evidence(
                 evidenceId,

@@ -7,14 +7,8 @@ import com.polink.investigation.dto.ai.HypothesisAiCandidate;
 import com.polink.investigation.dto.ai.HypothesisAiInput;
 import com.polink.investigation.dto.response.HypothesisCandidateResponse;
 import com.polink.investigation.dto.response.HypothesisGenerateResponse;
-import com.polink.investigation.entity.Evidence;
-import com.polink.investigation.entity.InvestigationLog;
-import com.polink.investigation.entity.Statement;
-import com.polink.investigation.entity.Witness;
-import com.polink.investigation.repository.EvidenceRepository;
-import com.polink.investigation.repository.InvestigationLogRepository;
-import com.polink.investigation.repository.StatementRepository;
-import com.polink.investigation.repository.WitnessRepository;
+import com.polink.investigation.entity.*;
+import com.polink.investigation.repository.*;
 import com.polink.user.entity.User;
 import com.polink.user.entity.UserRole;
 import com.polink.user.repository.UserRepository;
@@ -25,8 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 // 가설 생성 Service
 @Service
@@ -38,6 +31,10 @@ public class HypothesisGenerationService {
     // 경찰관이 채택하기 전까지 생성된 후보를 임시 보관
     private final HypothesisCandidateStore hypothesisCandidateStore;
 
+    private final HypothesisRepository hypothesisRepository;
+
+    private final HypothesisHistoryStore hypothesisHistoryStore;
+
     // 사건 자료를 DB에서 읽는 동안에만 사용할 읽기 전용 트랜잭션
     private final TransactionTemplate readOnlyTransaction;
 
@@ -47,7 +44,7 @@ public class HypothesisGenerationService {
     // 검증된 AI 가설 후보의 자료 부합도 점수 계산
     private final HypothesisConfidenceCalculator hypothesisConfidenceCalculator;
 
-    // 사건 기본 정보와 담당 경찰관 확인
+    // 사건 기본 정보와 담당 경찰 확인
     private final CaseRepository caseRepository;
 
     // 로그인 사용자와 역할 확인
@@ -65,9 +62,11 @@ public class HypothesisGenerationService {
     // 사건의 수사기록 조회
     private final InvestigationLogRepository investigationLogRepository;
 
-    public HypothesisGenerationService(HypothesisAiClient hypothesisAiClient, HypothesisCandidateStore hypothesisCandidateStore, PlatformTransactionManager transactionManager, HypothesisResponseValidator hypothesisResponseValidator, HypothesisConfidenceCalculator hypothesisConfidenceCalculator, CaseRepository caseRepository, UserRepository userRepository, EvidenceRepository evidenceRepository, WitnessRepository witnessRepository, StatementRepository statementRepository, InvestigationLogRepository investigationLogRepository) {
+    public HypothesisGenerationService(HypothesisAiClient hypothesisAiClient, HypothesisCandidateStore hypothesisCandidateStore, HypothesisRepository hypothesisRepository, HypothesisHistoryStore hypothesisHistoryStore, PlatformTransactionManager transactionManager, HypothesisResponseValidator hypothesisResponseValidator, HypothesisConfidenceCalculator hypothesisConfidenceCalculator, CaseRepository caseRepository, UserRepository userRepository, EvidenceRepository evidenceRepository, WitnessRepository witnessRepository, StatementRepository statementRepository, InvestigationLogRepository investigationLogRepository) {
         this.hypothesisAiClient = hypothesisAiClient;
         this.hypothesisCandidateStore = hypothesisCandidateStore;
+        this.hypothesisRepository = hypothesisRepository;
+        this.hypothesisHistoryStore = hypothesisHistoryStore;
         // DB 조회 시에만 사용할 트랜잭션 도구 생성
         this.readOnlyTransaction = new TransactionTemplate(transactionManager);
         this.hypothesisConfidenceCalculator = hypothesisConfidenceCalculator;
@@ -99,16 +98,32 @@ public class HypothesisGenerationService {
         // 후보의 필수값과 근거 번호를 먼저 검사
         hypothesisResponseValidator.validate(input, aiCandidates);
 
+        // 이전 가설 및 이번 응답 안에서 같은 문장의 후보 제외
+        List<HypothesisAiCandidate> newCandidates =
+                filterNewCandidates(input, aiCandidates);
+
+        if (newCandidates.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "새로운 수사 가설을 도출하지 못했습니다. "
+                            + "기존 가설을 검토하거나 수사 자료를 추가한 후 다시 분석해주세요."
+            );
+        }
+
         // 검증된 후보마다 서버가 점수를 계산해 화면용 응답으로 변환
         List<HypothesisCandidateResponse> responses = new ArrayList<>();
 
-        for (HypothesisAiCandidate candidate : aiCandidates) {
+        // 같은 분석에서 생성된 후보들을 묶을 분석 번호 생성
+        String analysisId = UUID.randomUUID().toString();
+
+        for (HypothesisAiCandidate candidate : newCandidates) {
 
             // 검증된 원본 후보의 점수를 서버에서 계산
             int confidence = hypothesisConfidenceCalculator.calculate(candidate);
 
             // 원본 후보와 계산된 점수를 15분 동안 보관하고 임시 번호를 받음
             String candidateId = hypothesisCandidateStore.put(
+                    analysisId,
                     input.caseId(),
                     loggedInUserId,
                     candidate,
@@ -128,6 +143,13 @@ public class HypothesisGenerationService {
                     )
             );
         }
+
+        // 채택·기각·미선택 여부와 관계없이 생성 이력 보관
+        hypothesisHistoryStore.remember(
+                caseId,
+                loggedInUserId,
+                newCandidates
+        );
 
         // 후보는 DB에 저장하지 않고 사건번호와 함께 반환
         return new HypothesisGenerateResponse(
@@ -216,21 +238,77 @@ public class HypothesisGenerationService {
         if (evidenceInputs.isEmpty()
                 && statementInputs.isEmpty()
                 && logInputs.isEmpty()) {
+
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "분석할 수사 자료가 없습니다. 증거물·진술·수사기록 중 하나 이상을 등록한 후 다시 시도해주세요."
             );
         }
 
-        // 7. 사건 기본 정보와 전체 수사 자료를 하나의 DTO로 구성
+        // 7. 이전 생성 이력을 가져오고 같은 문장은 한 번만 포함
+        Set<String> previousHypotheses = new LinkedHashSet<>(
+                hypothesisHistoryStore.getHistory(
+                        caseId,
+                        loggedInUserId
+                )
+        );
+
+        // 8. DB에 채택된 가설도 중복 회피 목록에 포함
+        List<Hypothesis> adoptedHypotheses =
+                hypothesisRepository.findAdoptedByCaseId(caseId);
+
+        for (Hypothesis hypothesis : adoptedHypotheses) {
+            String content = hypothesis.getContent();
+
+            if (content != null && !content.isBlank()) {
+                previousHypotheses.add(content.strip());
+            }
+        }
+
+        // 9. 사건 기본 정보와 전체 수사 자료를 하나의 DTO로 구성
         return new HypothesisAiInput(
                 caseFile.getCaseId(),
                 caseFile.getTitle(),
                 caseFile.getDescription(),
                 evidenceInputs,
                 statementInputs,
-                logInputs
+                logInputs,
+                List.copyOf(previousHypotheses)
         );
+    }
+
+    // 이전 가설이나 이번 응답 안에서 같은 문장이 반복되면 제외
+    private List<HypothesisAiCandidate> filterNewCandidates(
+            HypothesisAiInput input,
+            List<HypothesisAiCandidate> candidates
+    ) {
+        Set<String> seenContents = new HashSet<>();
+
+        for (String previous : input.previousHypotheses()) {
+            seenContents.add(normalizeContent(previous));
+        }
+
+        List<HypothesisAiCandidate> newCandidates =
+                new ArrayList<>();
+
+        for (HypothesisAiCandidate candidate : candidates) {
+            String content = normalizeContent(candidate.content());
+
+            // 이미 있는 문장이면 add()가 false를 반환
+            if (seenContents.add(content)) {
+                newCandidates.add(candidate);
+            }
+        }
+
+        return newCandidates;
+    }
+
+    // 앞뒤 공백·연속 공백·영문 대소문자 차이를 정리해 비교
+    private String normalizeContent(String content) {
+        return content
+                .strip()
+                .replaceAll("\\s+", " ")
+                .toLowerCase(Locale.ROOT);
     }
 
     // 로그인한 사용자가 해당 사건의 담당 경찰인지 확인 후 사건 정보를 반환

@@ -1,13 +1,14 @@
 package com.polink.user.exception;
 
-import com.polink.user.controller.AuthController;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
-@RestControllerAdvice(assignableTypes = AuthController.class)
+@RestControllerAdvice(
+        basePackages = "com.polink.user.controller"
+)
 public class UserExceptionHandler {
 
     public record ErrorResponse(int status, String message) {

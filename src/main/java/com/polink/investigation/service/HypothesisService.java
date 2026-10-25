@@ -18,6 +18,8 @@ import com.polink.investigation.repository.WitnessRepository;
 import com.polink.user.entity.User;
 import com.polink.user.entity.UserRole;
 import com.polink.user.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +36,8 @@ import java.util.List;
 @Service
 public class HypothesisService {
 
+    private static final Logger log =
+            LoggerFactory.getLogger(HypothesisService.class);
     private final HypothesisCandidateStore hypothesisCandidateStore;
     private final HypothesisRepository hypothesisRepository;
     private final CaseRepository caseRepository;
@@ -42,8 +46,9 @@ public class HypothesisService {
     private final StatementRepository statementRepository;
     private final WitnessRepository witnessRepository;
     private final ObjectMapper objectMapper;
+    private final HypothesisChecklistConverter checklistConverter;
 
-    public HypothesisService(HypothesisCandidateStore hypothesisCandidateStore, HypothesisRepository hypothesisRepository, CaseRepository caseRepository, UserRepository userRepository, EvidenceRepository evidenceRepository, StatementRepository statementRepository, WitnessRepository witnessRepository, ObjectMapper objectMapper) {
+    public HypothesisService(HypothesisCandidateStore hypothesisCandidateStore, HypothesisRepository hypothesisRepository, CaseRepository caseRepository, UserRepository userRepository, EvidenceRepository evidenceRepository, StatementRepository statementRepository, WitnessRepository witnessRepository, ObjectMapper objectMapper, HypothesisChecklistConverter checklistConverter) {
         this.hypothesisCandidateStore = hypothesisCandidateStore;
         this.hypothesisRepository = hypothesisRepository;
         this.caseRepository = caseRepository;
@@ -52,6 +57,7 @@ public class HypothesisService {
         this.statementRepository = statementRepository;
         this.witnessRepository = witnessRepository;
         this.objectMapper = objectMapper;
+        this.checklistConverter = checklistConverter;
     }
 
     // 경찰관이 AI 가설 후보를 채택하여 저장
@@ -121,6 +127,58 @@ public class HypothesisService {
         validateEvidenceIds(caseId, evidenceIds);
         validateStatementIds(caseId, statementIds);
 
+        // DB 저장 결과에 따라 후보 상태를 처리할 수 있는지 확인
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            throw new IllegalStateException(
+                    "가설을 저장하지 못했습니다. 잠시 후 다시 시도해주세요."
+            );
+        }
+
+// 같은 분석에서 다른 후보를 동시에 채택하지 못하도록 처리
+        if (!hypothesisCandidateStore.tryBeginAdoption(
+                request.candidateId()
+        )) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "선택한 후보가 만료되었거나 해당 분석의 채택이 이미 진행되었습니다."
+            );
+        }
+
+// DB 저장 성공·취소 결과에 따라 같은 분석의 후보 상태 처리
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+
+                    @Override
+                    public void afterCommit() {
+
+                        // DB 저장 성공 후 같은 분석의 모든 후보를 채택 대상에서 제외
+                        hypothesisCandidateStore.completeAdoption(
+                                stored.analysisId()
+                        );
+                    }
+
+                    @Override
+                    public void afterCompletion(int status) {
+
+                        if (status == STATUS_ROLLED_BACK) {
+
+                            // DB 변경이 취소되면 남은 후보를 다시 선택할 수 있도록 처리
+                            hypothesisCandidateStore.cancelAdoption(
+                                    stored.analysisId()
+                            );
+
+                        } else if (status == STATUS_UNKNOWN) {
+
+                            // 저장 여부가 불확실하면 추가 채택을 막고 로그 기록
+                            log.error(
+                                    "가설 저장 결과 확인 필요. 추가 채택 제한 유지: analysisId={}",
+                                    stored.analysisId()
+                            );
+                        }
+                    }
+                }
+        );
+
         HypothesisBasis basis = new HypothesisBasis(
                 evidenceIds,
                 statementIds,
@@ -129,34 +187,31 @@ public class HypothesisService {
 
         String basisJson = writeBasisJson(basis);
 
+        // 추가 확인 사항을 미완료 체크리스트로 만들고 JSON으로 변환
+        String checklistJson = checklistConverter.write(
+                checklistConverter.fromText(
+                        candidate.additionalRecommendation()
+                )
+        );
+
         Hypothesis hypothesis = new Hypothesis(
                 caseFile,
                 officer,
                 candidate.content(),
                 candidate.reason(),
-                candidate.additionalRecommendation(),
+                checklistJson,
                 stored.confidence(),
                 basisJson
         );
 
         Hypothesis saved = hypothesisRepository.save(hypothesis);
 
-        // DB 트랜잭션이 정상 완료된 뒤에만 임시 후보 제거
-        TransactionSynchronizationManager.registerSynchronization(
-                new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        hypothesisCandidateStore.remove(request.candidateId());
-                    }
-                }
-        );
-
         return new HypothesisResponse(
                 saved.getHypothesisId(),
                 saved.getCaseFile().getCaseId(),
                 saved.getContent(),
                 saved.getReason(),
-                saved.getAdditionalRecommendation(),
+                readRecommendation(saved.getAdditionalRecommendation()),
                 saved.getConfidence(),
                 saved.getSource(),
                 basis,
@@ -298,7 +353,7 @@ public class HypothesisService {
                     hypothesis.getCaseFile().getCaseId(),
                     hypothesis.getContent(),
                     hypothesis.getReason(),
-                    hypothesis.getAdditionalRecommendation(),
+                    readRecommendation(hypothesis.getAdditionalRecommendation()),
                     hypothesis.getConfidence(),
                     hypothesis.getSource(),
                     readBasisJson(hypothesis.getBasisJson()),
@@ -325,5 +380,10 @@ public class HypothesisService {
                     exception
             );
         }
+    }
+
+    // 일반 문자열 또는 체크리스트 JSON에서 추가 확인 사항 원문 반환
+    private String readRecommendation(String storedValue) {
+        return checklistConverter.read(storedValue).recommendation();
     }
 }

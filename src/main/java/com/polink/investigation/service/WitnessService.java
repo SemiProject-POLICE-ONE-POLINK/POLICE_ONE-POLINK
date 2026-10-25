@@ -97,7 +97,7 @@ public class WitnessService {
             Integer loggedInUserId
     ) {
         // 사건 상태와 관계없이 해당 사건의 담당 경찰인지 확인
-        investigationAccessService.findAssignedCase(
+        investigationAccessService.findReadableCase(
                 caseId,
                 loggedInUserId
         );
