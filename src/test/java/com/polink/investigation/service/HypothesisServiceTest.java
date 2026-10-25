@@ -14,10 +14,7 @@ import com.polink.investigation.entity.Evidence;
 import com.polink.investigation.entity.Hypothesis;
 import com.polink.investigation.entity.Statement;
 import com.polink.investigation.entity.Witness;
-import com.polink.investigation.repository.EvidenceRepository;
-import com.polink.investigation.repository.HypothesisRepository;
-import com.polink.investigation.repository.StatementRepository;
-import com.polink.investigation.repository.WitnessRepository;
+import com.polink.investigation.repository.*;
 import com.polink.user.entity.User;
 import com.polink.user.entity.UserRole;
 import com.polink.user.repository.UserRepository;
@@ -80,6 +77,9 @@ class HypothesisServiceTest {
     @Mock
     private WitnessRepository witnessRepository;
 
+    @Mock
+    private InvestigationLogRepository investigationLogRepository;
+
     // 후보 저장소와 JSON 변환은 실제 객체 사용
     private HypothesisCandidateStore candidateStore;
     private ObjectMapper objectMapper;
@@ -101,6 +101,7 @@ class HypothesisServiceTest {
                 evidenceRepository,
                 statementRepository,
                 witnessRepository,
+                investigationLogRepository,
                 objectMapper,
                 new HypothesisChecklistConverter(objectMapper)
         );
@@ -179,6 +180,7 @@ class HypothesisServiceTest {
         HypothesisBasis expectedBasis = new HypothesisBasis(
                 List.of(EVIDENCE_ID),
                 List.of(STATEMENT_ID),
+                List.of(), // 수사기록 근거 없음
                 candidate.circumstances()
         );
 
@@ -617,6 +619,7 @@ class HypothesisServiceTest {
         HypothesisBasis basis = new HypothesisBasis(
                 List.of(EVIDENCE_ID),
                 List.of(STATEMENT_ID),
+                List.of(), // 수사기록 근거 없음
                 List.of("출입 시각 추가 확인 필요")
         );
 
@@ -663,7 +666,7 @@ class HypothesisServiceTest {
 
         // 과거 데이터에 근거 JSON이 없으면 빈 근거 목록 반환
         assertEquals(
-                new HypothesisBasis(List.of(), List.of(), List.of()),
+                new HypothesisBasis(List.of(), List.of(), List.of(), List.of()),
                 responses.get(1).basis()
         );
 
@@ -998,6 +1001,7 @@ class HypothesisServiceTest {
                 "출입 시각 확인\n현장 CCTV 추가 확보",
                 evidenceIds,
                 statementIds,
+                List.of(),
                 List.of(),
                 List.of(),
                 List.of(),

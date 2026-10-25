@@ -7,14 +7,8 @@ import com.polink.investigation.dto.HypothesisBasis;
 import com.polink.investigation.dto.ai.HypothesisAiCandidate;
 import com.polink.investigation.dto.request.HypothesisSaveRequest;
 import com.polink.investigation.dto.response.HypothesisResponse;
-import com.polink.investigation.entity.Evidence;
-import com.polink.investigation.entity.Hypothesis;
-import com.polink.investigation.entity.Statement;
-import com.polink.investigation.entity.Witness;
-import com.polink.investigation.repository.EvidenceRepository;
-import com.polink.investigation.repository.HypothesisRepository;
-import com.polink.investigation.repository.StatementRepository;
-import com.polink.investigation.repository.WitnessRepository;
+import com.polink.investigation.entity.*;
+import com.polink.investigation.repository.*;
 import com.polink.user.entity.User;
 import com.polink.user.entity.UserRole;
 import com.polink.user.repository.UserRepository;
@@ -30,7 +24,9 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 // 가설 채택·저장 담당 Service
 @Service
@@ -45,10 +41,11 @@ public class HypothesisService {
     private final EvidenceRepository evidenceRepository;
     private final StatementRepository statementRepository;
     private final WitnessRepository witnessRepository;
+    private final InvestigationLogRepository investigationLogRepository;
     private final ObjectMapper objectMapper;
     private final HypothesisChecklistConverter checklistConverter;
 
-    public HypothesisService(HypothesisCandidateStore hypothesisCandidateStore, HypothesisRepository hypothesisRepository, CaseRepository caseRepository, UserRepository userRepository, EvidenceRepository evidenceRepository, StatementRepository statementRepository, WitnessRepository witnessRepository, ObjectMapper objectMapper, HypothesisChecklistConverter checklistConverter) {
+    public HypothesisService(HypothesisCandidateStore hypothesisCandidateStore, HypothesisRepository hypothesisRepository, CaseRepository caseRepository, UserRepository userRepository, EvidenceRepository evidenceRepository, StatementRepository statementRepository, WitnessRepository witnessRepository, InvestigationLogRepository investigationLogRepository, ObjectMapper objectMapper, HypothesisChecklistConverter checklistConverter) {
         this.hypothesisCandidateStore = hypothesisCandidateStore;
         this.hypothesisRepository = hypothesisRepository;
         this.caseRepository = caseRepository;
@@ -56,6 +53,7 @@ public class HypothesisService {
         this.evidenceRepository = evidenceRepository;
         this.statementRepository = statementRepository;
         this.witnessRepository = witnessRepository;
+        this.investigationLogRepository = investigationLogRepository;
         this.objectMapper = objectMapper;
         this.checklistConverter = checklistConverter;
     }
@@ -122,10 +120,12 @@ public class HypothesisService {
 
         List<String> evidenceIds = candidate.evidenceIds();
         List<Integer> statementIds = candidate.statementIds();
+        List<Integer> logIds = candidate.logIds();
         List<String> circumstances = candidate.circumstances();
 
         validateEvidenceIds(caseId, evidenceIds);
         validateStatementIds(caseId, statementIds);
+        validateLogIds(caseId, logIds);
 
         // DB 저장 결과에 따라 후보 상태를 처리할 수 있는지 확인
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -182,6 +182,7 @@ public class HypothesisService {
         HypothesisBasis basis = new HypothesisBasis(
                 evidenceIds,
                 statementIds,
+                logIds,
                 circumstances
         );
 
@@ -301,6 +302,50 @@ public class HypothesisService {
 
     }
 
+    // 근거 수사기록이 존재하고 현재 사건에 속하는지 확인
+    private void validateLogIds(
+            String caseId,
+            List<Integer> logIds
+    ) {
+        if (logIds == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "근거 수사기록 정보를 확인할 수 없습니다."
+            );
+        }
+
+        Set<Integer> checkedIds = new HashSet<>();
+
+        for (Integer logId : logIds) {
+
+            // 번호 누락·잘못된 번호·중복 번호 거부
+            if (logId == null
+                    || logId < 1
+                    || !checkedIds.add(logId)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "근거 수사기록 번호가 올바르지 않습니다."
+                );
+            }
+
+            InvestigationLog investigationLog =
+                    investigationLogRepository.findById(logId)
+                            .orElseThrow(() -> new ResponseStatusException(
+                                    HttpStatus.BAD_REQUEST,
+                                    "근거 수사기록 정보를 확인할 수 없습니다."
+                            ));
+
+            if (!caseId.equals(
+                    investigationLog.getCaseFile().getCaseId()
+            )) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "다른 사건의 수사기록은 근거로 사용할 수 없습니다."
+                );
+            }
+        }
+    }
+
     // 근거 번호 목록을 basis_json 컬럼에 저장할 문자열로 변환
     private String writeBasisJson(HypothesisBasis basis) {
         try {
@@ -369,7 +414,12 @@ public class HypothesisService {
     // DB에 저장된 근거 번호 JSON을 응답 DTO로 복원
     private HypothesisBasis readBasisJson(String basisJson) {
         if (basisJson == null || basisJson.isBlank()) {
-            return new HypothesisBasis(List.of(), List.of(), List.of());
+            return new HypothesisBasis(
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of()
+            );
         }
 
         try {

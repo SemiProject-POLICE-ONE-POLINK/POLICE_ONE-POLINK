@@ -33,6 +33,14 @@ public class MockHypothesisAiClient implements HypothesisAiClient {
             statementIds.add(statement.statementId());
         }
 
+        // 입력에 존재하는 수사기록 번호 수집
+        List<Integer> logIds = new ArrayList<>();
+
+        for (HypothesisAiInput.InvestigationLogInput log
+                : input.investigationLogs()) {
+            logIds.add(log.logId());
+        }
+
         // 모의 AI는 신뢰도를 정하지 않고 원본 후보만 반환한다.
         return List.of(
                 new HypothesisAiCandidate(
@@ -41,6 +49,7 @@ public class MockHypothesisAiClient implements HypothesisAiClient {
                         "등록된 증거물의 내용을 확인해주세요.",
                         evidenceIds,
                         statementIds,
+                        logIds,
                         List.of(), // 반대 증거물
                         List.of(), // 반대 진술
                         List.of(), // 증거물·진술 교차 확인
@@ -52,6 +61,7 @@ public class MockHypothesisAiClient implements HypothesisAiClient {
                         "목격자의 진술 이력을 확인해주세요.",
                         evidenceIds,
                         statementIds,
+                        logIds,
                         List.of(),
                         List.of(),
                         List.of(),
@@ -63,6 +73,7 @@ public class MockHypothesisAiClient implements HypothesisAiClient {
                         "기존 수사기록과 사건 내용을 확인해주세요.",
                         evidenceIds,
                         statementIds,
+                        logIds,
                         List.of(),
                         List.of(),
                         List.of(),

@@ -40,6 +40,14 @@ public class HypothesisResponseValidator {
             allowedStatementIds.add(statement.statementId());
         }
 
+        // AI에 전달한 수사기록 번호 보관
+        Set<Integer> allowedLogIds = new HashSet<>();
+
+        for (HypothesisAiInput.InvestigationLogInput log
+                : input.investigationLogs()) {
+            allowedLogIds.add(log.logId());
+        }
+
         // 4. 가설 후보를 하나씩 검사
         for (HypothesisAiCandidate hypothesis : hypotheses) {
 
@@ -59,6 +67,7 @@ public class HypothesisResponseValidator {
             // 근거가 없을 시 null이 아닌 빈 목록으로 반환
             if (hypothesis.evidenceIds() == null
                     || hypothesis.statementIds() == null
+                    || hypothesis.logIds() == null
                     || hypothesis.opposingEvidenceIds() == null     // 가설과 반대되는 증거 번호
                     || hypothesis.opposingStatementIds() == null    // 가설과 반대되는 진술 번호
                     || hypothesis.corroborations() == null
@@ -86,6 +95,14 @@ public class HypothesisResponseValidator {
             for (Integer statementId : hypothesis.statementIds()) {
                 if (statementId == null
                         || !allowedStatementIds.contains(statementId)) {
+                    throw invalidResponse();
+                }
+            }
+
+            // 입력에 없는 수사기록을 근거로 제시하면 거부
+            for (Integer logId : hypothesis.logIds()) {
+                if (logId == null
+                        || !allowedLogIds.contains(logId)) {
                     throw invalidResponse();
                 }
             }
@@ -123,6 +140,7 @@ public class HypothesisResponseValidator {
             // 같은 자료 번호가 반복되어 점수에 중복 반영되지 않도록 검사
             validateNoDuplicateIds(hypothesis.evidenceIds());
             validateNoDuplicateIds(hypothesis.statementIds());
+            validateNoDuplicateIds(hypothesis.logIds());
             validateNoDuplicateIds(hypothesis.opposingEvidenceIds());
             validateNoDuplicateIds(hypothesis.opposingStatementIds());
         }

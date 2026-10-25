@@ -134,6 +134,11 @@ public class OpenAiHypothesisAiClient implements HypothesisAiClient {
                         
                         가설을 직접 뒷받침하는 증거물 번호는 evidenceIds,
                         진술 번호는 statementIds에 넣으세요.
+                        가설을 직접 뒷받침하는 수사기록 번호는 logIds에 넣으세요.
+                        수사기록은 경찰관의 조사 메모이므로, 증거물·진술로 확인되지 않은
+                        내용은 확정된 사실로 취급하지 마세요.
+                        이러한 내용을 근거로 판단했다면 reason에 '수사기록 기준'임을 밝히세요.
+                        입력 자료에 실제 존재하는 수사기록 번호만 사용하세요.
                         가설과 반대되는 자료의 번호는 opposingEvidenceIds,
                         opposingStatementIds에 구분해서 넣으세요.
                         입력 자료에 실제 존재하는 번호만 사용하세요.
@@ -186,7 +191,7 @@ public class OpenAiHypothesisAiClient implements HypothesisAiClient {
                         
                         각 후보에는 아래 필드를 모두 포함하세요.
                         content, reason, additionalRecommendation,
-                        evidenceIds, statementIds, opposingEvidenceIds,
+                        evidenceIds, statementIds, logIds, opposingEvidenceIds,
                         opposingStatementIds, corroborations, circumstances.
                         
                         content, reason, additionalRecommendation은 문자열입니다.
@@ -195,7 +200,7 @@ public class OpenAiHypothesisAiClient implements HypothesisAiClient {
                         문자열 안의 줄바꿈은 유효한 JSON 이스케이프로 표현하세요.
                         
                         evidenceIds와 opposingEvidenceIds는 문자열 배열입니다.
-                        statementIds와 opposingStatementIds는 정수 배열입니다.
+                        statementIds, logIds, opposingStatementIds는 정수 배열입니다.
                         circumstances는 문자열 배열입니다.
                         corroborations는 evidenceId, statementId, sharedFact을
                         포함한 객체 배열입니다.

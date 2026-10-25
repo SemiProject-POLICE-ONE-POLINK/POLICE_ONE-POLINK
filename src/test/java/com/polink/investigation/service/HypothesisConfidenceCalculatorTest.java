@@ -82,6 +82,7 @@ class HypothesisConfidenceCalculatorTest {
                 null,
                 evidenceIds,
                 statementIds,
+                List.of(),
                 opposingEvidenceIds,
                 opposingStatementIds,
                 corroborations,

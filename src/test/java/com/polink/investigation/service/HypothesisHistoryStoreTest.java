@@ -207,6 +207,7 @@ class HypothesisHistoryStoreTest {
                 List.of(),
                 List.of(),
                 List.of(),
+                List.of(),
                 List.of()
         );
     }

@@ -830,6 +830,7 @@ class HypothesisGenerationServiceTest {
                 List.of(),
                 List.of(),
                 List.of(),
+                List.of(),
                 List.of()
         );
     }

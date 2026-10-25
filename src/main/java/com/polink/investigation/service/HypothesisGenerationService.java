@@ -139,6 +139,9 @@ public class HypothesisGenerationService {
                             confidence,
                             candidate.evidenceIds(),
                             candidate.statementIds(),
+                            candidate.logIds(),
+                            candidate.opposingEvidenceIds(),
+                            candidate.opposingStatementIds(),
                             candidate.circumstances()
                     )
             );
@@ -229,7 +232,8 @@ public class HypothesisGenerationService {
             logInputs.add(
                     new HypothesisAiInput.InvestigationLogInput(
                             investigationLog.getLogId(),
-                            investigationLog.getContent()
+                            investigationLog.getContent(),
+                            investigationLog.getInvestigatedAt()
                     )
             );
         }
