@@ -160,7 +160,8 @@ public class InvestigationBoardService {
             latestHypothesis = createLatestHypothesisSummary(
                     adoptedHypotheses.get(0),
                     evidences,
-                    witnesses
+                    witnesses,
+                    investigationLogs
             );
         }
 
@@ -342,7 +343,8 @@ public class InvestigationBoardService {
     private BoardHypothesisSummaryResponse createLatestHypothesisSummary(
             HypothesisResponse hypothesis,
             List<Evidence> evidences,
-            List<Witness> witnesses
+            List<Witness> witnesses,
+            List<InvestigationLog> investigationLogs
     ) {
         // 이 사건의 증거물을 번호로 빠르게 찾을 수 있도록 정리
         Map<String, Evidence> evidenceById = new HashMap<>();
@@ -410,6 +412,38 @@ public class InvestigationBoardService {
                     )
             );
         }
+
+        // 해당 사건의 전체 수사기록을 번호별로 정리
+        Map<Integer, InvestigationLog> logById = new HashMap<>();
+
+        for (InvestigationLog investigationLog : investigationLogs) {
+            logById.put(
+                    investigationLog.getLogId(),
+                    investigationLog
+            );
+        }
+
+        List<BoardHypothesisSummaryResponse.LogBasis> logBases =
+                new ArrayList<>();
+
+        // 최신 4개 요약과 별개로 전체 기록에서 가설 근거 연결
+        for (Integer logId : hypothesis.basis().logIds()) {
+            InvestigationLog investigationLog = logById.get(logId);
+
+            // 현재 사건의 기록에서 찾을 수 없으면 표시하지 않음
+            if (investigationLog == null) {
+                continue;
+            }
+
+            logBases.add(
+                    new BoardHypothesisSummaryResponse.LogBasis(
+                            investigationLog.getLogId(),
+                            investigationLog.getContent(),
+                            investigationLog.getInvestigatedAt()
+                    )
+            );
+        }
+
         // 가설 기본 정보와 연결된 근거 자료·정황을 하나의 카드 응답으로 구성
         return new BoardHypothesisSummaryResponse(
                 hypothesis.hypothesisId(),
@@ -421,6 +455,7 @@ public class InvestigationBoardService {
                 hypothesis.adoptedAt(),
                 evidenceBases,
                 statementBases,
+                logBases,
                 hypothesis.basis().circumstances()
         );
     }

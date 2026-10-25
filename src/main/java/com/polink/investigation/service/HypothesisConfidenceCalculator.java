@@ -16,6 +16,9 @@ public class HypothesisConfidenceCalculator {
         // 지지 진술은 최대 2건까지 가산
         score += Math.min(candidate.statementIds().size(), 2) * 10;
 
+        // 지지 수사기록은 건당 5점, 최대 2건까지 가산
+        score += Math.min(candidate.logIds().size(), 2) * 5;
+
         // 증거물과 진술이 같은 사실을 확인했다면 10점 가산
         if (!candidate.corroborations().isEmpty()) {
             score += 10;

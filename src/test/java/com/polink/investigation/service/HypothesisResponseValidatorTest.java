@@ -345,6 +345,7 @@ class HypothesisResponseValidatorTest {
                 null, // 추가 확인 사항은 선택 입력
                 evidenceIds,
                 statementIds,
+                List.of(),
                 opposingEvidenceIds,
                 opposingStatementIds,
                 corroborations,

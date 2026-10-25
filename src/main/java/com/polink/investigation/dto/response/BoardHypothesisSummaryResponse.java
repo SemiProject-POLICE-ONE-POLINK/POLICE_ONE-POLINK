@@ -16,9 +16,19 @@ public record BoardHypothesisSummaryResponse(
         LocalDateTime adoptedAt,            // 채택 일시
         List<EvidenceBasis> evidences,      // 근거로 사용한 모든 증거물
         List<StatementBasis> statements,    // 근거로 사용한 모든 진술
+        List<LogBasis> logs,                 // 근거로 사용한 수사기록
         List<String> circumstances          // AI가 자료를 바탕으로 해석한 정황 문장
 ) {
-    // 근거 증거물의 화면 표시 정보
+    // 화면에는 null 대신 빈 배열 반환
+    public BoardHypothesisSummaryResponse {
+        evidences = evidences == null ? List.of() : evidences;
+        statements = statements == null ? List.of() : statements;
+        logs = logs == null ? List.of() : logs;
+        circumstances =
+                circumstances == null ? List.of() : circumstances;
+    }
+
+    // 근거 증거물의 표시 정보
     public record EvidenceBasis(
             String evidenceId,
             String name,
@@ -32,6 +42,14 @@ public record BoardHypothesisSummaryResponse(
             String witnessName,
             StatementType statementType,
             String content
+    ) {
+    }
+
+    // 근거 수사기록의 표시 정보
+    public record LogBasis(
+            Integer logId,
+            String content,
+            LocalDateTime investigatedAt
     ) {
     }
 }
