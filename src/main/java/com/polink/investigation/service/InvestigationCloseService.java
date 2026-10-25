@@ -38,7 +38,8 @@ public class InvestigationCloseService {
 
         User officer = caseFile.getAssignedOfficer();
 
-        // 2. 사건 상태를 종결 대기로 변경 (CaseFile 메서드 협의 필요)
+        // 2. 사건 상태를 관리자 종결 대기로 변경
+        caseFile.finishInvestigation();
 
         // 3. 누가·언제·왜 종결했는지 수사기록으로 남김
         InvestigationLog closeLog = new InvestigationLog(

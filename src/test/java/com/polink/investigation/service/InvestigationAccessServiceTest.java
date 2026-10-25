@@ -173,7 +173,12 @@ class InvestigationAccessServiceTest {
     @ParameterizedTest(name = "{0} 사건 등록 거부")
     @EnumSource(
             value = CaseStatus.class,
-            names = {"WAITING", "CLOSED", "CANCELED"}
+            names = {
+                    "WAITING",
+                    "INVESTIGATION_DONE",
+                    "CLOSED",
+                    "CANCELED"
+            }
     )
     @DisplayName("담당 경찰관이어도 수사중이 아니면 등록용 검사는 409로 거부한다")
     void rejectNonInvestigatingCase(CaseStatus status) {

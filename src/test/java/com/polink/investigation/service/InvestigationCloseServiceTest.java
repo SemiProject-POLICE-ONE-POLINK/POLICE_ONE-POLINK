@@ -1,6 +1,7 @@
 package com.polink.investigation.service;
 
 import com.polink.casefile.entity.CaseFile;
+import com.polink.casefile.entity.CaseStatus;
 import com.polink.casefile.entity.CaseType;
 import com.polink.investigation.dto.request.InvestigationCloseRequest;
 import com.polink.investigation.dto.response.InvestigationCloseResponse;
@@ -102,9 +103,11 @@ class InvestigationCloseServiceTest {
         assertEquals(request.closeReason(), response.closeReason());
         assertEquals(savedLog.getInvestigatedAt(), response.closedAt());
 
-        // TODO: A의 finishInvestigation() 반영 후 주석 해제
-        // assertEquals("INVESTIGATION_DONE", response.status());
-        // assertEquals(CaseStatus.INVESTIGATION_DONE, caseFile.getStatus());
+        assertEquals("INVESTIGATION_DONE", response.status());
+        assertEquals(
+                CaseStatus.INVESTIGATION_DONE,
+                caseFile.getStatus()
+        );
 
         verify(investigationAccessService)
                 .findInvestigatingCase(CASE_ID, OFFICER_ID);

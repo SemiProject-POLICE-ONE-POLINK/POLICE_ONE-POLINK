@@ -231,11 +231,12 @@ public class CaseService {
                         "사건을 찾을 수 없습니다."
                 ));
 
-        if (caseFile.getStatus() == CaseStatus.CLOSED
+        if (caseFile.getStatus() == CaseStatus.INVESTIGATION_DONE
+                || caseFile.getStatus() == CaseStatus.CLOSED
                 || caseFile.getStatus() == CaseStatus.CANCELED) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "종결 또는 취소된 사건은 담당 경찰을 변경할 수 없습니다."
+                    "종결 대기, 종결 또는 취소된 사건은 담당 경찰을 변경할 수 없습니다."
             );
         }
 
@@ -293,11 +294,11 @@ public class CaseService {
                         "사건을 찾을 수 없습니다."
                 ));
 
-        // 수사 중인 사건만 종결할 수 있다.
-        if (caseFile.getStatus() != CaseStatus.INVESTIGATING) {
+        // 담당 경찰이 수사 종결을 요청한 사건만 관리자가 최종 종결할 수 있다.
+        if (caseFile.getStatus() != CaseStatus.INVESTIGATION_DONE) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "수사 중인 사건만 종결할 수 있습니다."
+                    "종결 대기 상태인 사건만 종결할 수 있습니다."
             );
         }
 
