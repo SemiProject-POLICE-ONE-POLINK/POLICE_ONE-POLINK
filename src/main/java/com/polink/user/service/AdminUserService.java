@@ -2,6 +2,8 @@ package com.polink.user.service;
 
 import com.polink.casefile.entity.CaseStatus;
 import com.polink.casefile.repository.CaseRepository;
+import com.polink.user.dto.response.AdminUserListResponse;
+import com.polink.user.dto.response.AdminUserResponse;
 import com.polink.user.dto.response.AssignablePoliceListResponse;
 import com.polink.user.dto.response.AssignablePoliceResponse;
 import com.polink.user.entity.User;
@@ -69,5 +71,44 @@ public class AdminUserService {
                         .toList();
 
         return new AssignablePoliceListResponse(officers);
+    }
+
+    @Transactional(readOnly = true)
+    public AdminUserListResponse getAllUsers(
+            Integer adminId
+    ) {
+        if (adminId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "로그인 사용자 정보가 필요합니다."
+            );
+        }
+
+        User admin = userRepository.findById(adminId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "회원을 찾을 수 없습니다."
+                ));
+
+        if (admin.getRole() != UserRole.ADMIN) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "회원 목록 조회는 관리자만 가능합니다."
+            );
+        }
+
+        List<AdminUserResponse> users =
+                userRepository.findAllByOrderByUserIdAsc()
+                        .stream()
+                        .map(user -> new AdminUserResponse(
+                                user.getUserId(),
+                                user.getUserName(),
+                                user.getName(),
+                                user.getPhone(),
+                                user.getRole()
+                        ))
+                        .toList();
+
+        return new AdminUserListResponse(users);
     }
 }
