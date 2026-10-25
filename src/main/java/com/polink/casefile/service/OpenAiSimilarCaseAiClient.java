@@ -2,6 +2,8 @@ package com.polink.casefile.service;
 
 import com.polink.casefile.dto.ai.SimilarCaseAiInput;
 import com.polink.casefile.dto.ai.SimilarCaseAiResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
@@ -10,6 +12,7 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -17,6 +20,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Component
@@ -26,6 +30,16 @@ public class OpenAiSimilarCaseAiClient implements SimilarCaseAiClient {
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
     private final String model;
+
+    private static final Logger log =
+            LoggerFactory.getLogger(OpenAiSimilarCaseAiClient.class);
+
+    // gpt-6-luna Standard 요금: 토큰 100만 개당 달러
+    private static final double INPUT_PRICE = 0.10;
+    private static final double OUTPUT_PRICE = 0.50;
+
+    // 원화 표시용 기준 환율. 실시간 환율이 아니므로 필요할 때 갱신
+    private static final double USD_TO_KRW = 1400.0;
 
     public OpenAiSimilarCaseAiClient(
             ObjectMapper objectMapper,
@@ -90,7 +104,7 @@ public class OpenAiSimilarCaseAiClient implements SimilarCaseAiClient {
                         matches의 각 항목에는 caseId와 similarityReason을
                         포함하세요.
                         """,
-                "input", "분석할 입력 데이터입니다.\n" + inputJson,
+                "input", "분석할 입력 데이터입니다. 반드시 JSON 객체로 응답하세요.\n" + inputJson,
                 "text", Map.of(
                         "format",
                         Map.of("type", "json_object")
@@ -106,13 +120,29 @@ public class OpenAiSimilarCaseAiClient implements SimilarCaseAiClient {
                     .body(request)
                     .retrieve()
                     .body(Map.class);
+        } catch (RestClientResponseException exception) {
+            log.error(
+                    "OpenAI API 호출 실패: status={}, body={}",
+                    exception.getStatusCode(),
+                    exception.getResponseBodyAsString()
+            );
+
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "AI 사건 분석 중 문제가 발생했습니다.",
+                    exception
+            );
         } catch (RestClientException exception) {
+            log.error("OpenAI API 연결 실패", exception);
+
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     "AI 사건 분석 중 문제가 발생했습니다.",
                     exception
             );
         }
+
+        logUsage(response);
 
         String outputText = extractOutputText(response);
 
@@ -170,6 +200,39 @@ public class OpenAiSimilarCaseAiClient implements SimilarCaseAiClient {
         }
 
         throw invalidResponse();
+    }
+
+    // OpenAI가 알려준 실제 토큰 수와 해당 요금 기준의 추정 비용을 서버 로그에 기록
+    private void logUsage(Map<?, ?> response) {
+        if (response == null
+                || !(response.get("usage") instanceof Map<?, ?> usage)
+                || !(usage.get("input_tokens") instanceof Number input)
+                || !(usage.get("output_tokens") instanceof Number output)) {
+            log.warn("AI 응답에서 토큰 사용량을 확인할 수 없습니다.");
+            return;
+        }
+
+        long inputTokens = input.longValue();
+        long outputTokens = output.longValue();
+
+        log.info("AI 토큰 사용량: 입력 {}, 출력 {}, 합계 {}",
+                inputTokens, outputTokens, inputTokens + outputTokens);
+
+        // 다른 모델로 바꾸면 Luna 가격을 잘못 적용하지 않도록 비용 계산을 건너뛴다.
+        if (!"gpt-6-luna".equals(model)) {
+            log.warn("모델 {}의 요금이 설정되지 않아 비용을 계산하지 않았습니다.", model);
+            return;
+        }
+
+        double estimatedUsd =
+                (inputTokens * INPUT_PRICE + outputTokens * OUTPUT_PRICE)
+                        / 1_000_000.0;
+        double estimatedKrw = estimatedUsd * USD_TO_KRW;
+
+        log.info("AI 추정 비용: ${} (약 {}원, 기준 환율 1달러={}원)",
+                String.format(Locale.US, "%.6f", estimatedUsd),
+                String.format(Locale.US, "%.2f", estimatedKrw),
+                USD_TO_KRW);
     }
 
     private ResponseStatusException invalidResponse() {
