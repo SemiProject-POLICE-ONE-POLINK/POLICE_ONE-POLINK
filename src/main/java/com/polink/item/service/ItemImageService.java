@@ -136,12 +136,13 @@ public class ItemImageService {
             throw new IllegalArgumentException("첨부된 이미지가 없습니다.");
         }
 
-        Path savedPath = Path.of(imagePath).toAbsolutePath().normalize();
+        Path savedPath = resolveStoredPath(imagePath);
         if (!uploadDirectory.equals(savedPath.getParent()) || !Files.isRegularFile(savedPath)) {
             throw new IllegalArgumentException("첨부된 이미지 파일을 찾을 수 없습니다.");
         }
 
         return savedPath;
+
     }
 
     /** 저장된 파일의 이름만 이용해 외부에서 접근 가능한 URL을 만든다. */
