@@ -4,6 +4,7 @@ import com.polink.casefile.entity.CaseFile;
 import com.polink.casefile.entity.CaseType;
 import com.polink.investigation.dto.request.EvidenceCreateRequest;
 import com.polink.investigation.dto.response.EvidenceCreateResponse;
+import com.polink.investigation.dto.response.EvidenceFileResponse;
 import com.polink.investigation.dto.response.EvidenceListResponse;
 import com.polink.investigation.entity.Evidence;
 import com.polink.investigation.entity.EvidenceType;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -27,6 +29,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -255,11 +258,18 @@ class EvidenceServiceTest {
 
         assertEquals("현장 사진", firstResponse.evidenceName());
         assertEquals(EvidenceType.PHOTO, firstResponse.evidenceType());
+        assertTrue(firstResponse.fileAttached());
+        assertFalse(responses.get(1).fileAttached());
         assertEquals(acquiredAt, firstResponse.acquiredAt());
         assertEquals("현장 출입구", firstResponse.acquiredLocation());
         assertEquals("현장 출입구 사진", firstResponse.description());
-        assertTrue(firstResponse.fileAttached());
-        assertFalse(responses.get(1).fileAttached());
+        assertEquals(
+                "/api/v1/cases/" + CASE_ID
+                        + "/evidences/EV-2026-0405-01/file",
+                firstResponse.fileUrl()
+        );
+
+        assertNull(responses.get(1).fileUrl());
 
         // 조회에는 관리자·담당 경찰용 접근 검사 사용
         verify(investigationAccessService)
@@ -475,6 +485,182 @@ class EvidenceServiceTest {
                         .getSynchronizations()
                         .isEmpty()
         );
+    }
+
+    // ==================== 첨부파일 조회 테스트 ====================
+
+    @Test
+    @DisplayName("권한과 증거물을 확인한 뒤 파일 조회 결과를 반환한다")
+    void findEvidenceFile() {
+        String evidenceId = "EV-2026-0405-01";
+
+        Evidence evidence = savedEvidence(evidenceId);
+        evidence.setFilePath(FILE_PATH);
+
+        EvidenceFileResponse fileResponse = new EvidenceFileResponse(
+                new byte[]{1, 2, 3},
+                "image/jpeg",
+                evidenceId + ".jpg"
+        );
+
+        when(evidenceRepository.findById(evidenceId))
+                .thenReturn(Optional.of(evidence));
+
+        when(evidenceFileService.readFile(FILE_PATH, evidenceId))
+                .thenReturn(fileResponse);
+
+        EvidenceFileResponse response =
+                evidenceService.findEvidenceFile(
+                        CASE_ID,
+                        evidenceId,
+                        OFFICER_ID
+                );
+
+        assertSame(fileResponse, response);
+
+        // 권한 확인 → 증거물 조회 → 파일 읽기 순서인지 확인
+        InOrder order = inOrder(
+                investigationAccessService,
+                evidenceRepository,
+                evidenceFileService
+        );
+
+        order.verify(investigationAccessService)
+                .findReadableCase(CASE_ID, OFFICER_ID);
+
+        order.verify(evidenceRepository)
+                .findById(evidenceId);
+
+        order.verify(evidenceFileService)
+                .readFile(FILE_PATH, evidenceId);
+
+        // 파일 조회에서 DB 저장은 수행하지 않음
+        verify(evidenceRepository, never())
+                .save(any(Evidence.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {401, 403, 404})
+    @DisplayName("접근 검사에 실패하면 증거물과 파일을 조회하지 않는다")
+    void rejectFileReadWhenAccessFails(int status) {
+        ResponseStatusException accessException =
+                new ResponseStatusException(
+                        HttpStatus.valueOf(status),
+                        "테스트용 접근 거부"
+                );
+
+        when(investigationAccessService
+                .findReadableCase(CASE_ID, OFFICER_ID))
+                .thenThrow(accessException);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> evidenceService.findEvidenceFile(
+                        CASE_ID,
+                        "EV-2026-0405-01",
+                        OFFICER_ID
+                )
+        );
+
+        assertSame(accessException, exception);
+
+        verifyNoInteractions(
+                evidenceRepository,
+                evidenceFileService
+        );
+    }
+
+    @Test
+    @DisplayName("증거물이 없으면 404 예외가 발생하고 파일을 읽지 않는다")
+    void rejectFileReadWhenEvidenceMissing() {
+        String evidenceId = "EV-2026-0405-99";
+
+        when(evidenceRepository.findById(evidenceId))
+                .thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> evidenceService.findEvidenceFile(
+                        CASE_ID,
+                        evidenceId,
+                        OFFICER_ID
+                )
+        );
+
+        assertEquals(
+                HttpStatus.NOT_FOUND,
+                exception.getStatusCode()
+        );
+
+        verifyNoInteractions(evidenceFileService);
+    }
+
+    @Test
+    @DisplayName("다른 사건의 증거물이면 파일을 읽지 않는다")
+    void rejectFileReadForOtherCaseEvidence() {
+        String evidenceId = "EV-2026-0406-01";
+
+        CaseFile otherCase = mock(CaseFile.class);
+        when(otherCase.getCaseId())
+                .thenReturn("SMPA-2026-0406");
+
+        Evidence evidence = mock(Evidence.class);
+        when(evidence.getCaseFile()).thenReturn(otherCase);
+
+        when(evidenceRepository.findById(evidenceId))
+                .thenReturn(Optional.of(evidence));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> evidenceService.findEvidenceFile(
+                        CASE_ID,
+                        evidenceId,
+                        OFFICER_ID
+                )
+        );
+
+        assertEquals(
+                HttpStatus.NOT_FOUND,
+                exception.getStatusCode()
+        );
+
+        verifyNoInteractions(evidenceFileService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {404, 500})
+    @DisplayName("파일 읽기 실패 시 해당 예외를 그대로 전달한다")
+    void propagateFileReadFailure(int status) {
+        String evidenceId = "EV-2026-0405-01";
+
+        Evidence evidence = savedEvidence(evidenceId);
+        evidence.setFilePath(FILE_PATH);
+
+        when(evidenceRepository.findById(evidenceId))
+                .thenReturn(Optional.of(evidence));
+
+        ResponseStatusException fileException =
+                new ResponseStatusException(
+                        HttpStatus.valueOf(status),
+                        "테스트용 파일 조회 실패"
+                );
+
+        when(evidenceFileService.readFile(FILE_PATH, evidenceId))
+                .thenThrow(fileException);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> evidenceService.findEvidenceFile(
+                        CASE_ID,
+                        evidenceId,
+                        OFFICER_ID
+                )
+        );
+
+        assertSame(fileException, exception);
+
+        verify(evidenceRepository, never())
+                .save(any(Evidence.class));
     }
 
     // ==================== 테스트 준비·확인용 메서드 ====================
