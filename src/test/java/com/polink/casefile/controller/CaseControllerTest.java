@@ -19,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.MethodParameter;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.HttpStatus;
@@ -243,7 +244,11 @@ public class CaseControllerTest {
     void getCases_success_returnsOk() throws Exception {
         CaseListResponse response =
                 new CaseListResponse(
-                        new PageImpl<CaseFile>(List.of())
+                        new PageImpl<>(
+                                List.of(),
+                                PageRequest.of(0, 10),
+                                0
+                        )
                 );
 
         when(caseService.getCases(
@@ -258,7 +263,12 @@ public class CaseControllerTest {
                 )
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isArray())
-                .andExpect(jsonPath("$.totalElements").value(0));
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.totalPages").value(0))
+                .andExpect(jsonPath("$.first").value(true))
+                .andExpect(jsonPath("$.last").value(true));
 
         ArgumentCaptor<Pageable> pageableCaptor =
                 ArgumentCaptor.forClass(Pageable.class);
@@ -282,7 +292,11 @@ public class CaseControllerTest {
     void getMyCases_success_returnsOk() throws Exception {
         MyCaseListResponse response =
                 new MyCaseListResponse(
-                        new PageImpl<CaseFile>(List.of())
+                        new PageImpl<>(
+                                List.of(),
+                                PageRequest.of(0, 10),
+                                0
+                        )
                 );
 
         when(caseService.getMyCases(
@@ -297,7 +311,12 @@ public class CaseControllerTest {
                 )
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isArray())
-                .andExpect(jsonPath("$.totalElements").value(0));
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.totalPages").value(0))
+                .andExpect(jsonPath("$.first").value(true))
+                .andExpect(jsonPath("$.last").value(true));
 
         verify(caseService).getMyCases(
                 eq(1),

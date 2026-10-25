@@ -1,21 +1,13 @@
 package com.polink.item.returnrequest.service;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+
 import com.polink.item.entity.Item;
 import com.polink.item.entity.ItemStatus;
 import com.polink.item.entity.ItemType;
 import com.polink.item.repository.ItemRepository;
-import com.polink.item.returnrequest.dto.ReturnRequestCreateRequest;
-import com.polink.item.returnrequest.dto.ReturnRequestCreateResponse;
+import com.polink.item.returnrequest.dto.*;
 import com.polink.item.returnrequest.entity.ReturnRequest;
 import com.polink.item.returnrequest.entity.ReturnRequestStatus;
 import com.polink.item.returnrequest.repository.ReturnRequestRepository;
-import java.time.LocalDateTime;
-import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,20 +15,18 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import static org.mockito.Mockito.never;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verifyNoInteractions;
-import com.polink.item.returnrequest.dto.MyReturnRequestListResponse;
-import java.util.List;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
-import static org.mockito.ArgumentMatchers.isNull;
-import com.polink.item.returnrequest.dto.PoliceReturnRequestListResponse;
-import com.polink.item.returnrequest.dto.ReturnRequestDetailResponse;
-import com.polink.item.returnrequest.dto.ReturnRequestCompleteResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 /*
  * 실제 DB 없이 반환 신청 Service의 업무 규칙을 테스트한다.
@@ -583,10 +573,14 @@ class ReturnRequestServiceTest {
         assertEquals(
                 ReturnRequestStatus.PENDING,
                 response.items().get(0).status()
-
         );
 
-
+        assertEquals(0, response.page());
+        assertEquals(10, response.size());
+        assertEquals(1L, response.totalElements());
+        assertEquals(1, response.totalPages());
+        assertTrue(response.first());
+        assertTrue(response.last());
 
         verify(returnRequestRepository)
                 .findReturnRequestsByConditions(
