@@ -127,7 +127,6 @@ public class ItemImageService {
         }
     }
 
-feat/item-overall-enhancements
     /**
      * DB에 저장된 이미지 경로를 브라우저 응답에 사용할 수 있는 실제 파일로 확인한다.
      * DB 값만 믿고 임의 경로를 읽지 않도록, 반드시 물품 이미지 전용 폴더의 일반 파일만 허용한다.
@@ -143,7 +142,8 @@ feat/item-overall-enhancements
         }
 
         return savedPath;
-=======
+    }
+
     /** 저장된 파일의 이름만 이용해 외부에서 접근 가능한 URL을 만든다. */
     private String toPublicUrl(Path savedPath) {
         return IMAGE_URL_PREFIX + savedPath.getFileName();
@@ -151,10 +151,6 @@ feat/item-overall-enhancements
 
     /**
      * DB imagePath를 실제 저장 파일 경로로 바꾼다.
-     *
-     * <p>URL에 상위 경로 이동 문자(../)를 넣는 공격을 막기 위해, URL 방식은 파일명 하나만 허용한다.
-     * 절대 경로 방식은 URL 도입 전 데이터의 롤백 정리 호환을 위해서만 지원하고,
-     * 이후 부모 폴더 검증을 다시 수행한다.</p>
      */
     Path resolveStoredPath(String imagePath) {
         if (imagePath.startsWith(IMAGE_URL_PREFIX)) {
@@ -168,7 +164,6 @@ feat/item-overall-enhancements
         }
 
         return Path.of(imagePath).toAbsolutePath().normalize();
- main
     }
 
     private String extractExtension(String originalFilename) {
