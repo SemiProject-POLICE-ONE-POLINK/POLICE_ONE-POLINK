@@ -18,17 +18,20 @@ public class InvestigationExceptionHandler {
 
     // 잘못된 입력은 HTTP 400과 오류 문구로 응답
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, String>> handleInvalidInput(
+    public ResponseEntity<Map<String, Object>> handleInvalidInput(
             IllegalArgumentException exception
     ) {
         return ResponseEntity.badRequest().body(
-                Map.of("message", exception.getMessage())
+                Map.of(
+                        "status", 400,
+                        "message", exception.getMessage()
+                )
         );
     }
 
     // Service에서 지정한 오류 코드와 안내 문구를 그대로 응답
     @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<Map<String, String>> handleStatusException(
+    public ResponseEntity<Map<String, Object>> handleStatusException(
             ResponseStatusException exception
     ) {
         String message = exception.getReason();
@@ -50,6 +53,9 @@ public class InvestigationExceptionHandler {
         // 별도 오류 페이지 처리 없이 현재 요청에서 JSON으로 반환
         return ResponseEntity
                 .status(exception.getStatusCode())
-                .body(Map.of("message", message));
+                .body(Map.of(
+                        "status", exception.getStatusCode().value(),
+                        "message", message
+                ));
     }
 }
