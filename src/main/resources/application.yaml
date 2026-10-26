@@ -15,8 +15,8 @@ spring:
   # 환경변수가 없으면 아래 기본값(username, password)을 사용한다.
   datasource:
     url: jdbc:mysql://localhost:3306/polink?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: ${DB_USERNAME:username}
-    password: ${DB_PASSWORD:password}
+    username: ${DB_USERNAME:polink}
+    password: ${DB_PASSWORD:polink}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   # 테이블은 sql/01_DB_SCRIPT.sql에서 직접 생성합니다.
@@ -38,3 +38,6 @@ app:
   jwt:
     secret-base64: ${JWT_SECRET_BASE64}
     access-token-minutes: 60
+  ai:
+    openai:
+     model: gpt-6-luna
