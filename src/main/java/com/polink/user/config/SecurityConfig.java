@@ -28,7 +28,7 @@ import java.util.Map;
 @Configuration
 public class SecurityConfig {
 
-@Bean  
+    @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             ObjectMapper objectMapper
@@ -516,7 +516,13 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
 
         // 실제 프론트 주소로 변경
-        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
+        configuration.setAllowedOrigins(List.of(
+                        "http://localhost:5173",
+                        "http://192.168.10.34:5173",
+                        "http://192.168.10.35:5173"
+                )
+        );
+
         configuration.setAllowedMethods(
                 List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS")
         );
