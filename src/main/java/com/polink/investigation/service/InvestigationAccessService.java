@@ -90,9 +90,6 @@ public class InvestigationAccessService {
             );
         }
 
-        // TODO: 별도 수사 상태 구현 후 수사중 여부도 함께 확인
-        // 사건이 수사중이어도 수사가 종결되었다면 작업 거부
-
         return caseFile;
     }
 
